@@ -26,6 +26,10 @@
 
   // ---------- item colors for crafting grids ----------
   const COLORS = [
+    // dyes in their own colours
+    [/^red dye/i, "#c0392b"], [/^blue dye/i, "#2e5fb8"], [/^light blue dye/i, "#6cb4e8"], [/^yellow dye/i, "#f1c40f"], [/^white dye/i, "#f3f3f3"], [/^black dye/i, "#222222"],
+    [/^brown dye/i, "#7b4a28"], [/^purple dye/i, "#8e44ad"], [/^pink dye/i, "#f199c0"], [/^magenta dye/i, "#c2479e"], [/^orange dye/i, "#e67e22"], [/^cyan dye/i, "#16a0a0"],
+    [/^lime dye/i, "#7ed321"], [/^green dye/i, "#4a7a24"], [/^light gray dye/i, "#b5b5b5"], [/^gray dye/i, "#6e6e6e"],
     [/planks|wooden slab|block \(planks/i, "#b8945f"], [/stripped log/i, "#c9a26b"], [/log/i, "#6f5230"], [/stick|bowl|fishing rod|bow$/i, "#9a7443"],
     [/cobblestone|furnace/i, "#8a8a8a"], [/smooth stone|stone slab|stone brick/i, "#aeaeae"], [/stone/i, "#9a9a9a"],
     [/iron nugget/i, "#c9c9c9"], [/block of iron/i, "#e8e8e8"], [/iron/i, "#dcdcdc"], [/gold nugget/i, "#f6dc6a"], [/gold/i, "#f2cf3d"],
