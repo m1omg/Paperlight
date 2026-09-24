@@ -493,6 +493,12 @@
   // Returns { text, expect } so the brain knows what the next answer is about.
   function followUp(mem) {
     const now = Date.now();
+    const cf = mem.careFollow;
+    if (cf && !cf.asked && now - cf.at > 2 * 3600e3 && now - cf.at < 14 * 864e5) {
+      cf.asked = true;
+      return { text: cf.kind === "overdose" ? "I've been thinking about you. 💙 How are you feeling? Did you tell an adult about what happened?" : "I've been thinking about you. 💙 How are you feeling today? Did you get a chance to talk to someone you trust?",
+        expect: { kind: "followup", about: "care", label: cf.kind || "sad" } };
+    }
     const ev = mem.events.find((e) => !e.asked && now - e.at > 3 * 3600e3 && now - e.at < 14 * 864e5 && dueOf(e) <= now);
     if (ev) {
       ev.asked = true;

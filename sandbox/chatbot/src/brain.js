@@ -98,7 +98,8 @@
       } else {
         const fu = MEM.followUp(mem);
         const n = mem.name ? " " + mem.name : "";
-        if (fu) { text = `${pick(["Hey", "Hi", "Welcome back"])}${n}! 😊 ${fu.text}`; expect = fu.expect; }
+        if (fu && fu.expect && fu.expect.about === "care") { text = `Hi${n}. ${fu.text}`; expect = fu.expect; this.state.care = 4; this.state.careKind = fu.expect.label; }
+        else if (fu) { text = `${pick(["Hey", "Hi", "Welcome back"])}${n}! 😊 ${fu.text}`; expect = fu.expect; }
         else if (away && away > 3 * 864e5) text = `${n ? U.capitalizeFirst(n.trim()) + "! " : ""}It's been a while! I missed you. 😊 How have you been?`;
         else text = pick([`Hey${n}! 👋 How's your ${PART_OF_DAY()} going?`, `Welcome back${n}! 😊 What's new?`, `Hi${n}! Good to see you again. How are you?`]);
         if (!fu) expect = { kind: "howareyou" };
@@ -205,13 +206,14 @@
         const sf = P.safety.check(m, st, mem);
         if (sf) {
           out = { text: sf.text, source: sf.source, expect: sf.care ? { kind: "vent", emotion: "sad" } : null };
-          if (sf.care) { st.care = sf.care; st.careKind = sf.kind; st.ventTurns = Math.max(st.ventTurns || 0, 4); }
+          if (sf.care) { st.care = sf.care; st.careKind = sf.kind; st.ventTurns = Math.max(st.ventTurns || 0, 4); mem.careFollow = { at: Date.now(), asked: false, kind: sf.kind }; }
         }
       }
 
       // 1) memory facts ("my name is...", "I have a dog", "my favorite color is...") and threads to follow up on
       const facts = out ? [] : MEM.extract(mem, m, expect);
-      if (!out) { MEM.noteThread(mem, m); MEM.noteDiary(mem, m); }
+      if (!out && !(st.care > 0) && !(P.safety && P.safety.sensitive(m))) { MEM.noteThread(mem, m); MEM.noteDiary(mem, m); }
+      else if (!out && (st.care > 0 || (P.safety && P.safety.sensitive(m)))) mem.careFollow = Object.assign({}, mem.careFollow, { at: Date.now(), asked: false });
 
       // 2) whatever Pip was waiting for
       if (!out && expect) out = this._onExpect(expect, m, c, facts);
@@ -250,8 +252,15 @@
       const prevUser = [...st.history].reverse().find((h) => h.role === "user");
       if (prevUser && prevUser.text.toLowerCase() === m.clean.toLowerCase() && m.tokens.length >= 2 && !st.game && !/^(safety|game|expect)/.test(out.source || ""))
         out.text = pick(["You said that twice! 😄 ", "Haha, déjà vu! 😄 ", "I heard you the first time! 😄 "]) + out.text;
-      if (st.care > 0 && P.safety && !/^safety/.test(out.source || "") && /^(intent:(ok|idk|nothing|bare_no|bare_yes|hmm|laugh|user_good|agree|disagree|why|really|greet|how_are_you|whats_up|wow|thanks|sorry|welcome|bored|stop_questions|change_topic|confused)|react|fallback|eliza|neural|ack|expect:howareyou|more:|skill:choose|unknown)/.test(out.source || ""))
-        out = { text: P.safety.careReply(st.careKind, m, st), source: "safety:care", expect: { kind: "vent" } };
+      const hardCare = /^(overdose|crisis|abuse|neglect|grooming)$/.test(st.careKind || "");
+      // in a serious moment, a plain question (math, Minecraft, a fact) still gets answered, with a gentle reminder
+      if (st.care > 0 && hardCare && /^skill:(math|units|capital|knowledge|dictionary|minecraft)/.test(out.source || "") && st.turn % 2 === 0)
+        out.text += st.careKind === "overdose" ? " (And please tell an adult about the pills today. 💙)" : " (And remember, I'm here if you want to talk. 💙)";
+      if (st.care > 0 && P.safety && !/^safety/.test(out.source || "") && (hardCare && !/^(skill:(math|units|capital|knowledge|dictionary|minecraft)|support:|event:(grief|bullied|selfesteem|lonely|school|moved|failed|breakup)|expect:followup)/.test(out.source || "") ||
+          /^(intent:(ok|idk|nothing|bare_no|bare_yes|hmm|laugh|user_good|agree|disagree|why|really|greet|how_are_you|whats_up|wow|thanks|sorry|welcome|bored|stop_questions|change_topic|confused)|react|fallback|eliza|neural|ack|expect:howareyou|more:|skill:choose|unknown)/.test(out.source || ""))) {
+        const wantsJoke = /^(intent:(joke|cheer_up|game|riddle|trivia|rps)|more:)/.test(out.source || "");
+        out = { text: (wantsJoke && st.careKind !== "overdose" ? "I'll tell you one in a minute, I promise. 💙 " : "") + P.safety.careReply(st.careKind, m, st), source: "safety:care", expect: { kind: "vent" } };
+      }
       if (st.care > 0) st.care--;
       if (/\b(i (just |already |literally )?asked|like i said|i (just|already) said|that is not what i (asked|said|meant)|that's not what i (asked|said|meant)|not what i asked|i told you already|i already told you)\b/.test(m.plain) && !/^(oops|sorry|my bad|oh)/i.test(out.text) && !/^(neural|react|fallback|eliza)/.test(out.source || ""))
         out.text = pick(["Oops, sorry! 😅 ", "My bad! ", "Oh, sorry about that! "]) + out.text;
@@ -448,6 +457,15 @@
             if (good) { this._mood("happy"); return { text: pick([`Yay!! 🎉 I knew you'd do great on your ${what}! How does it feel?`, `That's awesome${n}! 🥳 All that effort paid off! What was the best part?`, `Woohoo! 🎉 I'm so happy for you! Tell me more!`]), source: "expect:followup", expect: { kind: "open", topic: "good news" } }; }
             if (unsure) return { text: pick([`Fingers crossed! 🤞 When do you find out how you did?`, `The waiting is the worst part! 🤞 I bet you did better than you think.`]), source: "expect:followup", expect: { kind: "open", topic: what } };
             if (meh) return { text: pick([`Okay is good! 😊 Was it harder or easier than you expected?`, `Not bad! 👍 Glad it's over at least. Was it hard?`]), source: "expect:followup", expect: { kind: "open", topic: what } };
+            break;
+          }
+          if (ex.about === "care") {
+            const told = /\b(i told|told (her|him|them|my|someone|a teacher|my mom|my dad)|talked to|i called|she knows|he knows|they know|we went|went to the (doctor|hospital)|doctor said)\b/.test(t) && !/\b(didn'?t|did not|haven'?t|have not|never)\b/.test(t);
+            const body = /\b(stomach|dizzy|throw(ing)? up|threw up|vomit\w*|sick|pain|hurts|headache|can'?t (wake|stay awake)|sleepy|slept)\b/.test(t);
+            if (ex.label === "overdose" && (body || /\b(didn'?t|did not|haven'?t|no)\b/.test(t))) return { text: "Please tell your mom or another adult today, and get checked by a doctor. 💙 A stomach ache or feeling sleepy after taking pills can be serious, even a day later. You can also call Poison Control at 1-800-222-1222 (US) or 911 (999 / 112). You won't be in trouble for asking for help.", source: "safety:care", expect: { kind: "vent" } };
+            if (told) return { text: "I'm really proud of you for talking to someone. 💙 That was brave. How are you feeling now?", source: "expect:followup", expect: { kind: "vent" } };
+            if (bad || /\b(didn'?t|did not|haven'?t|no one|nobody)\b/.test(t)) return { text: "Thank you for being honest with me. 💙 It can feel really hard to tell someone. Is there one grown-up you trust, like a teacher or school counselor, you could talk to today? And the helplines are there anytime: 988 (US) or Childline 0800 1111 (UK).", source: "safety:care", expect: { kind: "vent" } };
+            if (good) return { text: "I'm really glad to hear that. 💙 I'm here whenever you want to talk.", source: "expect:followup" };
             break;
           }
           if (ex.about === "mood") {
@@ -736,6 +754,7 @@
     }
 
     _mood(label) {
+      if (this.state.care > 0) return;
       const moods = this.mem.moods;
       moods.push({ label, at: Date.now() });
       if (moods.length > 30) moods.shift();
@@ -1128,6 +1147,9 @@
       const explained = long || /\b(what happened|tell me more|go on|talk about it|want to tell me|how are you feeling about it|how do you feel)\b/i.test(lastBot);
       const past = /\b(went|did|was|were|had|got|saw|made|played|visited|watched|happened|yesterday|last night|today)\b/.test(m.plain);
       const fresh = (key, list) => S.deal(st, "react:" + key, list);
+      if (P.safety && P.safety.sensitive(m) && v >= -0.3 && !deep) {
+        return { text: fresh("careful", ["Thank you for telling me. 💙 Can you tell me a bit more about what's going on?", "That sounds like a lot. 💙 Are you okay?", "I'm listening. 💙 How are you feeling about it?"]), source: "react:careful", score: 0.49, expect: { kind: "vent" } };
+      }
       if (m.isQuestion) {
         return { text: fresh("q", ["Hmm, I'm honestly not sure! 🤔 I'm a small offline AI, so I don't know everything.", "Ooh, that's a tough one for a little AI like me. What do you think?", "I don't know that one! 😅 What's your guess?", "Good question... I really don't know! Tell me what you think?"]), source: "react:question", score: 0.47 };
       }

@@ -48,7 +48,7 @@
   R("Chain", { grid: ["N", "I", "N"], key: { N: "Iron Nugget", I: "Iron Ingot" } });
   R("Paper", { grid: ["SSS"], key: { S: "Sugar Cane" }, makes: 3 });
   R("Book", { shapeless: ["Paper", "Paper", "Paper", "Leather"], aliases: "books" });
-  R("Leather", { grid: ["RR", "RR"], key: { R: "Rabbit Hide" }, aliases: "hide|leathers", info: "Mostly from cows, but 4 rabbit hide also make one." });
+  R("Leather", { grid: ["RR", "RR"], key: { R: "Rabbit Hide" }, aliases: "leathers", info: "Mostly from cows, but 4 rabbit hide also make one." });
   R("Book and Quill", { shapeless: ["Book", "Ink Sac", "Feather"], aliases: "writable book|book & quill|quill" });
   R("Bookshelf", { grid: ["PPP", "BBB", "PPP"], key: { P: "Planks", B: "Book" }, aliases: "bookshelves|book shelf",
     info: "Put 15 bookshelves around an enchanting table (one block gap) to unlock level-30 enchantments." });
@@ -266,7 +266,7 @@
     "Netherite Ingot": ["Mine ancient debris in the Nether (best around Y=15, bring a diamond pickaxe), smelt it into netherite scrap, then craft 4 scrap + 4 gold ingots into one netherite ingot.", "netherite"],
     "Obsidian": ["Pour water onto a lava source block, then mine it with a diamond (or netherite) pickaxe. It takes a while!", "obsidian block"],
     "String": ["Kill spiders, break cobwebs (a sword is fastest), or go fishing.", "strings|thread"],
-    "Leather": ["Kill cows, mooshrooms, horses, donkeys, mules, llamas or hoglins. You can also craft it from 4 rabbit hide (a 2x2 square), or catch it while fishing.", "hide"],
+    "Leather": ["Kill cows, mooshrooms, horses, donkeys, mules, llamas or hoglins. You can also craft it from 4 rabbit hide (a 2x2 square), or catch it while fishing.", "leathers"],
     "Feather": ["Kill chickens.", "feathers"],
     "Flint": ["Break gravel. It sometimes drops flint instead (10%).", "flints"],
     "Gunpowder": ["Kill creepers (from a distance!), ghasts or witches. Also found in chests.", "gun powder|sulfur"],
@@ -537,6 +537,8 @@
       a: "Villages spawn in plains, deserts, savannas, taigas and snowy plains. Explore those biomes, or with cheats on use /locate structure minecraft:village_plains. Villages have beds, food and villagers to trade with!" },
     { q: ["how to trade with villagers", "villager trading", "how do villagers work", "how to get a librarian", "villager jobs"],
       a: "Villager trading: right-click a villager with a job to see its trades (you pay with emeralds). Give a jobless villager a workstation to set its job: lectern = librarian (enchanted books!), composter = farmer, blast furnace = armorer, etc. Trade a few times and it levels up with better offers. Curing a zombie villager gives you huge discounts." },
+    { q: ["how to hide from mobs", "best way to hide in minecraft", "hide from mobs", "how do i stay safe at night in minecraft", "how to not get attacked by mobs"],
+      a: "Hiding from mobs: dig into a hillside and block the entrance behind you (mobs can't dig), light everything up with torches (mobs don't spawn in bright light), use doors (zombies can only break them on Hard), and sleep in a bed to skip the night. Sneaking also makes the Warden and sculk sensors not hear you. 🏠" },
     { q: ["is herobrine real", "herobrine", "who is herobrine"],
       a: "Herobrine is a Minecraft legend! 👻 The story says he's a ghostly Steve with white eyes, but he was never actually in the game. Mojang even jokes about it in the patch notes: \"Removed Herobrine\". If your sister saw him, maybe it was a mod, a skin... or a really good prank! 😄" },
     { q: ["how to get mending", "where to find mending", "mending book", "get mending from a villager", "mending from villager", "librarian mending", "mending villager"],
