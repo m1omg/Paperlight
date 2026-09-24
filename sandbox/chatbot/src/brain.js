@@ -452,6 +452,9 @@
           if (/\b(what|whats|who|why|how|where|when)\b/.test(t) && !/\b(what about|how about) (you|u)\b/.test(t)) break;
           if (m.tokens.length > 18 || (P.safety && P.safety.sensitive(m)) || /\b(died|passed away|funeral|divorc\w*)\b/.test(t)) break;
           if (this.mem.name && m.plain.replace(/[^a-z ]/g, "").trim() === this.mem.name.toLowerCase()) return { text: `That's your name, ${this.mem.name}! 😄 I meant: what do you like to do for fun?`, source: "expect:hobby", expect: { kind: "hobby" } };
+          // "mid ngl", "meh", "idk": that's not a hobby
+          if (/^(?:it'?s |its |it is |kinda |honestly |ngl |lowkey |not going to lie |to be honest )*(mid|meh|eh|idk|i do not know|dunno|nothing|nothing really|not much|nah|bruh|lol|ok|okay|k)(?: ngl| tbh| not going to lie| to be honest| honestly| lol| i guess)?[.!]*$/.test(t))
+            return { text: /\b(mid|meh|eh)\b/.test(t) ? "Mid, huh? 😅 Not much fun lately? What's one thing that could make today better?" : "That's okay! 😊 Maybe you haven't found your thing yet. Games, drawing, sports, music... anything sound fun?", source: "expect:hobby", expect: { kind: "open", topic: "fun" } };
           if (/^(hmm |well |and |so )?(what about you|how about you|and you|wbu|hbu|you|u)\??$/.test(t)) return { text: "Me? I love chatting, bad puns, math puzzles and Minecraft! 😄 But I asked first: what do you like to do?", source: "expect:hobby", expect: { kind: "hobby" } };
           const found = [];
           for (const [re, name] of HOBBIES) if (re.test(m.plain) && !found.includes(name)) found.push(name);
@@ -621,6 +624,9 @@
             const ack = this._ackFacts(facts.filter((f) => !f.quiet), m, c);
             if (ack) return Object.assign(ack, { text: (e.valence > 0.2 || /\b(good|great|fine|ok|okay)\b/.test(t) ? pick(["Glad your day's going well! 😊 ", "Nice! 😊 "]) : "") + ack.text });
           }
+          // "mid ngl", "meh", "eh": a so-so day, not a crisis
+          if (/^(?:it'?s |its |it is |kinda |pretty |honestly |ngl |lowkey |not going to lie |to be honest )*(mid|meh|eh|so so|so-so|average|nothing special|same as always)(?: ngl| tbh| not going to lie| to be honest| honestly| lol| i guess)?[.!]*$/.test(t))
+            return { text: pick(["A mid day, huh? 😅 Anything in particular, or just meh?", "Just a meh kind of day? 😅 Want to tell me about it, or should I try to make it less mid?"]) + back, source: "expect:howareyou", expect: { kind: "open", topic: "day" } };
           if (e.valence <= -0.5 || /\b(not (good|great|well|ok|okay|fine)|bad|terrible|awful|horrible|meh|could be better|so so|not so good)\b/.test(t)) {
             const lab = e.label && e.label !== "happy" && e.label !== "love" ? e.label : "sad";
             this._mood(lab);
@@ -1335,6 +1341,19 @@
       const lg = st.lastGameResult;
       if (lg && st.turn - lg.turn <= 5 && /\b(was i right|was it right|did i get (it|that|the last one|the last word|the word|that one)( right)?|did i spell (it|that) right|was that right|am i right|was that correct|did i win)\b/.test(t))
         return { text: lg.right ? `Yes! You got it right: ${lg.word.toUpperCase().split("").join("-")}. 🎉` : `Not quite: it's spelled ${lg.word.toUpperCase().split("").join("-")}${lg.said && lg.said !== "?" ? ` (you wrote ${lg.said})` : ""}. So close!`, source: "social:game" };
+      // "ok thats actually not bad" right after advice
+      if (/^(?:ok |okay |hm+ |wow |lol )?(?:that'?s|thats|that is|this is) (?:actually |kinda |pretty |really )?(?:not bad|good|helpful|a good idea|smart|fair|useful|good advice)\b/.test(t) && /^(advice|event:homework|social)/.test(st.lastSource || ""))
+        return { text: pick(["Glad it helps! 💙 Let me know how it goes.", "Yay, I'm glad! 😊 You've got this."]), source: "social:thanks" };
+      // "bruh if i knew i wouldnt be asking u": Pip dodged a real question, so try it again
+      if (/\b(if i knew i (wouldn'?t|would not|wouldnt) (be asking|ask)|that'?s why i (asked|am asking|asked you)|thats why i asked|i (literally )?just asked( you)?|answer my question|you didn'?t answer|u didnt answer)\b/.test(t) && /^(react|unknown|eliza|fallback|ack|neural|intent:(ok|idk))/.test(st.lastSource || "")) {
+        const lastQ = st.history.slice(0, -1).reverse().find((h) => h.role === "user" && (/\?\s*$/.test(h.text) || /^(what|how|why|who|where|when|which|is|are|do|does|can)\b/i.test(h.text)));
+        if (lastQ) {
+          const qm = N.analyze(lastQ.text);
+          const ans = this._skills(qm, this.ctx(qm), []) || (S.define(qm) ? { text: S.define(qm) } : null);
+          if (ans && ans.text) return { text: "Sorry, you're right! 😅 Let me try again: " + ans.text, source: ans.source || "skill:retry" };
+        }
+        return { text: "Fair point, sorry! 😅 I don't know that one well enough to explain it. Could you ask it a different way? I'm best at math, science basics, words and Minecraft.", source: "social:retry" };
+      }
       // "u always say that", "you keep saying the same thing"
       if (/\b(you|u) (always|keep|just keep|keep on) (say|saying|said) (that|the same|this|it)\b|\b(you|u) (said|say) that (already|every time|again|like \d+ times)\b|\bsame (thing|answer|reply) (again|every time|over and over)\b|\bstop saying that\b|\bthat'?s (literally )?the same thing\b|\b(you|u) (keep|kept) repeating\b|\b(you|u) keep saying\b/.test(t)) {
         if (lastBot) st.recent.push(lastBot);
