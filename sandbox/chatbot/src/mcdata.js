@@ -192,7 +192,7 @@
 
   // ---------- redstone & rails ----------
   R("Redstone Torch", { grid: ["R", "S"], key: { R: "Redstone Dust", S: "Stick" } });
-  R("Lever", { grid: ["S", "C"], key: { S: "Stick", C: "Cobblestone" }, aliases: "switch" });
+  R("Lever", { grid: ["S", "C"], key: { S: "Stick", C: "Cobblestone" }, aliases: "redstone switch|minecraft switch" });
   R("Button", { shapeless: ["Stone or Planks"], aliases: "buttons|stone button|wooden button" });
   R("Pressure Plate", { grid: ["BB"], key: { B: "Stone or Planks" }, aliases: "pressure plates|stone pressure plate" });
   R("Repeater", { grid: ["TRT", "SSS"], key: { T: "Redstone Torch", R: "Redstone Dust", S: "Stone" }, aliases: "redstone repeater|repeaters", info: "Refreshes a signal to strength 15, adds a delay and only lets signal go one way." });

@@ -569,7 +569,7 @@
   function capital(t) {
     // "Lisbon is the capital of Portugal, isn't it?" / "is Lisbon the capital of Portugal?": check it
     let c = /\b(?:is )?([a-z][a-z .'-]{1,30}?) (?:is )?the capital (?:city )?of (?:the )?([a-z][a-z .'-]{1,30}?)(?:,? (?:isn'?t it|is not it|right|correct|yes))?\??$/.exec(t.replace(/^(yes|yeah|so|and|now|oh)[,.!]*\s+/, ""));
-    if (c && !/^(what|which|whats|who)$/.test(c[1].trim())) {
+    if (c && !/\b(what|which|whats|who|what s|tell me|know)$/.test(c[1].trim())) {
       const hit = capByCountry.get(c[2].trim().replace(/^the /, ""));
       const w = c[1].trim().split(/\s+/);
       const real = hit && hit[1].toLowerCase().split(" (")[0];
@@ -765,6 +765,9 @@
     [["what is a cell", "what are cells"], "Cells are the tiny living building blocks of every living thing. 🔬 You're made of about 37 trillion of them! Each one has a job, like muscle cells, nerve cells or blood cells."],
     [["what is friction"], "Friction is the force that slows things down when two surfaces rub together. 🛷 It's why a ball stops rolling, and why your hands get warm when you rub them."],
     [["what is energy"], "Energy is what lets things move, heat up or change. ⚡ It comes in many forms (movement, heat, light, electricity, chemical energy in food) and it can change from one form to another, but it's never used up or created from nothing."],
+    [["what is the difference between mitosis and meiosis", "mitosis vs meiosis", "difference between mitosis and meiosis", "how is meiosis different from mitosis"], "Mitosis makes 2 identical cells with the full set of chromosomes: that's for growing and healing. 🔬 Meiosis makes 4 cells with half the chromosomes, all a bit different: those are sperm and egg cells. Memory trick: mi-TOE-sis makes body cells (like your toes), and meiosis has two rounds of division."],
+    [["what is a thesis statement", "what's a thesis statement", "thesis statement meaning"], "A thesis statement is the one sentence that says what your essay will argue, and roughly how. ✍️ Formula: topic + your claim + 2-3 reasons. Example: \"Through Scout's growing understanding of Atticus and Boo Radley, Harper Lee shows that real courage means doing what's right even when you know you'll lose.\""],
+    [["what is photosynthesis vs respiration", "difference between photosynthesis and respiration"], "Photosynthesis: plants use sunlight, water and CO₂ to make sugar and release oxygen. 🌱 Respiration: cells (in plants AND animals) burn that sugar with oxygen to get energy, releasing CO₂ and water. They're like opposites!"],
     // sports and games people ask about
     [["what does a libero do", "what is a libero", "what's a libero", "libero volleyball"], "The libero is volleyball's defensive specialist! 🏐 They play in the back row, wear a different-colored jersey, and their job is to dig hard hits and make great passes. They can't attack the ball above the net, but they swap in and out without counting as a sub."],
     [["what is dress to impress", "dress to impress roblox"], "Dress to Impress is a Roblox fashion game: you get a theme and a few minutes to style your avatar, then everyone votes on the runway! 👗 What's your best theme?"],
