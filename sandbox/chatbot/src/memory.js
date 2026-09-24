@@ -224,7 +224,7 @@
     } else if ((r = new RegExp("\\bmy (?:little |baby |pet |new |old |cute |fat |crazy )?(" + PET + ") ([a-z]+)(?= (?:is|was|keeps|just|always|never|ate|eats|loves|likes|hates|sleeps|slept|barks|barked|barking|meows|jumped|jumps|ran|runs|got|has|did|and|bit|scratched|knocked|sat|sits|stole)\\b|[,.!]|$)").exec(t))) {
       const w = r[2];
       if (!ADVERB.test(w) && !NOT_NAME.has(w) && !P.nlp.STOP.has(w) && plausibleName(w) && w.length >= 3 && (looksLikeName(w, raw, false) || NAMEISH.test(w) || PETNAMEISH.test(w)))
-        facts.push({ type: "pet", kind: singularPet(r[1]), name: properCase(w), quiet: true });
+        facts.push({ type: "pet", kind: singularPet(r[1]), name: properCase(w), quiet: mem.pets.some((p) => p.name && p.name.toLowerCase() === w) });
     }
 
     if ((r = new RegExp("\\b([a-z]+) is my (?:pet |little |baby )?(" + PET + ")\\b").exec(t)) && !NOT_NAME.has(r[1]) && !P.nlp.STOP.has(r[1]) && plausibleName(r[1]) && r[1].length >= 3) {

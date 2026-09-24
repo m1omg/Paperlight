@@ -29,7 +29,7 @@
   function start(kind, c) {
     const st = c.state;
     switch (kind) {
-      case "joke": return { text: deal(st, "joke", C.jokes), intent: "joke" };
+      case "joke": return { text: deal(st, "joke", C.jokes.filter((j) => !C.topicJokes.programming.test(j) && !/chemist|ion say|helium|curium|barium|biology teacher|obtuse/i.test(j))), intent: "joke" };
       case "mcjoke": return { text: deal(st, "mcjoke", C.mcJokes), intent: "mcjoke" };
       case "joke_plain": return { text: deal(st, "joke_plain", C.jokes.filter((j) => !C.mcJokes.includes(j))), intent: "joke" };
       case "fact": return { text: pick(["Here's one: ", "Fun fact: ", "Did you know? ", ""]) + deal(st, "fact", C.facts) };
@@ -46,8 +46,12 @@
         return { text: (g.asked ? "" : "Trivia time! 🧠 ") + q[0], chips: ["I don't know", "Stop"] };
       }
       case "spell": {
+        const own = /\b(?:with|on|for|the word)\s+["']?([a-z]{3,20})["']?\s*$/.exec(c.m ? c.m.plain.replace(/[?!.]+$/, "") : "");
+        if (own && !/^(me|spelling|words|it|this|that)$/.test(own[1])) { st.game = { type: "spelltype", w: own[1], score: 0, asked: 0, idle: 0 }; return { text: `Okay! Spell "${own[1].slice(0, 1).toUpperCase()}..." for me: type the whole word "${own[1].replace(/./g, "_ ").trim()}" from memory! ✏️ (No peeking! 😄)` }; }
         const g = st.game && st.game.type === "spell" ? st.game : { type: "spell", score: 0, asked: 0 };
-        const w = deal(st, "spell", SPELL);
+        const said = ((c.m ? c.m.plain : "") + " " + (st.curText || "") + " " + (c.lastUser || "")).toLowerCase();
+        g.want = g.want || SPELL.filter((x) => new RegExp("\\b" + x[0].toLowerCase() + "\\b").test(said));
+        const w = g.want.length ? g.want.shift() : deal(st, "spell", SPELL);
         const opts = U.shuffle(w.slice());
         Object.assign(g, { w, opts, idle: 0 });
         st.game = g;
@@ -109,7 +113,8 @@
     const st = c.state, g = st.game;
     if (!g) return null;
     const t = m.norm;
-    if (QUIT.test(t) && m.tokens.length <= 6) {
+    const isOption = g.opts && g.opts.some((o) => o.toLowerCase() === m.clean.toLowerCase().replace(/[^a-z]/g, ""));
+    if (QUIT.test(t) && m.tokens.length <= 6 && !isOption) {
       st.game = null;
       if ((g.type === "trivia" || g.type === "spell") && g.asked) return { text: `Game over! You got ${g.score} out of ${g.asked}. ${g.score >= g.asked * 0.7 ? "Impressive! 🏆" : "Nice try! 😊"}` };
       if (g.type === "rps" && g.you + g.me) return { text: `Good game! Final score: you ${g.you}, me ${g.me}. ${g.you > g.me ? "You win! 🏆" : g.you < g.me ? "I win this time! 😄" : "It's a tie!"}` };
@@ -141,6 +146,13 @@
         if (g.asked >= 5) { st.game = null; return { text: `${verdict} That's 5 questions: you got ${g.score}/5! ${g.score >= 4 ? "Trivia champion! 🏆" : g.score >= 2 ? "Nice job! 😊" : "You'll get them next time! 💪"} Play again?`, expect: { kind: "yesno", yes: "trivia" } }; }
         const nx = start("trivia", c);
         return { text: `${verdict} (Score: ${g.score}/${g.asked}) Next question: ${nx.text}`, chips: nx.chips };
+      }
+      case "spelltype": {
+        const low = m.clean.toLowerCase().replace(/[^a-z]/g, "");
+        if (!low || m.tokens.length > 3) return idle(g, st);
+        st.game = null;
+        if (low === g.w) return { text: `Yes! ${g.w.toUpperCase().split("").join("-")}. Perfect! 🎉 Want another word?`, expect: { kind: "yesno", yes: "spell" } };
+        return { text: `So close! It's ${g.w.toUpperCase().split("").join("-")}. You wrote ${low.toUpperCase().split("").join("-")}. Try it once more?`, expect: { kind: "yesno", yesText: "Okay, type it again! ✏️", then: null } };
       }
       case "spell": {
         const low = m.clean.toLowerCase().replace(/[^a-z ]/g, " ").trim();
@@ -491,6 +503,11 @@
 
   // ---------- general knowledge (question variants -> answer) ----------
   const FAQ = [
+    [["why do beagles howl", "why do dogs howl", "why does my dog howl"], "Dogs howl to talk over long distances, like wolves do! 🐶 Beagles and hounds were bred to hunt in packs, and their loud howl (called \"baying\") told the hunters they'd found a scent. So a howling beagle is just doing its old job!"],
+    [["why do dogs sniff everything", "why do dogs smell everything", "why does my dog sniff everything"], "A dog's nose is about 10,000 times better than ours! 👃🐶 Sniffing is how they read the world: who walked by, what they ate, even how they felt. A walk full of sniffing is like reading the news for a dog."],
+    [["why do dogs eat grass"], "Nobody is 100% sure! 🌱 Most dogs just like the taste or texture, and wild dogs ate plants too. It's usually fine, but if a dog eats a lot of grass and gets sick, a vet should check."],
+    [["why do cats knead", "why do cats make biscuits"], "Kneading (\"making biscuits\") is something kittens do to their mom to get milk. 🐱 Grown-up cats keep doing it when they feel safe and happy, so it's a compliment!"],
+    [["why do cats like boxes"], "Boxes feel safe and cozy to cats: 📦 nothing can sneak up on them, and small spaces keep them warm. Wild cats hide in tight spots too!"],
     // why-questions kids ask
     [["why do hamsters stuff their cheeks", "why do hamsters fill their cheeks", "hamster cheek pouches", "why do hamsters put food in their cheeks", "why do hamsters stuff their cheeks with seeds"], "Hamsters have stretchy cheek pouches that reach all the way back to their shoulders! 🐹 In the wild they fill them with seeds, carry the food home to their burrow and hide it for later, like a snack backpack. So your hamster is just being a very smart hamster!"],
     [["why are hamsters awake at night", "are hamsters nocturnal", "why do hamsters run at night", "why do hamsters sleep all day"], "Hamsters are mostly night animals: in the wild they sleep in cool burrows during the hot day and come out at dusk and at night, when it's safer from predators. 🐹🌙 That's why the wheel gets busy after bedtime! It's best to let them sleep during the day."],
@@ -686,7 +703,8 @@
   function define(m) {
     // "could you tell me what the word 'ephemeral' means?" / "do you know what loquacious means" -> "what does X mean"
     const t = m.plain.replace(/[?!.]+$/, "").trim()
-      .replace(/^(?:(?:can|could|would|will) (?:you|u) (?:please )?(?:tell me|explain(?: to me)?|say)|(?:do|does) (?:you|u) know|i (?:want|need|would like) to know|i wonder|(?:please )?tell me|explain)\s+/, "")
+      .replace(/^(?:(?:can|could|would|will) (?:you|u) (?:please )?(?:tell me|explain(?: to me)?|say)|(?:do|does) (?:you|u) (?:even )?know|i (?:want|need|would like) to know|i wonder|(?:please )?tell me|explain)\s+/, "")
+      .replace(/^what (?:a |an )?([a-z][a-z '-]{1,30}?) is$/, "what is $1")
       .replace(/^what (?:the word |the term |the phrase )?["']?([a-z][a-z '-]{1,30}?)["']? (?:means|stands for|is supposed to mean)$/, "what does $1 mean")
       .replace(/^what(?:'s| is) (?:the )?(?:definition|meaning) of (?:the word )?/, "meaning of ")
       .replace(/^(?:the )?(?:meaning|definition) of (?:the word )?/, "meaning of ")

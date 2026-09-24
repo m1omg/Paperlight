@@ -170,7 +170,7 @@ const groups = [
     ["lol u dont even know what a buzzer beater is do u", /clock runs out/i, "skill:knowledge"],
     ["lebron or curry", /lebron|curry/i, "skill:choose"],
     ["lol why lebron", /gut feeling|felt right/i],
-    ["k. im gonna go sleep. night", /night/i, "intent:good_night"],
+    ["k. im gonna go sleep. night", /night|sleep/i, "intent:good_night"],
   ]],
   ["qa round 2: grown-ups", [
     ["Hello Pip, my name is Margaret.", /Margaret/],

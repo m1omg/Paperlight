@@ -272,7 +272,9 @@
     // "how many bones are in the human body?", "forget it. when did ww2 end?": real-world questions, not the game
     if (/\b(human|humans|real life|irl|in real life|human body|world war|ww1|ww2|wwii|history|biology|chemistry|physics|in science|in math|president|country|countries|planet|solar system|in the ocean)\b/.test(text) && !/\b(minecraft|mc|in the game|in game)\b/.test(text)) return null;
     // "what's your favorite mob?" / "do you like creepers?" are about Pip, and "I know what a creeper is" isn't a question
-    if (/\b(your|yours|urs) (favou?rite|fav|fave)\b|\bwhat(?: is| s|s)? (yours|urs)\b|\bdo (you|u) (like|love|hate|enjoy)\b|\b(what do|do) you think (of|about)\b/.test(text)) return null;
+    if (/\bpiston door|redstone door|2x2 door\b/.test(text)) return null;
+    if (/^(why|how come)\b/.test(text) && /\b(dogs?|puppies|puppy|cats?|kittens?|beagles?|hamsters?|birds?|horses?)\b/.test(text) && !/\b(minecraft|mc|in the game|in game|tame|wolf|wolves)\b/.test(text)) return null;
+    if (/\b(your|yours|urs) (favou?rite|fav|fave)\b|\bwhat(?: is| s|s)? (yours|urs)\b|\bdo (you|u) (like|love|hate|enjoy|play|even play)\b|\b(what do|do) you think (of|about)\b/.test(text)) return null;
     if (/\bi (already |do )?know (what|how|where|who|that)\b/.test(text) && !/\b(but|so) (what|how|where|why|can|do|does|is)\b/.test(text)) return null;
 
     if (/\bwhat (is|does|are) (hp|health points|hearts)( mean| in minecraft)?\b|\bwhat does hp stand for\b/.test(text)) { const g = D.guides.find((x) => x.q.includes("what is hp")); if (g) return done(state, { text: g.a, kind: "guide" }, null); }

@@ -193,6 +193,7 @@
         if (rest && (/\?\s*$/.test(rest[1]) || /^(?:(?:and|so|but|then)\s+)?(what|how|where|who|why|when|which|tell|give|show|hw|wat)\b/i.test(rest[1]))) text = rest[1].replace(/^(?:and|so|but|then)\s+(?=\S+\s)/i, (x) => (/^and\s/i.test(x) ? x : ""));
       }
       const m = N.analyze(text);
+      st.curText = m.plain;   // the whole message, for handlers that only see one sentence of it
       const c = this.ctx(m);
       const trace = [];
       const expect = st.expect;
@@ -571,6 +572,10 @@
           if (m.tokens.length > 12 || (m.isQuestion && !askBack)) break;
           // "my parents are getting divorced" / "my dog died" is news, not a mood: the event replies know it better
           if (/\b(divorc\w*|died|passed away|moved|moving|broke up|dumped|hospital|sick|surgery|funeral|fired|lost my|new (puppy|dog|cat|kitten|baby|brother|sister)|got a (puppy|dog|cat|kitten))\b/.test(t)) break;
+          if (facts.some((f) => !f.quiet && /^(age|name|pet|event|job|location|school)$/.test(f.type)) && e.valence > -0.5) {
+            const ack = this._ackFacts(facts.filter((f) => !f.quiet), m, c);
+            if (ack) return Object.assign(ack, { text: (e.valence > 0.2 || /\b(good|great|fine|ok|okay)\b/.test(t) ? pick(["Glad your day's going well! 😊 ", "Nice! 😊 "]) : "") + ack.text });
+          }
           if (e.valence <= -0.5 || /\b(not (good|great|well|ok|okay|fine)|bad|terrible|awful|horrible|meh|could be better|so so|not so good)\b/.test(t)) {
             const lab = e.label && e.label !== "happy" && e.label !== "love" ? e.label : "sad";
             this._mood(lab);
@@ -1188,7 +1193,7 @@
       if (!worried && !/\b(tips?|advice|how (do|can|should|could) i|how to|what should i|what do i do|should i|any ideas|help me|how can i|why|any idea|do you know|what if|what do i (say|tell)|what to (tell|say)|keeps asking|do (you|u) think|gets? (easier|better))\b|\b(tummy|stomach) (feels|is|feeling)|butterflies/.test(t) && !/\?/.test(m.clean)) return null;
       for (const a of C.advice) {
         const recentText = t + " " + this.state.history.filter((h) => h.role === "user").slice(-5).map((h) => h.text.toLowerCase()).join(" ");
-        if (a.re.test(t) && (a.need.test(t) || (a.need.source.includes("divorc") && a.need.test(recentText)))) return { text: S.deal(this.state, "advice:" + a.re.source.slice(0, 30), a.say), source: "advice", score: /\b(tips?|advice)\b/.test(m.plain) || (m.isQuestion && a.re.test(m.plain)) ? 0.95 : 0.86 };
+        if (a.re.test(t) && (a.need.test(t) || ((a.need.source.includes("divorc") || a.need.source.includes("friend|mean")) && a.need.test(recentText)))) return { text: S.deal(this.state, "advice:" + a.re.source.slice(0, 30), a.say), source: "advice", score: /\b(tips?|advice)\b/.test(m.plain) || (m.isQuestion && a.re.test(m.plain)) ? 0.95 : 0.86 };
       }
       return null;
     }
@@ -1245,6 +1250,15 @@
       if ((this.mem.lost || []).length && m.emotion.valence > -0.5 && !m.isQuestion && (lostNames.some((n) => new RegExp("\\b" + n + "\\b").test(t)) || new RegExp("\\bmy (late )?(" + this.mem.lost.join("|") + ")\\b").test(t)) && /\b(used to|always|every|remember|loved|planted|made|gave|taught|would|when we|the year)\b/.test(t)) {
         const rose = /\b(rose|roses|flower|flowers|garden|tree)\b/.test(t) ? " Something that keeps blooming every year is like a little hello from him. 🌹" : "";
         return { text: S.deal(this.state, "memory-warm", [`That's a beautiful memory. 💙${rose}`, `What a lovely thing to remember. 💙${rose} Thank you for sharing it with me.`, `I can tell how much you loved each other. 💙${rose}`]), source: "event:memory", score: 0.9, expect: { kind: "vent", emotion: "sad" } };
+      }
+      const sib = new RegExp("\\bmy (?:little |big |baby |younger |older )?(brother|sister|cousin|" + PETS + ")\\b").exec(t);
+      if (sib && !/\bmy (?:little |big |baby |younger |older )?(brother|sister|cousin)(?: [a-z]+)? (?:just |accidentally |always |keeps? |again )*(?:broke|ruined|took|stole)/.test(t)) {
+        const pr = new RegExp("\\b(?:she|he|they|it) (?:just |always |keeps? |again )*(?:took|takes|stole|broke|ate|hid|ruined) (?:the |my |our )?([a-z ]{2,30})").exec(t);
+        if (pr) {
+          this._mood("angry");
+          const thing = pr[1].replace(/\s+(again|yesterday|today|lol|haha|without asking)$/g, "").trim();
+          return { text: pick([`Ugh, the ${thing} again?! 😤 ${U.capitalizeFirst(sib[1])}s, huh. Did you get it back?`, `Nooo, not the ${thing}! 😤 That's so annoying. Did you tell a parent?`]), source: "event:broken", score: 0.9 };
+        }
       }
       if ((r = new RegExp("\\bmy (?:little |big |baby |younger |older )?(" + FAM + "|" + PETS + ")(?: [a-z]+)? (?:just |accidentally |always |keeps? |again )*(?:broke|ruined|destroyed|wrecked|ate|chewed|lost|stole|took|takes|taking|deleted|knocked over|smashed|ripped|spilled \\w+ on) my ([a-z ]{2,30})").exec(t))) {
         this._mood("angry");
