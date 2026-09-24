@@ -142,14 +142,22 @@
       if (m.plain.replace(/[^a-z ]/g, "").trim() === nm || new RegExp("\\b(?:it'?s|its|it is|i'?m|im|i am|me|call me)\\s+" + nm + "\\s*[.!]*$").test(m.plain.replace(/[?]+$/, ""))) facts.push({ type: "name", value: mem.name });
     }
     // "jayden im 10": a name right before the age
-    if (!facts.some((f) => f.type === "name") && (r = /^\s*([a-z]{2,20})[\s,.!]*(?:im|i am|i'm)\s+(\d{1,2})\b/.exec(m.plain))) {
+    if (!facts.some((f) => f.type === "name") && ((r = /^\s*(?:(?:hi+|hey+|hello+|yo|sup|hii+)[\s,!.]+)?(?:(?:its|it is|this is|i am|im)\s+)?([a-z]{2,20})[\s,.!]*(?:and\s+)?(?:im|i am|i'm)\s+(\d{1,2})\b/.exec(m.plain)) ||
+        ((expectingName || !mem.name) && (r = /^\s*([a-z]{2,20})\s*[,.!]+\s*(\d{1,2})(?:\s*(?:and a half|½|1\/2))?(?:\s*(?:years? old|yrs?|yo))?\s*[.!]*$/.exec(m.plain))))) {
       const cand = r[1].replace(/(.)\1{2,}$/, "$1").replace(/(.)\1{2,}/g, "$1$1");
-      if (!NOT_NAME.has(cand) && !P.nlp.STOP.has(cand) && plausibleName(cand) && looksLikeName(cand, raw, !P.nlp.knownWord(cand))) facts.push({ type: "name", value: properCase(cand) });
+      if (!NOT_NAME.has(cand) && !P.nlp.STOP.has(cand) && plausibleName(cand) && !/^(and|yes|yeah|yep|yup|no|nope|ok|okay|so|well|um|uh|lol|haha|hmm|also|but|because|cause|bc|hi|hey|hello|sup|yo|dude|bro|well|now|today|still|just|almost|nearly|only|about|like)$/.test(cand) &&
+          looksLikeName(cand, raw, expectingName || !mem.name || !P.nlp.knownWord(cand))) facts.push({ type: "name", value: properCase(cand) });
+    }
+    // "hey im dev, 13", "ava. 10 and a half": a number right after the name is the age
+    const nf = facts.find((f) => f.type === "name");
+    if (nf && (r = new RegExp("\\b" + nf.value.toLowerCase() + "\\b[\\s,.!]*(?:and\\s+)?(?:i'?m\\s+|i am\\s+)?(\\d{1,2})(\\s*(?:and a half|½|1/2))?(?:\\s*(?:years? old|yrs?(?: old)?|yo))?\\s*[.!]*$").exec(m.plain.replace(/\s*[.!]+$/, "")))) {
+      const a = +r[1];
+      if (a >= 3 && a <= 99) facts.push({ type: "age", value: a, half: !!r[2] });
     }
     // age
-    if ((r = /\bi am (\d{1,3})(?: years? old| yrs? old| yo| y\/o)?\s*(?:$|[.!,;]| and| but| now| today| lol| [a-z]+ [a-z]+)/.exec(t)) || ((r = /\b(\d{1,2}) (?:years? old|yrs? old|yo)\b/.exec(t)) && !/\b(he|she|they|it|his|her|son|daughter|kid|kids|brother|sister|dog|cat|grandson|granddaughter|child|baby|cousin|friend)( is| are|'s| s)? (\w+ )?\d{1,2} (years?|yrs?)/.test(t)) || (r = /\bi am (\d{1,3}) years? old\b/.exec(t)) ||
+    if (!facts.some((f) => f.type === "age") && ((r = /\bi am (\d{1,3})(?: years? old| yrs? old| yo| y\/o)?\s*(?:$|[.!,;]| and| but| now| today| lol| [a-z]+ [a-z]+)/.exec(t)) || ((r = /\b(\d{1,2}) (?:years? old|yrs? old|yo)\b/.exec(t)) && !/\b(he|she|they|it|his|her|son|daughter|kid|kids|brother|sister|dog|cat|grandson|granddaughter|child|baby|cousin|friend)( is| are|'s| s)? (\w+ )?\d{1,2} (years?|yrs?)/.test(t)) || (r = /\bi am (\d{1,3}) years? old\b/.exec(t)) ||
       (r = /\bmy age is (\d{1,3})\b/.exec(t)) || (r = /\bi (?:just )?turned (\d{1,3})\b/.exec(t)) || (expect && (expect.kind === "age" || (expect.q && /how old are you/i.test(expect.q))) && (r = /^\s*(?:i am |im )?(\d{1,3})\b/.exec(m.plain))) ||
-      (mem._askedAge && (r = /^\s*(?:i am |im |i'm )?(\d{1,2})(?: years old| yo)?\s*[.!]*$/.exec(m.plain)))) {
+      ((mem._askedAge || expectingName) && (r = /^\s*(?:i am |im |i'm )?(\d{1,2})(?: years old| yo)?\s*[.!]*$/.exec(m.plain))))) {
       const a = parseInt(r[1], 10);
       if (a >= 3 && a <= 105) facts.push({ type: "age", value: a });
       else if (a > 105 && a < 1000) facts.push({ type: "age_odd", value: a, quiet: false });

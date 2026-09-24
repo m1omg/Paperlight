@@ -526,5 +526,56 @@
   }
   function singular(n) { return n.replace(/(inche|foot|feet)s?$/, (x) => (x.startsWith("inch") ? "inch" : "foot")).replace(/ies$/, "y").replace(/s$/, ""); }
 
-  P.math = { Q, evaluate, solve, convert, compare, format, toExpression, CalcError, scaleRecipe };
+  // "3/4 + 1/6": fraction homework, worked the way a teacher shows it (matching bottoms, then simplify)
+  function fractionSteps(text) {
+    const s = text.toLowerCase().trim().replace(/[?!.=\s]+$/, "").replace(/^(?:(?:ok|okay|so|um|pip|please|pls|hey)[\s,]+)*(?:what(?:'s| is)|whats|solve|calculate|work out|what do you get for|can you do|help me with|how do i do|how do you do|do)\s+/, "").trim();
+    const NUM = "(\\d+ \\d+\\/\\d+|\\d+\\/\\d+|\\d+)";
+    const r = new RegExp("^" + NUM + "\\s*(\\+|-|−|–|\\*|x|×|÷|plus|minus|times|divided by|of|take away)\\s*" + NUM + "$").exec(s);
+    if (!r || !/\d\/\d/.test(r[1] + " " + r[3])) return null;
+    const parse = (t) => {
+      let m;
+      if ((m = /^(\d+) (\d+)\/(\d+)$/.exec(t))) return { n: B(m[1]) * B(m[3]) + B(m[2]), d: B(m[3]), shown: t, mixed: true };
+      if ((m = /^(\d+)\/(\d+)$/.exec(t))) return { n: B(m[1]), d: B(m[2]), shown: t };
+      return { n: B(t), d: ONE, shown: t, whole: true };
+    };
+    const a = parse(r[1]), b = parse(r[3]);
+    if (a.d === ZERO || b.d === ZERO) return { text: "A fraction can't have 0 on the bottom! 😅 Can you check it?" };
+    const op = /^(\+|plus)$/.test(r[2]) ? "+" : /^(-|−|–|minus|take away)$/.test(r[2]) ? "−" : /^(\*|x|×|times|of)$/.test(r[2]) ? "×" : "÷";
+    const fr = (n, d) => n + "/" + d;
+    const g = (x, y) => { x = x < 0 ? -x : x; y = y < 0 ? -y : y; while (y) { [x, y] = [y, x % y]; } return x; };
+    const steps = [`${a.shown} ${op} ${b.shown}`];
+    // mixed and whole numbers become improper fractions first
+    if (a.mixed || b.mixed) steps.push(`${fr(a.n, a.d)} ${op} ${fr(b.n, b.d)}`);
+    let n, d, hint;
+    if (op === "+" || op === "−") {
+      const L = a.d / g(a.d, b.d) * b.d;
+      const an = a.n * (L / a.d), bn = b.n * (L / b.d);
+      if (a.d !== L || b.d !== L) steps.push(`${fr(an, L)} ${op} ${fr(bn, L)}`);
+      n = op === "+" ? an + bn : an - bn; d = L;
+      steps.push(fr(n, d));
+      hint = a.d !== b.d && !a.whole && !b.whole ? `First I made the bottom numbers match: ${L} is the smallest number both ${a.d} and ${b.d} go into.` : a.whole || b.whole ? `A whole number is just a fraction with 1 on the bottom, so I turned it into ${({ 2: "halves", 3: "thirds", 4: "quarters", 5: "fifths", 6: "sixths", 7: "sevenths", 8: "eighths", 9: "ninths", 10: "tenths", 12: "twelfths", 100: "hundredths" })[String(L)] || L + "ths"}.` : "Same bottom number, so just add the tops.";
+      if (op === "−" && a.d === b.d) hint = "Same bottom number, so just take away the tops.";
+    } else if (op === "×") {
+      n = a.n * b.n; d = a.d * b.d;
+      steps.push(`(${a.n} × ${b.n})/(${a.d} × ${b.d})`, fr(n, d));
+      hint = r[2] === "of" ? "\"Of\" means times: multiply the tops, multiply the bottoms, then simplify." : "Multiply the tops, multiply the bottoms, then simplify.";
+    } else {
+      if (b.n === ZERO) return { text: `${steps[0]}: you can't divide by zero! 😅` };
+      steps.push(`${fr(a.n, a.d)} × ${fr(b.d, b.n)}`);
+      n = a.n * b.d; d = a.d * b.n;
+      steps.push(fr(n, d));
+      hint = "Dividing by a fraction is the same as multiplying by it flipped upside down.";
+    }
+    const k = g(n, d);
+    if (k > ONE) { n /= k; d /= k; steps.push(d === ONE ? String(n) : fr(n, d)); }
+    else if (d === ONE) steps[steps.length - 1] = String(n);
+    const neg = n < 0, an2 = neg ? -n : n;
+    if (d !== ONE && an2 > d) steps.push(`${neg ? "−" : ""}${an2 / d} ${fr(an2 % d, d)}`);
+    const out = steps.filter((x, i) => i === 0 || x !== steps[i - 1]).map((x) => x.replace(/^-/, "−")).join(" = ");
+    const val = new Q(n, d);
+    const dec = d === ONE ? "" : ` (${val.finiteDecimal() ? "=" : "≈"} ${val.toDecimal(3).replace(/^-/, "−")})`;
+    return { text: `${out}${dec} ✏️ ${hint}`, value: val };
+  }
+
+  P.math = { Q, evaluate, solve, convert, compare, format, toExpression, CalcError, scaleRecipe, fractionSteps };
 })(typeof window !== "undefined" ? (window.Pip = window.Pip || {}) : (global.Pip = global.Pip || {}));
