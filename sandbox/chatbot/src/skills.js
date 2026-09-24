@@ -588,7 +588,13 @@
     return null;
   }
   function define(m) {
-    const t = m.plain.replace(/[?!.]+$/, "").trim();
+    // "could you tell me what the word 'ephemeral' means?" / "do you know what loquacious means" -> "what does X mean"
+    const t = m.plain.replace(/[?!.]+$/, "").trim()
+      .replace(/^(?:(?:can|could|would|will) (?:you|u) (?:please )?(?:tell me|explain(?: to me)?|say)|(?:do|does) (?:you|u) know|i (?:want|need|would like) to know|i wonder|(?:please )?tell me|explain)\s+/, "")
+      .replace(/^what (?:the word |the term |the phrase )?["']?([a-z][a-z '-]{1,30}?)["']? (?:means|stands for|is supposed to mean)$/, "what does $1 mean")
+      .replace(/^what(?:'s| is) (?:the )?(?:definition|meaning) of (?:the word )?/, "meaning of ")
+      .replace(/^(?:the )?(?:meaning|definition) of (?:the word )?/, "meaning of ")
+      .replace(/^what does the (?:word|term) /, "what does ").replace(/^what is the (?:word|term) /, "what is ");
     const r = /^(?:(what(?:'s| is| are| was| were)|whats|who(?:'s| is| was| are)|whos|define|definition of|meaning of|what(?:'s| is) the meaning of|what does|what do)\s+)(?:a |an |the |some )?([a-z][a-z '-]{1,30}?)(?:\s+mean| means)?$/.exec(t);
     if (!r || /\b(you|your|yours|my|me|i|it|that|this|up|going on|new|wrong|happening|the matter|next|there|here|they|he|she|we|u|ur)\b/.test(r[2])) return null;
     const e = lookup(r[2]);

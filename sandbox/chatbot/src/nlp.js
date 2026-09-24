@@ -55,12 +55,13 @@
   function addEmo(cat, words, w) { for (const x of words.split(" ")) EMO[x] = { cat, w: w || 1 }; }
   addEmo("sad", "sad unhappy depressed depressing miserable upset heartbroken crying cry cried tears gloomy hopeless " +
     "devastated disappointed disappointing awful terrible horrible worst hurt hurting grief grieving broken down low " +
-    "bummed sucks sucked suck crappy lousy shitty rough blue meh blah unmotivated empty numb worthless useless failure " +
+    "bummed sucks sucked suck crappy lousy shitty rough meh blah unmotivated empty numb worthless useless failure " +
     "failed fail sadness sorrow heartbreak dumped rejected", 1);
   addEmo("lonely", "lonely alone isolated lonesome friendless ignored excluded unloved unwanted invisible", 1.2);
   addEmo("lonely", "miss missing", 0.7);
   addEmo("sad", "bad tough guilty ashamed embarrassed homesick regret sadder saddest crap cries garbage divorce divorced divorcing", 0.8);
-  addEmo("angry", "whatever ugh pissed", 0.6);
+  addEmo("angry", "ugh", 0.5);
+  addEmo("angry", "whatever", 0.3);
   addEmo("angry", "unfair jealous", 0.9);
   addEmo("anxious", "scary awkward freaking panicky shaky", 0.8);
   addEmo("anxious", "anxious anxiety worried worry worrying nervous scared afraid stressed stress stressful panic " +
@@ -76,7 +77,7 @@
   addEmo("sick", "sick ill fever flu covid headache migraine nauseous vomiting puking cough coughing sore injured " +
     "hospital", 1.1);
   addEmo("love", "love loving crush adore", 0.6);
-  const NEGATORS = new Set(["not", "no", "never", "nothing", "hardly", "barely", "without", "nor", "neither"]);
+  const NEGATORS = new Set(["not", "no", "never", "nothing", "nobody", "noone", "hardly", "barely", "without", "nor", "neither"]);
   const INTENS = new Set(["so", "very", "really", "super", "extremely", "incredibly", "totally", "quite", "too", "sooo", "soo", "hella", "mega"]);
 
   // --- dictionary for spell correction -------------------------------------------------------------
@@ -102,6 +103,8 @@
     }
     addWords(Object.values(SLANG).join(" ").split(" "), 0.5);
     addWords(Object.keys(EMO), 0.3);
+    // computer words people paste or test with: never "correct" them into feelings (null -> dull)
+    addWords("null undefined nan json html css javascript python sql api url http https www bool boolean int str var const".split(" "), 0.2);
   }
   // candidate index by deletion keys (SymSpell-lite) for fast lookup of distance-1/2 neighbors
   function buildDelIndex() {
@@ -223,6 +226,8 @@
       // "I'm afraid I don't play" is politeness, and "not very good with computers" is modesty
       if (tokens[i] === "afraid" && tokens[i - 1] === "am" && (!tokens[i + 1] || /^(that|i|not|so|we|it|you|there|this)$/.test(tokens[i + 1]))) continue;
       if (tokens[i] === "good" && /^(with|at)$/.test(tokens[i + 1] || "")) continue;
+      // "I want a puppy so bad" / "I need it so badly": wanting a lot, not feeling bad
+      if (/^(bad|badly)$/.test(tokens[i]) && /^(so|really|sooo|soo)$/.test(tokens[i - 1] || "") && tokens.slice(0, i).some((x) => /^(want|wanted|wants|wanna|need|needed|needs|wish|miss)$/.test(x))) continue;
       let w = e.w;
       let neg = false;
       // "not happy" is negated, but in "I don't know, it's fun" the "not" belongs to "know"
@@ -239,13 +244,25 @@
       scores[cat] = (scores[cat] || 0) + w;
     }
     const joined = " " + tokens.join(" ") + " ";
-    if (/ (by myself|on my own|no one to|nobody to|(do not|don't|dont) (really |even )?have (anyone|anybody|any friends)|no friends|have nobody|have no one|nobody to talk to|sit alone|eat alone|nobody (listens|cares|does|understands|gets it)|no one (listens|cares|understands)|(does not|doesn't|doesnt|do not|don't|dont) (even )?listen) /.test(joined)) scores.lonely = (scores.lonely || 0) + 1.2;
+    if (/ (by myself|on my own|no one to|nobody to|(do not|don't|dont) (really |even )?have (anyone|anybody|any friends)|no friends|have nobody|have no one|nobody to talk to|sit alone|eat alone|(nobody|no one|noone) (listens|cares|does|understands|gets it|likes me|loves me|wants me|talks to me|plays with me|wants to play with me|sits with me|wants to be my friend)|no one (listens|cares|understands)|(does not|doesn't|doesnt|do not|don't|dont) (even )?listen) /.test(joined)) scores.lonely = (scores.lonely || 0) + 1.2;
+    if (/ (feel|feels|feeling|felt|am|was|been|im) (so |a bit |a little |kind of |kinda |pretty |really )?blue( today| lately| again)? /.test(joined)) scores.sad = (scores.sad || 0) + 1;
+    return finishEmotion(scores);
+  }
+  function finishEmotion(scores) {
     let best = null, bestV = 0;
     for (const k in scores) if (scores[k] > bestV) { best = k; bestV = scores[k]; }
     const positive = (scores.happy || 0) + (scores.love || 0) * 0.5;
     const negative = (scores.sad || 0) + (scores.lonely || 0) + (scores.anxious || 0) + (scores.angry || 0) +
       (scores.tired || 0) * 0.6 + (scores.bored || 0) * 0.5 + (scores.sick || 0);
     return { label: best, strength: bestV, scores, valence: positive - negative };
+  }
+  // feelings sentence by sentence: in "I'm not bored. I just miss how things used to be" the "not" belongs to "bored" only
+  function emotionOfText(clean, toks) {
+    const sents = clean.split(/(?<=[.!?;])\s+/).filter((x) => /[a-z]/i.test(x));
+    if (sents.length < 2) return emotion(toks);
+    const scores = {};
+    for (const s of sents) { const e = emotion(words(normalize(s))); for (const k in e.scores) scores[k] = (scores[k] || 0) + e.scores[k]; }
+    return finishEmotion(scores);
   }
 
   // --- analysis of one user message -------------------------------------------------------------------
@@ -258,7 +275,7 @@
     const toks = words(norm);
     const stems = toks.map(stem);
     const isQuestion = /\?\s*$/.test(clean) || QWORDS.test(norm) || /\b(right|yeah|no)\?$/.test(norm);
-    let emo = emotion(toks);
+    let emo = emotionOfText(clean, toks);
     // "great. even the ai doesn't listen to me": a sarcastic "great" in front of a complaint
     if (/^(great|perfect|awesome|wonderful|fantastic|nice|cool|lovely|brilliant|wow|thanks|oh great|just great|oh wow|oh nice|yay)[.,!]+\s+\S/i.test(clean.trim())) {
       const rest = emotion(toks.slice(toks[1] === "great" || toks[1] === "wow" || toks[1] === "nice" ? 2 : 1));

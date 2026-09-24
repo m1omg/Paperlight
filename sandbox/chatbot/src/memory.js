@@ -533,13 +533,21 @@
 
   // Something from memory worth bringing up when the user comes back (Replika-style follow-ups)
   // Returns { text, expect } so the brain knows what the next answer is about.
+  const HARD_CARE = /^(overdose|crisis|abuse|neglect|grooming|sextortion|meetstranger|friendcrisis|runaway)$/;
   function followUp(mem) {
     const now = Date.now();
     const cf = mem.careFollow;
     if (cf && !cf.asked && now - cf.at > 2 * 3600e3 && now - cf.at < 14 * 864e5) {
       cf.asked = true;
-      return { text: cf.kind === "overdose" ? "I've been thinking about you. 💙 How are you feeling? Did you tell an adult about what happened?" : "I've been thinking about you. 💙 How are you feeling today? Did you get a chance to talk to someone you trust?",
-        expect: { kind: "followup", about: "care", label: cf.kind || "sad" } };
+      const hard = HARD_CARE.test(cf.kind || "");
+      // a serious moment gets a real check-in; a sad or touchy chat just gets a warm "how are you?"
+      let text = cf.kind === "overdose" ? "I've been thinking about you. 💙 How are you feeling? Did you tell an adult about what happened?"
+        : hard ? "I've been thinking about you. 💙 How are you feeling today? Did you get a chance to talk to someone you trust?"
+        : cf.kind === "grief" ? "I've been thinking about what you told me. 💙 How are you feeling today?"
+        : "I've been thinking about you. 💙 How are you feeling today?";
+      const soon = !hard && mem.events.find((e) => !e.wished && e.due && e.due > now && e.due - now < 30 * 3600e3);
+      if (soon) { soon.wished = true; text += ` And your ${soon.what} is ${dayWord(soon.due)}! Good luck! 🍀`; }
+      return { text, expect: { kind: "followup", about: "care", label: cf.kind || "soft", hard } };
     }
     const ev = mem.events.find((e) => !e.asked && now - e.at > 3 * 3600e3 && now - e.at < 14 * 864e5 && dueOf(e) <= now);
     if (ev) {
