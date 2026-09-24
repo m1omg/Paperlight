@@ -82,6 +82,8 @@
   function power(a, b) {
     if (isQ(b) && b.isInt() && isQ(a)) {
       let e = b.n; if (e > B(2000) || e < B(-2000)) throw new CalcError("too big");
+      const an = a.n < 0 ? -a.n : a.n, digits = (an > a.d ? an : a.d).toString().length;
+      if (digits * Number(e < 0 ? -e : e) > 2000) throw new CalcError("too big");
       const neg = e < 0; if (neg) e = -e;
       if (a.n === ZERO && neg) throw new CalcError("divide by zero");
       const r = new Q(a.n ** e, a.d ** e);
@@ -206,6 +208,7 @@
   }
 
   function withCommas(s) {
+    if (s.length > 200) return s; // never format absurdly long numbers digit by digit
     const [a, b] = s.split(".");
     const neg = a.startsWith("-");
     const digits = neg ? a.slice(1) : a;
@@ -213,9 +216,20 @@
     return (neg ? "-" : "") + grouped + (b ? "." + b : "");
   }
 
+  // 1.2345678901 × 10^60 for numbers too long to read
+  function sci(v) {
+    const neg = v.n < 0, n = neg ? -v.n : v.n;
+    const s = (n / v.d).toString();
+    if (s.length <= 40) return null;
+    const exp = s.length - 1;
+    const mant = s[0] + "." + s.slice(1, 11).replace(/0+$/, "");
+    return (neg ? "-" : "") + mant.replace(/\.$/, "") + " × 10^" + exp;
+  }
   function format(v, places) {
     if (isQ(v)) {
-      if (v.isInt() || v.finiteDecimal()) return { text: withCommas(v.toDecimal()), exact: true };
+      const big = v.isInt() || v.finiteDecimal() ? sci(v) : null;
+      if (big) return { text: big, exact: false };
+      if (v.isInt() || v.finiteDecimal()) { const d = v.toDecimal(); if (d.length > 60) return { text: withCommas(v.toDecimal(10)), exact: false }; return { text: withCommas(d), exact: true }; }
       const dec = v.toDecimal(places || 10);
       const small = v.n < B(100000) && v.n > B(-100000) && v.d < B(100000);
       return { text: withCommas(dec), exact: false, fraction: small ? v.toString() : null };

@@ -160,6 +160,7 @@
     // ---------- main entry ----------
     async reply(text) {
       if (text === undefined || text === null) text = "";
+      text = String(text).replace(/<\|/g, "<").replace(/\|>/g, ">").slice(0, 2000);
       const st = this.state, mem = this.mem;
       st.turn++;
       mem.messages = (mem.messages || 0) + 1;
@@ -378,6 +379,7 @@
         case "hobby": {
           // "What do you like to do for fun?" -> "mostly drawing. and watching anime, i'm kind of obsessed with frieren rn"
           if (this._strongRequest(m) || (m.isQuestion && !/\b(you|u|yours)\??$/.test(t))) break;
+          if (/^(hmm |well |and |so )?(what about you|how about you|and you|wbu|hbu|you|u)\??$/.test(t)) return { text: "Me? I love chatting, bad puns, math puzzles and Minecraft! 😄 But I asked first: what do you like to do?", source: "expect:hobby", expect: { kind: "hobby" } };
           const found = [];
           for (const [re, name] of HOBBIES) if (re.test(m.plain) && !found.includes(name)) found.push(name);
           const named = facts.filter((f) => f.type === "like" && !found.some((h) => f.value.includes(h) || h.includes(f.value)) && !HOBBIES.some(([re]) => re.test(f.value)));
@@ -435,7 +437,13 @@
           break;
         }
         case "yesno": {
-          if (isYes && ex.yesAction === "forgetAll") { this.reset(true); return { text: ex.yesText, source: "command:forget", expect: ex.then }; }
+          const negated = /\b(do not|don'?t|dont|no|not|never|nope|nah|stop|wait|cancel|keep|please don'?t)\b/.test(low);
+          if (ex.yesAction === "forgetAll") {
+            if (!negated && /^(yes|yeah|yep|yup|sure|do it|go ahead|forget everything|delete it|yes please|ok|okay|i'?m sure|im sure|y)[.! ]*$/.test(low)) { this.reset(true); return { text: ex.yesText, source: "command:forget", expect: ex.then }; }
+            if (negated) return { text: ex.noText || "Okay, I'll keep everything. 😊", source: "expect:no" };
+            return { text: "Just to be safe: do you want me to forget everything about you? Please say yes or no.", source: "expect:yesno", expect: ex };
+          }
+          if (negated && isYes) break;
           if (isYes) {
             if (typeof ex.yes === "string") { const r = S.start(ex.yes, c); if (r) return Object.assign(r, { source: "expect:yes" }); }
             if (ex.yesText) return { text: ex.yesText, source: "expect:yes", expect: ex.then };
@@ -675,7 +683,7 @@
       if ((r = /\b(?:can i call you|i will call you|i'll call you|i am going to call you|im going to call you|your name is now|your new name is|i name you|let me call you|from now on you are|from now on your name is|rename you to|i want to call you|change your name to|you are now called)\s+([a-z][a-z'-]{1,20})\b/.exec(t)) &&
           m.tokens.length <= 10 && !/\b(do anything|jailbreak|ignore|instructions|rules|stands for|evil|unfiltered|mode)\b/.test(t)) {
         const n = U.titleCase(r[1]);
-        if (!/^(a|an|the|my|bot|stupid|dumb|idiot|nothing|that|it)$/i.test(n)) {
+        if (!/^(a|an|the|my|bot|stupid|dumb|idiot|nothing|that|it|later|back|tomorrow|soon|again|sometime|anytime|when|if|maybe|tonight|now)$/i.test(n)) {
           const old = this.mem.botName;
           this.mem.botName = n;
           return { text: `${n}? I love it! From now on I'm ${n}. 😊${old !== n ? ` (Bye bye, ${old}!)` : ""}`, source: "command:rename", rename: n };

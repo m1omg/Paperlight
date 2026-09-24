@@ -29,7 +29,10 @@
     "early on fire speechless dying crying laughing blessed grateful thankful sure positive okay hi hello hey yo sup hiya " +
     "howdy yes yeah yep yup nope nah no lol haha hehe hmm hm um uh why what how who idk nothing bye thanks thank sure maybe " +
     "please sorry wow cool nice good bad fine great test testing anonymous secret unknown whatever dunno later brb ty thx " +
-    "pip bot chatbot guess none nobody hru wyd").split(" "));
+    "pip bot chatbot guess none nobody hru wyd polish english american british french german spanish italian chinese japanese korean " +
+    "indian mexican canadian australian russian ukrainian dutch swedish irish scottish welsh brazilian portuguese turkish greek arab african " +
+    "asian european latino latina jewish muslim christian catholic hindu buddhist atheist gay straight bi lesbian trans nonbinary vegan " +
+    "vegetarian now later soon here there done back ready fine hungry thirsty").split(" "));
 
   const PET = "dogs?|cats?|pupp(?:y|ies)|kittens?|kitt(?:y|ies)|hamsters?|rabbits?|bunn(?:y|ies)|fish|goldfish|parrots?|birds?|" +
     "turtles?|tortoises?|snakes?|lizards?|horses?|guinea pigs?|ferrets?|gerbils?|mice|mouse|rats?|chickens?|ducks?|geckos?|axolotls?|frogs?|pigs?|goats?|cows?|budgies?|cockatiels?";
@@ -97,7 +100,7 @@
 
     // name
     const expectingName = expect && expect.kind === "name";
-    if ((r = /\b(?:my name is|my names|my name s|(?<!\b(?:his|her|its|their|the|\w+'s|\w+s) )name is|i am called|call me|you can call me|people call me|everyone calls me|i go by)\s+([a-z][a-z'-]*)(?:\s+([a-z][a-z'-]*))?/.exec(t)) && !/\b\w+'?s name is\b/.test(t.replace(/\bmy name is\b/g, "")) &&
+    if ((r = /\b(?:my name is|my names|my name s|(?<!\b(?:his|her|its|their|the|your|ur|\w+'s|\w+s) )name is|i am called|call me|you can call me|people call me|everyone calls me|i go by)\s+([a-z][a-z'-]*)(?:\s+([a-z][a-z'-]*))?/.exec(t)) && !/\b\w+'?s name is\b/.test(t.replace(/\bmy name is\b/g, "")) &&
       !/\b(do not|don't|never|dont) call me\b/.test(t) && !/\bcall me (later|back|tomorrow|when|if|a|an|the|maybe|sometime)\b/.test(t)) {
       if (looksLikeName(r[1], raw, true) && r[1] !== "not") facts.push({ type: "name", value: properCase(r[1]) });
     } else if ((r = /^\s*(?:i am|im|it is|its|this is|hi i am|hello i am|hey i am|hi im|hey im|hello im)\s+([a-z][a-z'-]*)\s*[.!]?\s*$/.exec(m.plain)) && looksLikeName(r[1], raw, expectingName)) {
@@ -142,7 +145,10 @@
 
     // birthday
     if ((r = /\bmy (?:birthday|bday|birth day) is (?:on )?(?:the )?([a-z]+ \d{1,2}(?:st|nd|rd|th)?|\d{1,2}(?:st|nd|rd|th)?(?: of)? [a-z]+|today|tomorrow|next week|in \w+(?: \w+)?)/.exec(t))) {
-      facts.push({ type: "birthday", value: r[1] === "today" ? "today" : properCase(r[1]).replace(/ Of /, " of ") });
+      const MON = { january: 31, february: 29, march: 31, april: 30, may: 31, june: 30, july: 31, august: 31, september: 30, october: 31, november: 30, december: 31 };
+      const md = /([a-z]+) (\d{1,2})|(\d{1,2})(?:st|nd|rd|th)?(?: of)? ([a-z]+)/.exec(r[1]);
+      const mon = md ? (md[1] || md[4]) : null, day = md ? +(md[2] || md[3]) : null;
+      if (!(mon && MON[mon] && day > MON[mon])) facts.push({ type: "birthday", value: r[1] === "today" ? "today" : properCase(r[1]).replace(/ Of /, " of ") });
     }
 
     // favorites: "my favorite color is blue", "blue is my favorite color"

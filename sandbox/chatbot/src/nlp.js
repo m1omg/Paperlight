@@ -152,13 +152,17 @@
   }
 
   // collapse "sooooo" -> "soo", "hiiii" -> "hii" (then spell-fix can finish the job)
-  function squeeze(w) { return w.replace(/(\w)\1{2,}/g, "$1$1"); }
+  function squeeze(w) { return w.replace(/([a-z])\1{2,}/g, "$1$1"); }
 
   const LAUGH = /^(a?(ha){2,}h?|(he){2,}|(hi){3,}|l+o+l+(o+l+)*|lmf?a+o+|rofl|xd+|kek|haha\w*|jaja\w*)$/;
 
   function normalize(text, opts) {
     opts = opts || {};
-    let s = basicClean(text).toLowerCase();
+    const caps = new Set();
+    const rawClean = basicClean(text);
+    for (const mm of rawClean.matchAll(/(?<![.!?]\s)(?<!^)\b([A-Z][a-z]{1,})\b/g)) caps.add(mm[1].toLowerCase());
+    opts = Object.assign({}, opts, { caps });
+    let s = rawClean.toLowerCase();
     s = s.replace(/[’]/g, "'");
     for (const [re, rep] of CONTRACTIONS) s = s.replace(re, rep);
     s = s.replace(/(\d),(\d{3})/g, "$1$2");            // 1,000 -> 1000
@@ -167,7 +171,7 @@
     const out = [];
     for (let ri = 0; ri < raw.length; ri++) {
       const t = raw[ri];
-      const core = t.replace(/^[^a-z0-9<]+|[^a-z0-9>+%]+$/g, "");
+      const core = t.replace(/^[^a-z0-9<-]+|[^a-z0-9>+%]+$/g, "").replace(/^-+(?!\d)/, "");
       if (!core) { if (/[?!]/.test(t)) out.push(t.replace(/[^?!]/g, "").slice(0, 1)); continue; }
       let w = squeeze(core);
       if (LAUGH.test(w)) { out.push("haha"); continue; }
@@ -177,7 +181,7 @@
       if (w === "imma" || w === "ima") { out.push("i", "am", "going", "to"); continue; }
       if (w === "aight" || w === "ight") { out.push("alright"); continue; }
       if (SLANG[w] !== undefined) { out.push(...SLANG[w].split(" ")); continue; }
-      if (opts.spell !== false && /^[a-z]+$/.test(w)) {
+      if (opts.spell !== false && /^[a-z]+$/.test(w) && !opts.caps.has(w)) {
         const fixed = correctWord(w);
         if (fixed !== w && SLANG[fixed] !== undefined) { out.push(...SLANG[fixed].split(" ")); continue; }
         w = fixed;

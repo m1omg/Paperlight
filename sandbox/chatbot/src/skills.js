@@ -104,7 +104,7 @@
   }
 
   // ---------- running games ----------
-  const QUIT = /\b(stop|quit|end|exit|enough|no more|i (am|m) done|done playing|cancel|forget it|nevermind|never mind|something else|another game)\b/;
+  const QUIT = /^(stop|quit|end|exit|enough|no more|i (am|m) done|done|done playing|cancel|forget it|nevermind|never mind|something else|another game|stop playing|end game|end the game|i quit|lets stop|let's stop|can we stop)( please| now| pls)?[.!]*$|\b(stop|quit|end|exit) (the |this )?(game|playing|quiz|trivia)\b|\b(i am|i'?m|im) done( playing)?\b|\bno more (questions|games|riddles)\b/;
   function gameTurn(m, c) {
     const st = c.state, g = st.game;
     if (!g) return null;
@@ -131,7 +131,8 @@
         const q = g.q;
         if (/\b(skip|pass|next)\b/.test(t)) { g.asked++; const r = start("trivia", c); r.text = `It was ${q[2].replace(/^The /, "the ")}. Next: ` + r.text.replace("Trivia time! 🧠 ", ""); return r; }
         const idk = /\b(i do not know|idk|no idea|not sure|dunno|give up|no clue)\b/.test(t);
-        if (!idk && m.tokens.length > 8) return idle(g, st);
+        if (!idk && (m.tokens.length > 8 || /\?\s*$/.test(m.clean) || /^(what|why|how|who|where|when|would you|can you|do you|tell me|let'?s|lets)\b/.test(t))) return idle(g, st);
+        if (!idk && m.tokens.length > 3 && m.tokens.filter((w) => !P.nlp.STOP.has(w)).length > 3) return idle(g, st); // a list of guesses isn't an answer
         g.asked++;
         const right = !idk && matchesAnswer(m.clean, q[1]);
         if (right) g.score++;
@@ -173,7 +174,8 @@
         return { text: `I choose ${mine} ${em[mine]}! ${res} (You ${g.you} : ${g.me} Me) Again?`, chips: ["Rock", "Paper", "Scissors", "Stop"] };
       }
       case "guess": {
-        const nm = /(-?\d+)/.exec(t);
+        const tt = P.math && P.math.toExpression ? P.math.toExpression(t) : t;
+        const nm = /^(is it |maybe |i guess |how about |what about |my guess is |i think )?(-?\d+|[a-z]+(?:[ -][a-z]+)?)\s*[?!.]*$/.test(t) && !/[+*/^=]/.test(t) ? /(-?\d+)/.exec(tt) : null;
         if (!nm) return /\b(give up|tell me)\b/.test(t) ? (st.game = null, { text: `It was ${g.target}! 😄 Want to play again?`, expect: { kind: "yesno", yes: "guess" } }) : idle(g, st);
         const n = parseInt(nm[1], 10);
         g.tries++;
@@ -272,11 +274,13 @@
     if ((r = /\b(?:in|after) (\d+|a|one|two|three|four|five|six|seven|ten) (days?|weeks?)(?: from (?:now|today))?\b|\b(\d+) (days?|weeks?) from (?:now|today)\b/.exec(t))) {
       const nn = r[1] || r[3], unit = r[2] || r[4];
       const n = { a: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, ten: 10 }[nn] || +nn;
+      if (!(n * (/week/.test(unit) ? 7 : 1) <= 3650000)) return "That's too far in the future for my calendar! 📅";
       const d = new Date(today); d.setDate(d.getDate() + n * (/week/.test(unit) ? 7 : 1));
       return `${n} ${unit.replace(/s$/, "")}${n === 1 ? "" : "s"} from today is ${fmt(d)}. 📅`;
     }
     if ((r = /\b(\d+|a|one|two|three) (days?|weeks?) ago\b/.exec(t))) {
       const n = { a: 1, one: 1, two: 2, three: 3 }[r[1]] || +r[1];
+      if (!(n * (/week/.test(r[2]) ? 7 : 1) <= 3650000)) return "That's too far back for my calendar! 📅";
       const d = new Date(today); d.setDate(d.getDate() - n * (/week/.test(r[2]) ? 7 : 1));
       return `${n} ${r[2].replace(/s$/, "")}${n === 1 ? "" : "s"} ago was ${fmt(d)}. 📅`;
     }
