@@ -613,10 +613,110 @@
     { k: /\b(youtube|youtuber|tiktok|tiktoker|streamer|twitch)\b/, name: "videos", say: ["Ooh, fun! 📺"], q: ["Who do you like to watch?", "Do you make videos too?"], opinion: "there are so many creative people on there!" },
     { k: /\b(pizza|burgers?|tacos?|sushi|pasta|ice cream|chocolate|fries|chicken nuggets|nuggets|pancakes|cookies|cake|donuts?|ramen)\b/, name: "food", say: ["Yum! 😋 Now I'm hungry, and I don't even eat.", "Ooh, great choice! 😋"], q: ["What's the best one you've ever had?", "Do you like making it yourself?"], opinion: "it looks delicious! I can't eat, but if I could..." },
   ];
-  function topicOf(text) { const t = String(text).toLowerCase(); return topics.find((x) => x.k.test(t)) || null; }
+  function topicOf(text) {
+    const t = String(text).toLowerCase();
+    const tp = topics.find((x) => x.k.test(t)) || null;
+    // "that sport" -> the sport they actually named
+    if (tp && tp.name === "that sport") {
+      const w = (tp.k.exec(t) || [])[0] || "";
+      const sport = w.replace(/^(go|went|going|love|like) /, "");
+      if (sport) return Object.assign({}, tp, { name: sport, say: [`${sport.charAt(0).toUpperCase() + sport.slice(1)}! That's such a cool sport! 💪`], opinion: `${sport} looks really fun!` });
+    }
+    return tp;
+  }
+
+  // artists people ask about: pronoun, well-known songs, and the one Pip would pick
+  const artists = [
+    ["Taylor Swift", "she", ["Love Story", "Shake It Off", "Anti-Hero", "Cruel Summer", "Blank Space"], "Love Story"],
+    ["Olivia Rodrigo", "she", ["drivers license", "good 4 u", "vampire", "deja vu", "traitor", "bad idea right?"], "good 4 u"],
+    ["SZA", "she", ["Kill Bill", "Good Days", "Snooze", "Saturn"], "Good Days"],
+    ["Billie Eilish", "she", ["bad guy", "Ocean Eyes", "Birds of a Feather", "What Was I Made For?", "Happier Than Ever"], "Birds of a Feather"],
+    ["Sabrina Carpenter", "she", ["Espresso", "Please Please Please", "Nonsense", "Feather", "Taste"], "Espresso"],
+    ["Ariana Grande", "she", ["thank u, next", "7 rings", "positions", "we can't be friends"], "thank u, next"],
+    ["Doja Cat", "she", ["Say So", "Kiss Me More", "Paint The Town Red"], "Say So"],
+    ["Chappell Roan", "she", ["Pink Pony Club", "Good Luck, Babe!", "HOT TO GO!", "Femininomenon"], "Pink Pony Club"],
+    ["Dua Lipa", "she", ["Levitating", "Don't Start Now", "New Rules", "Houdini"], "Levitating"],
+    ["Beyoncé", "she", ["Halo", "Crazy in Love", "Single Ladies", "Texas Hold 'Em"], "Halo"],
+    ["Rihanna", "she", ["Umbrella", "Diamonds", "We Found Love", "Work"], "Umbrella"],
+    ["Lady Gaga", "she", ["Bad Romance", "Poker Face", "Shallow", "Just Dance"], "Bad Romance"],
+    ["Adele", "she", ["Rolling in the Deep", "Hello", "Someone Like You", "Easy On Me"], "Rolling in the Deep"],
+    ["Katy Perry", "she", ["Firework", "Roar", "Teenage Dream", "Dark Horse"], "Firework"],
+    ["Miley Cyrus", "she", ["Flowers", "Party in the U.S.A.", "The Climb", "Wrecking Ball"], "Flowers"],
+    ["Selena Gomez", "she", ["Lose You to Love Me", "Come & Get It", "Calm Down"], "Lose You to Love Me"],
+    ["Tate McRae", "she", ["greedy", "you broke me first", "Sports car"], "greedy"],
+    ["Gracie Abrams", "she", ["That's So True", "I Love You, I'm Sorry"], "That's So True"],
+    ["Lana Del Rey", "she", ["Young and Beautiful", "Summertime Sadness", "Video Games"], "Young and Beautiful"],
+    ["Laufey", "she", ["From The Start", "Valentine"], "From The Start"],
+    ["Ed Sheeran", "he", ["Shape of You", "Perfect", "Thinking Out Loud", "Bad Habits"], "Perfect"],
+    ["Harry Styles", "he", ["As It Was", "Watermelon Sugar", "Adore You", "Sign of the Times"], "Watermelon Sugar"],
+    ["The Weeknd", "he", ["Blinding Lights", "Save Your Tears", "Starboy", "Can't Feel My Face"], "Blinding Lights"],
+    ["Bruno Mars", "he", ["24K Magic", "Uptown Funk", "Just the Way You Are", "Die With A Smile", "APT."], "24K Magic"],
+    ["Drake", "he", ["God's Plan", "Hotline Bling", "One Dance"], "God's Plan"],
+    ["Kendrick Lamar", "he", ["HUMBLE.", "Alright", "Not Like Us", "DNA."], "Alright"],
+    ["Travis Scott", "he", ["goosebumps", "SICKO MODE", "HIGHEST IN THE ROOM", "FE!N"], "goosebumps"],
+    ["Post Malone", "he", ["Circles", "Sunflower", "Congratulations", "I Had Some Help"], "Circles"],
+    ["Justin Bieber", "he", ["Love Yourself", "Sorry", "Peaches", "Ghost"], "Love Yourself"],
+    ["Bad Bunny", "he", ["Tití Me Preguntó", "Dákiti", "Me Porto Bonito", "Callaita"], "Tití Me Preguntó"],
+    ["Shawn Mendes", "he", ["Treat You Better", "Stitches", "Señorita"], "Treat You Better"],
+    ["Lil Nas X", "he", ["Old Town Road", "MONTERO", "INDUSTRY BABY"], "Old Town Road"],
+    ["Benson Boone", "he", ["Beautiful Things", "Slow It Down"], "Beautiful Things"],
+    ["Noah Kahan", "he", ["Stick Season", "Northern Attitude"], "Stick Season"],
+    ["Hozier", "he", ["Too Sweet", "Take Me to Church"], "Too Sweet"],
+    ["Tyler, the Creator", "he", ["EARFQUAKE", "See You Again", "NEW MAGIC WAND"], "EARFQUAKE"],
+    ["Eminem", "he", ["Lose Yourself", "Without Me", "Mockingbird"], "Lose Yourself"],
+    ["Michael Jackson", "he", ["Billie Jean", "Thriller", "Beat It", "Smooth Criminal"], "Billie Jean"],
+    ["Zach Bryan", "he", ["Something in the Orange", "I Remember Everything"], "Something in the Orange"],
+    ["Frank Ocean", "he", ["Pink + White", "Thinkin Bout You", "Nights"], "Pink + White"],
+    ["C418", "he", ["Sweden", "Wet Hands", "Subwoofer Lullaby", "Mice on Venus"], "Sweden"],
+    ["BTS", "they", ["Dynamite", "Butter", "Boy With Luv", "Spring Day"], "Dynamite"],
+    ["BLACKPINK", "they", ["How You Like That", "DDU-DU DDU-DU", "Pink Venom"], "How You Like That"],
+    ["Stray Kids", "they", ["God's Menu", "MANIAC", "S-Class"], "God's Menu"],
+    ["NewJeans", "they", ["Super Shy", "Ditto", "Hype Boy", "OMG"], "Super Shy"],
+    ["Imagine Dragons", "they", ["Believer", "Thunder", "Radioactive", "Enemy"], "Believer"],
+    ["Coldplay", "they", ["Viva la Vida", "Yellow", "Fix You", "A Sky Full of Stars"], "Viva la Vida"],
+    ["Queen", "they", ["Bohemian Rhapsody", "Don't Stop Me Now", "We Will Rock You"], "Don't Stop Me Now"],
+    ["The Beatles", "they", ["Here Comes the Sun", "Hey Jude", "Let It Be", "Yellow Submarine"], "Here Comes the Sun"],
+    ["Arctic Monkeys", "they", ["505", "Do I Wanna Know?", "R U Mine?"], "505"],
+  ].map(([name, p, songs, pick]) => ({ name, p, songs, pick, key: name.toLowerCase().replace(/[,.]/g, "").replace(/é/g, "e") }));
+  const ARTIST_ALIASES = { "tswift": "taylor swift", "taylor": "taylor swift", "olivia": "olivia rodrigo", "billie": "billie eilish", "sabrina": "sabrina carpenter", "ariana": "ariana grande", "the weekend": "the weeknd", "weeknd": "the weeknd", "kendrick": "kendrick lamar", "post": "post malone", "bieber": "justin bieber", "bts": "bts", "blackpink": "blackpink", "beyonce": "beyonce", "gaga": "lady gaga", "tyler the creator": "tyler the creator", "mj": "michael jackson", "chappell": "chappell roan" };
+  function artistOf(text) {
+    const t = " " + String(text).toLowerCase().replace(/é/g, "e").replace(/[,.!?]/g, " ").replace(/\s+/g, " ") + " ";
+    let a = artists.find((x) => t.includes(" " + x.key + " "));
+    if (!a) for (const [al, key] of Object.entries(ARTIST_ALIASES)) if (al.length > 4 && t.includes(" " + al + " ")) { a = artists.find((x) => x.key === key); if (a) break; }
+    return a || null;
+  }
+  // "my fav songs rn are vampire and good days by sza"
+  function songsIn(text) {
+    const t = " " + String(text).toLowerCase().replace(/[,.!?]/g, " ").replace(/\s+/g, " ") + " ";
+    const out = [];
+    for (const a of artists) for (const sg of a.songs) {
+      const k = sg.toLowerCase().replace(/[,.!?]/g, "").trim();
+      if (k.length >= 4 && t.includes(" " + k + " ") && !out.some((o) => o.title === sg)) out.push({ title: sg, artist: a.name });
+    }
+    return out.slice(0, 3);
+  }
 
   // practical, kind advice for things people often ask a friend about
   const advice = [
+    // friendship and crush questions teens ask
+    { re: /\bshould i (text|message|dm|snap|call|talk to|apologi[sz]e to|say sorry to) (her|him|them|[a-z]+) first\b|\b(text|message) (her|him|them) first\b.*\bwait\b|\bwait for (her|him|them) to (text|message|call|reach out)\b/, need: /./,
+      say: ["I'd text first. 💙 Waiting usually makes things more awkward, and she might be waiting for you too! Reaching out shows the friendship matters more to you than who was right. Keep it short and real, no big speech needed.".replace(/she\b/g, "they")] },
+    { re: /\bwhat (should|do|can) i (text|send|say to|message|dm|write to)( her| him| them| [a-z]+)?\b|\bwhat (words|message|text) (do|should) i (send|text|write)\b|\bwhat (to|should i) (text|send) (her|him|them)\b/, need: /./,
+      say: ["Something short and real, like: \"Hey, I'm sorry about the group chat thing. I miss hanging out. Can we talk?\" 💙 Don't argue about who started it or write a whole essay. Just open the door and let them answer.",
+        "Keep it simple: \"Hey, I've been thinking about what happened. I'm sorry for my part, and I miss you.\" 💙 Short, honest and kind works way better than a long explanation."] },
+    { re: /\b(leaves? me on read|left me on read|leave me on read|doesn'?t (text|reply|answer) back|does not (text|reply|answer) back|ignores? my (text|message|snap)|what if (she|he|they) (doesn'?t|does not|don'?t|do not|never) (reply|answer|text back|respond))\b/, need: /./,
+      say: ["Then give it a little time. 💙 People sometimes need a day to cool off or figure out what to say. You did your part by reaching out, and that says a lot about you. If there's still no answer after a while, a friendly hi in person can work better than another text."] },
+    { re: /\bhow (do|can|would) (i|you|u) (know|tell) if (she|he|they|someone|my crush|a (boy|girl|guy)) likes? (me|you|u)( back)?\b|\b(does|do) (she|he|they|my crush) (like|likes) me( back)?\b|\bsigns (that )?(someone|a (boy|girl|guy)|my crush|they|he|she) likes? (me|you)\b/, need: /./,
+      say: ["Some common signs: 💕 they find reasons to talk to you, remember little things you said, laugh at your jokes (even the bad ones), and act a bit different around you (extra smiley, or a bit nervous). But the only way to really know is to talk to them more and see. And whatever happens, you're worth liking!"] },
+    { re: /\bwhat (should|can|do) i do (at|during) (recess|lunch|break( time)?)\b|\b(nobody|no one|don'?t have anyone|dont have anyone|do not have anyone|have no one) to (play|hang out|sit) with\b/, need: /./,
+      say: ["Some recess ideas: 🏃 ask to join a game of tag or soccer (a good goalie is always wanted!), bring a ball or cards to share, or look for another kid who's on their own and ask them to play. You could also ask a teacher if there's a club or a buddy bench. 💙"] },
+    { re: /\b(brother|sister|sibling)\b.*\b(barg\w*|coming into my room|comes into my room|come into my room|coming in my room|without knocking|won'?t knock|doesn'?t knock|going in my room|reads? my (diary|texts|phone))\b/, need: /./,
+      say: ["Ugh, no knocking is SO annoying. 😤 Some ideas: a \"please knock\" sign on your door, a calm talk when you're not mad (\"I need my room to be my space\"), or asking your parents to back up a knock-first rule for everyone, them included!"] },
+    { re: /\b(what if|scared|afraid|worried|nervous) .{0,30}\b(parents|mom|dad|mum)\b.{0,30}\b(take|takes|took|taking) (away )?my (phone|switch|xbox|ps5|ipad|tablet)\b|\b(parents|mom|dad|mum)\b.{0,30}\b(see|find out about|look at) my (grade|grades|report card)\b/, need: /./,
+      say: ["That's a real worry. 💙 One thing that helps a lot: tell them first, before they see it, and bring a plan (like \"I'll study 30 minutes a day and ask my teacher for help\"). Parents usually go easier when you're honest and show you're trying."] },
+    // a parent asking how to help their child
+    { re: /\b(help|support) (my |our )?(son|daughter|kid|child|kids|children|boy|girl)\b.*\b(divorce|split|separat\w*|cope|coping)\b|\b(son|daughter|kid|child)\b.*\b(quiet|quieter|withdrawn|upset|struggling|acting out|sad)\b.*\b(since|after) (the |our )?(divorce|split|separation)\b|\b(since|after) (the |our )?(divorce|split|separation)\b.*\b(son|daughter|kid|child)\b.*\b(quiet|quieter|withdrawn|upset|struggling|sad)\b/, need: /./,
+      say: ["That's a really caring question. 💙 A few things that help most kids through a divorce: 1) Say clearly, more than once, that it's not his fault and that you both still love him. 2) Keep routines as steady and predictable as you can across both homes. 3) Make low-pressure time to talk; side by side works well, like car rides or building something in Minecraft together. 4) Keep him out of the middle and avoid criticizing his mum in front of him. 5) If he stays withdrawn for weeks or it gets worse, his school counselor, GP or a family therapist can help. Kids usually do well when they feel safe with both parents."] },
     { re: /\b(stud(y|ying)|revis(e|ing)|exams?|tests?|finals|homework)\b/, need: /\b(tips?|advice|how (do|can|should) i|help me|better|focus|what should i do|any ideas)\b/,
       say: ["Here's what works for a lot of people: 📚 study in short chunks (25 minutes, then a 5-minute break), test yourself instead of just re-reading (flashcards are great), explain it out loud like you're teaching someone, and sleep well the night before, because your brain saves what you learned while you sleep. Which subject is it?",
         "Try this: 1) pick the one topic you're least sure about and start there, 2) cover your notes and try to write down everything you remember, 3) check what you missed. Short sessions with breaks beat one giant cram. And put your phone in another room! 📵 What are you studying for?"] },
@@ -650,7 +750,7 @@
     { re: /\b(divorce|divorced|splitting up|separat\w*|my parents fight|two houses|switch houses)\b/, need: /\b(how (do|can|should) i|what (should|do|can) i|help|advice|tips?|deal|cope|handle|should i|any ideas)\b/,
       say: ["A few things that help a lot of kids with divorce: 💙 1) It's not your fault, even if they fought about you or your stuff. 2) You don't have to pick a side; it's okay to love both parents and to say \"please don't make me choose.\" 3) Talk about it with someone: a parent, a school counselor or a friend. 4) Keep doing the things that make you you, like your team or your games. Which part is hardest right now?"] },
     { re: /\b(best friend|friend|bff)\b.*\b(moving|move|moved) (away|to another|to a different|next)\b|\b(moving|move) away\b.*\b(friend|bff)\b/, need: /./,
-      say: ["Oh, that's really hard. 💙 It makes sense to feel sad. A few ideas: spend as much time together as you can before she goes, make something to remember each other by (a photo book, a friendship bracelet), and plan how you'll stay in touch: video calls, playing games online together, or even writing real letters. Lots of best friends stay best friends after a move! And it's okay to be sad about it."] },
+      say: ["Oh, that's really hard. 💙 It makes sense to feel sad. A few ideas: spend as much time together as you can before the move, make something to remember each other by (a photo book, a friendship bracelet), and plan how you'll stay in touch: video calls, playing games online together, or even writing real letters. Lots of best friends stay best friends after a move! And it's okay to be sad about it."] },
     { re: /\b(goalie|goalkeeper|keeper)\b/, need: /\b(tips?|advice|better|how (do|can) i|help|good)\b/,
       say: ["Goalie tips: 🧤 stay on your toes with your knees a little bent, keep your hands up and ready, watch the ball (not the player's feet), and step off your line to make the goal look smaller to the shooter. Talk to your defenders a lot! And when a goal goes in, shake it off fast: every goalie in the world gets scored on. 💪"] },
     { re: /\b(soccer|football|basketball|bball|baseball|volleyball|hockey|tennis|swimming|gymnastics|dance|karate)\b/, need: /\b(tips?|advice|get better|how (do|can) i (get|be) better|improve)\b/,
@@ -694,5 +794,5 @@
       say: ["Crushes are exciting and scary at the same time! 😊 The best move is to just be yourself and be kind. Get to know them as a friend first: talk about things you both like. There's no rush, and whatever happens, you're awesome either way. 💙"] },
   ];
 
-  P.content = { persona, intents, jokes, mcJokes, topicJokes, topics, topicOf, advice, facts, riddles, trivia, wyr, questions, compliments, motivation, stories, poems, stalls, safety };
+  P.content = { artists, artistOf, songsIn, persona, intents, jokes, mcJokes, topicJokes, topics, topicOf, advice, facts, riddles, trivia, wyr, questions, compliments, motivation, stories, poems, stalls, safety };
 })(typeof window !== "undefined" ? (window.Pip = window.Pip || {}) : (global.Pip = global.Pip || {}));

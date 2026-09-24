@@ -9,7 +9,7 @@
   function blank() {
     return {
       v: 1, name: null, age: null, ageAt: null, location: null, birthday: null, job: null, school: null,
-      likes: [], dislikes: [], favorites: {}, pets: [], people: {}, notes: [], events: [], moods: [], threads: [], diary: [], topics: [],
+      likes: [], dislikes: [], favorites: {}, pets: [], people: {}, pinfo: {}, notes: [], events: [], moods: [], threads: [], diary: [], topics: [],
       botName: "Pip", firstSeen: Date.now(), lastSeen: null, sessions: 0, messages: 0, facts: 0,
     };
   }
@@ -216,7 +216,7 @@
       const pm = new RegExp("^my (?:little |baby |pet |new |cute )?(" + PET + ")$").exec(v);
       if (pm) facts.push({ type: "pet", kind: singularPet(pm[1]), name: null });
       else if (/^my /.test(v)) { /* "I love my mom": warm, but not a hobby */ }
-      else if (v && !/^(you|u|it|that|this|them|him|her|talking to you|chatting with you|you too|your|when you|how you|the way you|what you|pip)\b/.test(v) && v.split(" ").length <= 6 && !/^(to )?(be|have|know|ask|say|tell|see|go|get|think)\b/.test(v)) {
+      else if (v && !/^(you|u|it|that|this|them|him|her|talking to you|chatting with you|you too|your|when you|how you|the way you|what you|pip|someone|somebody|a (boy|girl|guy|person)|this (boy|girl|guy|person))\b/.test(v) && v.split(" ").length <= 6 && !/^(to )?(be|have|know|ask|say|tell|see|go|get|think)\b/.test(v)) {
         facts.push({ type: "like", value: v });
       }
     }
@@ -269,6 +269,41 @@
       const rel = (/\b(grandchildren|grandkids|kids|children|sons|daughters|brothers|sisters|siblings|cousins)\b/.exec(t) || [, "kids"])[1];
       facts.push({ type: "person", rel, name: properCase(r[1]) + " and " + properCase(r[3]), ages: [+r[2], +r[4]] });
     }
+    // "theres a kid named omar who plays minecraft": a (maybe) new friend
+    if ((r = /\b(?:a|this|one) (?:kid|boy|girl|guy|friend|person) (?:named|called) ([a-z]+)\b/.exec(t)) && looksLikeName(r[1], raw, true) && !NOT_NAME.has(r[1]) && !mem.people.friend) {
+      facts.push({ type: "person", rel: "friend", name: properCase(r[1]), quiet: true });
+    }
+    // ages and birthdays of the people in their life: "my son Sam is 9", "Sam is 9", "shes 14", "Sam's birthday is November 14th"
+    {
+      const relOfName = (nm) => Object.keys(mem.people).find((k) => (mem.people[k] || "").toLowerCase() === nm) ||
+        (facts.find((f) => f.type === "person" && f.name.toLowerCase() === nm) || {}).rel;
+      const mentioned = new RegExp("\\bmy (" + PEOPLE + ")\\b").exec(t);
+      const factRel = (facts.find((f) => f.type === "person") || {}).rel;
+      if (mentioned || factRel) mem._lastRel = factRel || mentioned[1];
+      let pr, rel = null, age = null;
+      if ((pr = new RegExp("\\bmy (" + PEOPLE + ")(?:,? ([a-z]+),?)? (?:is|turned|just turned|turns|who is|whos|who's) (\\d{1,2})(?: years? old| yo)?\\b").exec(t))) { rel = pr[1]; age = +pr[3]; }
+      else if ((pr = /\b([a-z]+) (?:is|turned|just turned) (\d{1,2})(?: years? old| yo)?\b/.exec(t)) && relOfName(pr[1])) { rel = relOfName(pr[1]); age = +pr[2]; }
+      else if ((pr = /(?:^\s*|[.!,;]\s*|\band |\bbut |\blol |\bhaha )(?:he|she)(?:'s| is| s|s) (?:only |just |like )?(\d{1,2})(?: years? old| yo)?\b(?! (?:hours?|minutes?|mins?|feet|inches|cm|pounds|lbs|kg|points|goals))/.exec(t)) && mem._lastRel && !/\b(my (dog|cat|puppy|kitten|hamster|pet))\b/.test(t)) { rel = mem._lastRel; age = +pr[1]; }
+      if (rel && age >= 0 && age < 110 && !/^(friend|friends|teacher|boss|crush)$/.test(rel) || rel && age >= 0 && age < 110 && /\bmy (friend|crush|best friend)\b/.test(t)) facts.push({ type: "pinfo", rel, age, quiet: true });
+      const MONTHS = "january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec";
+      const DATE = "((?:" + MONTHS + ") \\d{1,2}(?:st|nd|rd|th)?|\\d{1,2}(?:st|nd|rd|th)? (?:of )?(?:" + MONTHS + "))";
+      if ((pr = new RegExp("\\b(?:my (" + PEOPLE + ")(?:'s| s)|([a-z]+)(?:'s| s)) (?:birthday|bday|birth day) is (?:on )?(?:the )?" + DATE).exec(t))) {
+        const r2 = pr[1] || relOfName(pr[2]);
+        if (r2) facts.push({ type: "pinfo", rel: r2, birthday: normDate(pr[3]), name: mem.people[r2] || null });
+      }
+    }
+    // "my dog rocky ... hes a beagle"
+    {
+      const BREED = "beagle|labrador|lab|golden retriever|retriever|poodle|labradoodle|goldendoodle|bulldog|french bulldog|frenchie|german shepherd|husky|chihuahua|dachshund|corgi|pug|shih tzu|yorkie|boxer|rottweiler|border collie|collie|pitbull|pit bull|doberman|great dane|cocker spaniel|spaniel|maltese|pomeranian|terrier|jack russell|schnauzer|shiba inu|shiba|samoyed|bernese mountain dog|sheepdog|greyhound|whippet|basset hound|bloodhound|mutt|tabby|siamese|persian|maine coon|ragdoll|bengal|sphynx|calico|tuxedo cat|british shorthair";
+      let br;
+      if ((br = new RegExp("\\bmy (dog|puppy|cat|kitten)(?: [a-z]+)? (?:is|s) (?:a |an )(?:little |big |cute |small |huge )?(" + BREED + ")\\b").exec(t)) ||
+          (br = new RegExp("(?:^\\s*|[.!,;]\\s*|\\band |\\blol |\\bhaha )(?:he|she|it)(?:'s| is| s|s) (?:a |an )(?:little |big |cute |small |huge )?(" + BREED + ")\\b").exec(t)) && (mem.pets.length || facts.some((f) => f.type === "pet")) ||
+          (br = new RegExp("\\bmy (" + BREED + ") ([a-z]+)\\b").exec(t))) {
+        const breed = br.length === 3 && new RegExp("^(" + BREED + ")$").test(br[1]) ? br[1] : br[2] || br[1];
+        const kind = /^(tabby|siamese|persian|maine coon|ragdoll|bengal|sphynx|calico|tuxedo cat|british shorthair)$/.test(breed) ? "cat" : "dog";
+        facts.push({ type: "petbreed", kind, breed: breed === "lab" ? "labrador" : breed === "frenchie" ? "french bulldog" : breed, quiet: true });
+      }
+    }
     // "i mostly listen to travis scott", or the answer right after Pip asked about music
     if ((r = /\bi (?:mostly |mainly |usually |really |just )*(?:listen to|am listening to|have been listening to|been listening to) ([a-z0-9][a-z0-9 .'&-]{1,40}?)(?= (?:a lot|all the time|every|rn|right now|lately|these days)|[.!?,]|\s*$)/.exec(t)) ||
         (expect && expect.kind === "music" && (r = /^\s*(?:rn |right now |lately |mostly |probably |prob |i guess |hmm )*([a-z0-9][a-z0-9 .'&-]{1,40}?)\s*[.!]*$/.exec(m.plain)))) {
@@ -303,9 +338,9 @@
       };
       const whenOf = (w) => (w ? w.replace(/^(later today|this (afternoon|evening|morning)|in (like )?(an|a few|\d+|one|two|three) hours?)$/, "today").replace(/^(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/, "on $1").replace(/^(on|over) the weekend$/, "this weekend").replace(/^this (\w+day)$/, "on $1") : "soon");
       const ROUTINE = /^(practice|lesson|class|training|rehearsal|homework)$/;
-      if ((r = new RegExp("\\b(?:i|we) (?:have|got|have got|will have|am having|are having|have to do|need to do) (?:a |an |my |our |the |this |that |some |another )?((?:[a-z]+ ){0,3}?)(" + NOUN + ")\\b(?:.*?\\b(" + WHEN + ")\\b)?").exec(t)) && !(ROUTINE.test(r[2]) && !/\b(big|important|first|last|final)\b/.test(r[1] || "")) ||
+      if ((r = new RegExp("\\b(?:i|we) (?:have|got|have got|will have|am having|are having|have to do|need to do) (?:a |an |my |our |the |this |that |some |another )?((?:[a-z]+ ){0,3}?)(" + NOUN + ")\\b(?:.*?\\b(" + WHEN + ")\\b)?").exec(t)) && !(ROUTINE.test(r[2]) && !/\b(big|important|first|last|final)\b/.test(r[1] || "")) && !/\bgot (?:my|the|our|a|an) (?:[a-z]+ ){0,3}(?:tests?|exams?|quiz|quizzes|essay|project|report card|grades?|results?)s? (?:back|results?|marked|graded)\b/.test(t) ||
           (r = new RegExp("\\bmy ((?:[a-z]+ ){0,3}?)(" + NOUN + ") is (?:on |)(" + WHEN + ")\\b").exec(t))) {
-        facts.push({ type: "event", what: clean(r[1], r[2]), when: whenOf(r[3]) });
+        facts.push({ type: "event", what: clean(r[1], r[2]), when: whenOf(r[3]), worry: /\b(nervous|stressed|stressing|freaking out|freaked|scared|worried|anxious|dreading|panicking|terrified)\b/.test(t) });
       } else if ((r = new RegExp("\\b(?:(?:i am|we are|were|im) (?:going|goin|heading)|(?:i|we) (?:have|need|got) to go|(?:i|we) gotta go) (?:to|on) (?:a |an |the |my |our )?((?:[a-z]+ ){0,2}?)(" + NOUN + "|dentist|doctors?|zoo|beach|museum|movies?|amusement park|theme park|water park)\\b(?:.*?\\b(" + WHEN + ")\\b)?").exec(t)) && r[3]) {
         let what = PLACE[r[2]] || clean(r[1], r[2]);
         const dest = /^(trip|vacation|holiday)$/.test(r[2]) && /\b(?:trip|vacation|holiday) to ([a-z]+)\b/.exec(t);
@@ -397,7 +432,7 @@
     mem.facts++;
     switch (f.type) {
       case "name": f.prev = mem.name; mem.name = f.value; break;
-      case "age": mem.age = f.value; mem.ageAt = Date.now(); break;
+      case "age": f.same = mem.age === f.value; mem.age = f.value; mem.ageAt = Date.now(); break;
       case "location": mem.location = f.value; break;
       case "birthday": mem.birthday = f.value; break;
       case "favorite": mem.favorites[f.slot] = f.value; break;
@@ -409,6 +444,18 @@
         break;
       }
       case "person": mem.people[f.rel] = f.name; break;
+      case "pinfo": {
+        const pi = (mem.pinfo = mem.pinfo || {});
+        const cur = (pi[f.rel] = pi[f.rel] || {});
+        if (f.age !== undefined) { f.same = cur.age === f.age; cur.age = f.age; cur.ageAt = Date.now(); }
+        if (f.birthday) cur.birthday = f.birthday;
+        break;
+      }
+      case "petbreed": {
+        const pet = mem.pets.filter((x) => x.kind === f.kind || (f.kind === "dog" && x.kind === "puppy") || (f.kind === "cat" && x.kind === "kitten")).pop();
+        if (pet) pet.breed = f.breed; else mem.pets.push({ kind: f.kind, name: null, breed: f.breed });
+        break;
+      }
       case "job": f.same = mem.job === f.value; mem.job = f.value; break;
       case "school": mem.school = f.value; break;
       case "event": {
@@ -416,7 +463,7 @@
         const same = (e) => e.what === f.what || ((e.what.endsWith(" " + f.what) || f.what.endsWith(" " + e.what)) && Date.now() - e.at < 7 * 864e5);
         if (f.when === "soon" && mem.events.some((e) => same(e) && !e.done)) break;
         mem.events = mem.events.filter((e) => !same(e));
-        mem.events.push({ what: f.what, when: f.when, at: Date.now(), due: dueDate(f.when, Date.now()), asked: false });
+        mem.events.push({ what: f.what, when: f.when, at: Date.now(), due: dueDate(f.when, Date.now()), asked: false, worry: !!f.worry });
         if (mem.events.length > 10) mem.events.shift();
         break;
       }
@@ -469,20 +516,30 @@
     if (mem.job) parts.push(`you're ${U.aOrAn(mem.job)} ${mem.job}`);
     if (mem.school) parts.push(`you're in ${mem.school}`);
     if (mem.birthday) parts.push(`your birthday is ${mem.birthday}`);
-    if (mem.pets.length) parts.push(`you have ${U.listJoin(mem.pets.map((p) => (p.name ? `a ${p.kind} named ${p.name}` : `a ${p.kind}`)))}`);
+    if (mem.pets.length) parts.push(`you have ${U.listJoin(mem.pets.map((p) => (p.name ? `${U.aOrAn(p.breed || p.kind)} ${p.breed || p.kind} named ${p.name}` : `${U.aOrAn(p.breed || p.kind)} ${p.breed || p.kind}`)))}`);
     const favs = Object.entries(mem.favorites).slice(-4).map(([k, v]) => (k === "music" ? `you listen to ${v}` : `your favorite ${k} is ${v}`));
     parts.push(...favs);
-    if (mem.likes.length) parts.push(`you like ${U.listJoin(mem.likes.slice(-4))}`);
+    const likes = mem.likes.filter((x) => !/^(someone|somebody|a boy|a girl|this boy|this girl|him|her)$/i.test(x));
+    if (likes.length) parts.push(`you like ${U.listJoin(likes.slice(-4))}`);
     if (mem.dislikes.length) parts.push(`you're not a fan of ${U.listJoin(mem.dislikes.slice(-3))}`);
     const pe = Object.entries(mem.people);
     const inGroup = (v) => pe.some(([k2, v2]) => v2 !== v && / and /.test(v2) && v2.split(/ and |, /).includes(v));
-    const ppl = pe.filter(([, v]) => !inGroup(v)).slice(-3).map(([k, v]) => `your ${k} ${/ and /.test(v) ? "are" : "is"} ${v}`);
+    const pi = mem.pinfo || {};
+    const ppl = pe.filter(([, v]) => !inGroup(v)).slice(-3).map(([k, v]) => `your ${k} ${/ and /.test(v) ? "are" : "is"} ${v}${pi[k] && pi[k].age !== undefined ? ` (${personAge(pi[k])})` : ""}${pi[k] && pi[k].birthday ? `, whose birthday is ${pi[k].birthday}` : ""}`);
     parts.push(...ppl);
     if (mem.position) parts.push(`you play ${mem.position}`);
     const ev = mem.events.filter((e) => !e.done && dueOf(e) > Date.now() - 6 * 3600e3).slice(-2);
     if (ev.length) parts.push(`you have ${U.listJoin(ev.map((e) => (/s$/.test(e.what) && !/(ss|us)$/.test(e.what) ? "" : U.aOrAn(e.what) + " ") + e.what + (e.when && e.when !== "soon" ? " " + (/month/.test(e.when) && !e.due ? e.when : dayWord(dueOf(e))) : "")))} coming up`.replace(/ (today|tomorrow|tonight) coming up$/, " $1"));
     if (mem.notes.length) parts.push(`you asked me to remember that ${mem.notes[mem.notes.length - 1]}`);
     return parts;
+  }
+  function personAge(info) { return info.age + Math.floor((Date.now() - (info.ageAt || Date.now())) / (365.25 * 864e5)); }
+  function normDate(d) {
+    const M = { jan: "January", feb: "February", mar: "March", apr: "April", may: "May", jun: "June", jul: "July", aug: "August", sep: "September", sept: "September", oct: "October", nov: "November", dec: "December" };
+    const r = /^(?:(\d{1,2})(?:st|nd|rd|th)? (?:of )?([a-z]+)|([a-z]+) (\d{1,2})(?:st|nd|rd|th)?)$/.exec(d.trim());
+    if (!r) return d;
+    const mon = (r[2] || r[3]).slice(0, 3), day = r[1] || r[4];
+    return (M[mon === "sep" && /sept/.test(r[2] || r[3]) ? "sept" : mon] || U.capitalizeFirst(r[2] || r[3])) + " " + (+day);
   }
   function currentAge(mem) {
     if (!mem.age) return null;
@@ -491,6 +548,18 @@
   }
 
   // Answer questions about the user. Returns {text, expect?} or null.
+  function daysUntilText(dateText) {
+    const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+    const r = /^([A-Za-z]+) (\d{1,2})$/.exec(dateText || "");
+    if (!r) return "";
+    const mi = MONTHS.indexOf(r[1].toLowerCase());
+    if (mi < 0) return "";
+    const now = new Date(), today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    let d = new Date(now.getFullYear(), mi, +r[2]);
+    if (d < today) d = new Date(now.getFullYear() + 1, mi, +r[2]);
+    const n = Math.round((d - today) / 864e5);
+    return n === 0 ? " That's TODAY! 🎉" : n === 1 ? " That's tomorrow!" : ` That's in ${n} days.`;
+  }
   function recall(mem, m) {
     // "what's my cat's name and what's my best friend's name?" -> answer both
     const parts = m.plain.split(/\s+(?:and|also|plus)\s+(?=(?:what|whats|who|where|when|how|do you)\b)|[?]\s*/).map((x) => x.trim()).filter((x) => x.length > 3);
@@ -516,6 +585,53 @@
     if (/\b(what is|whats|do you (?:know|remember)|tell me|say|guess) my name\b|\bwho am i\b|\bdo you know who i am\b|\bremember me\b|\bdo you (still )?(know|remember) me\b|\byou (know|remember) me\b/.test(t)) {
       if (mem.name) return { text: U.pick([`You're ${mem.name}! How could I forget? 😊`, `Your name is ${mem.name}.`, `${mem.name}, of course!`]) };
       return { text: "You haven't told me your name yet! What should I call you?", expect: { kind: "name" } };
+    }
+    if (/\b(did|do) you (catch|get|remember|know|hear) my name\b|\bdid you get (that|it)\b.*\bname\b/.test(t)) {
+      if (mem.name) return { text: U.pick([`Yes! You're ${mem.name}. 😊`, `I did: ${mem.name}! 😊`]) };
+      return { text: "Hmm, I didn't catch it! What's your name?", expect: { kind: "name" } };
+    }
+    // "how old is sam", "how old is my sister", "and how old is mia"
+    {
+      const pi = mem.pinfo || {};
+      const who = /\bhow old (?:is|s) (?:my )?([a-z]+(?: [a-z]+)?)\b/.exec(t) || /\b(?:do you (?:know|remember)|and) how old (?:my )?([a-z]+(?: [a-z]+)?) is\b/.exec(t);
+      if (who) {
+        let w = who[1].replace(/ (now|again|then|today)$/, "");
+        const rel = mem.people[w] !== undefined ? w : Object.keys(mem.people).find((k) => (mem.people[k] || "").toLowerCase() === w) || (/^(he|she)$/.test(w) && mem._lastRel) || null;
+        if (rel && pi[rel] && pi[rel].age !== undefined) return { text: `${mem.people[rel] && mem.people[rel].toLowerCase() !== w ? mem.people[rel] + ", your " + rel + ", is" : mem.people[rel] ? mem.people[rel] + " is" : "Your " + rel + " is"} ${personAge(pi[rel])}! 😊` };
+        if (rel) return { text: `Hmm, I don't think you've told me how old ${mem.people[rel] || "your " + rel} is. How old?` };
+      }
+      const bd = /\bwhen is (?:my )?([a-z]+)(?:'s| s) (?:birthday|bday)\b/.exec(t);
+      if (bd && bd[1] !== "my") {
+        const w = bd[1];
+        const rel = mem.people[w] !== undefined ? w : Object.keys(mem.people).find((k) => (mem.people[k] || "").toLowerCase() === w) || (/^(his|her)$/.test(w) && mem._lastRel) || null;
+        if (rel && pi[rel] && pi[rel].birthday) return { text: `${mem.people[rel] || "Your " + rel}'s birthday is ${pi[rel].birthday}! 🎂${daysUntilText(pi[rel].birthday)}` };
+        if (rel) return { text: `I don't know ${mem.people[rel] || "your " + rel}'s birthday yet! When is it?` };
+      }
+    }
+    // "what kind of dog is he", "what breed is rocky"
+    if (/\bwhat (kind|breed|type|sort) of (dog|cat|puppy|kitten|pet)\b|\bwhat breed\b/.test(t) && mem.pets.length) {
+      const nm = mem.pets.find((p) => p.name && new RegExp("\\b" + p.name.toLowerCase() + "\\b").test(t));
+      const p = nm || mem.pets.slice().reverse().find((x) => /^(dog|cat|puppy|kitten)$/.test(x.kind)) || mem.pets[mem.pets.length - 1];
+      if (p && p.breed) return { text: `${p.name || "Your " + p.kind} is ${U.aOrAn(p.breed)} ${p.breed}! ${/^(dog|puppy)$/.test(p.kind) ? "🐶" : "🐱"}` };
+      if (p) return { text: `Hmm, I don't think you told me what kind of ${p.kind} ${p.name || "it"} is! What breed?` };
+    }
+    // "when is my match?", "what day is my test again"
+    {
+      const ev = /\b(?:when|what day|what time) (?:is|s|was) my ([a-z]+(?: [a-z]+)?)\b/.exec(t) || /\bwhen (?:do|will) i (?:have|play) my ([a-z]+)\b/.exec(t);
+      if (ev && !/^(birthday|bday|name)$/.test(ev[1])) {
+        const key = ev[1].replace(/ (again|tho|though)$/, "").split(" ").pop();
+        const e = mem.events.slice().reverse().find((x) => x.what.toLowerCase().split(" ").some((w) => w === key || w === key + "es" || w + "es" === key || w === key.replace(/s$/, "")));
+        if (e) {
+          const d = dueOf(e);
+          const past = e.done || d < Date.now() - 12 * 3600e3;
+          return { text: past ? `Your ${e.what} was ${dayWord(d)}! How did it go?` : `Your ${e.what} is ${e.when && e.when !== "soon" ? (/month/.test(e.when) && !e.due ? e.when : dayWord(d)) : "coming up soon"}! ${/match|game|tournament|race/.test(e.what) ? "⚽" : "📅"}${mem.position && /match|game/.test(e.what) ? ` Good luck in ${/goal/.test(mem.position) ? "goal" : "your position"}! 🧤`.replace(" 🧤", /goal/.test(mem.position) ? " 🧤" : "") : ""}` };
+        }
+      }
+    }
+    // "what was i stressed about?"
+    if (/\bwhat (?:was|am|were) i (?:so )?(?:stressed|stressing|worried|nervous|anxious|scared|freaking out|panicking)(?: out)? about\b|\b(?:remember|know) what i (?:was|am) (?:so )?(?:stressed|worried|nervous|anxious|scared|freaking out)\b/.test(t)) {
+      const e = mem.events.slice().reverse().find((x) => x.worry) || mem.events.slice().reverse().find((x) => !x.done);
+      if (e) return { text: `Your ${e.what}! ${e.when && e.when !== "soon" ? "It's " + dayWord(dueOf(e)) + ". " : ""}How are you feeling about it now?`, expect: { kind: "followup", about: "upcoming", what: e.what } };
     }
     if (/\bhow old am i\b|\bwhat is my age\b|\bdo you (?:know|remember) (?:my age|how old i am)\b/.test(t)) {
       return mem.age ? { text: `You told me you're ${currentAge(mem)}.` } : { text: "I don't know yet! How old are you?", expect: { kind: "age" } };
@@ -577,7 +693,7 @@
     if (/\bwhat do i (?:hate|dislike|not like)\b/.test(t)) {
       return mem.dislikes.length ? { text: `You're not a fan of ${U.listJoin(mem.dislikes.slice(-5))}.` } : { text: "I don't think you've told me anything you dislike!" };
     }
-    if (/\bwhat (?:is|was) my job\b|\bwhat do i do for (?:a living|work)\b/.test(t)) {
+    if (/\bwhat (?:is|was) my job\b|\bwhat (?:do i do|i do) for (?:a living|work)\b|\b(?:remember|know) (?:what )?my (?:job|work|profession)\b|\bwhat (?:do i|i) work as\b/.test(t)) {
       return mem.job ? { text: `You're ${U.aOrAn(mem.job)} ${mem.job}!` } : { text: "You haven't told me what you do. Do you work or go to school?" };
     }
     if (/\bwhat do you (?:know|remember) about me\b|\btell me (?:what you know )?about (?:me|myself)\b|\bwhat have i told you\b|\bdo you remember (?:anything|stuff|things) about me\b|\bwhat do you know of me\b/.test(t)) {
@@ -642,7 +758,7 @@
       let text = cf.kind === "overdose" ? "I've been thinking about you. 💙 How are you feeling? Did you tell an adult about what happened?"
         : hard ? "I've been thinking about you. 💙 How are you feeling today? Did you get a chance to talk to someone you trust?"
         : cf.kind === "grief" ? "I've been thinking about what you told me. 💙 How are you feeling today?"
-        : "I've been thinking about you. 💙 How are you feeling today?";
+        : "I hope you're doing okay. 💙 How are you feeling today?";
       const soon = !hard && mem.events.find((e) => !e.wished && e.due && e.due > now && e.due - now < 30 * 3600e3);
       if (soon) { soon.wished = true; text += ` And your ${soon.what} is ${dayWord(soon.due)}! Good luck! 🍀`; }
       return { text, expect: { kind: "followup", about: "care", label: cf.kind || "soft", hard } };
@@ -702,5 +818,5 @@
     try { if (storage) storage.setItem(KEY, JSON.stringify(mem)); } catch (e) { /* ignore */ }
   }
 
-  P.memory = { noteThread, noteDiary, searchDiary, blank, extract, apply, recall, forget, followUp, rearmEvent, dueDate, dayWord, dueOf, summary, load, save, looksLikeName, currentAge, petText, SLOTS };
+  P.memory = { daysUntilText, personAge, normDate, noteThread, noteDiary, searchDiary, blank, extract, apply, recall, forget, followUp, rearmEvent, dueDate, dayWord, dueOf, summary, load, save, looksLikeName, currentAge, petText, SLOTS };
 })(typeof window !== "undefined" ? (window.Pip = window.Pip || {}) : (global.Pip = global.Pip || {}));

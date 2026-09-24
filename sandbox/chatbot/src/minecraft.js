@@ -163,7 +163,7 @@
   const an = (w) => U.aOrAn(w);
   function article(name) {
     if (/s$/.test(name) && !/(Glass|Compass|Grass|Boss)$/.test(name)) return name;
-    if (/^(TNT|Wool|Paper|Sugar|Bread|Glass|Concrete|Clay|Sandstone|Glowstone|Purpur|Coarse|Mossy|Snow Block|Honey Block|Chain|Scaffolding|Obsidian|Leather|String|Gunpowder|Iron Bars)/.test(name) || /Armor$/.test(name)) return name;
+    if (/^(TNT|Wool|Paper|Sugar|Bread|Glass|Concrete|Clay|Sandstone|Glowstone|Purpur|Coarse|Mossy|Snow Block|Honey Block|Chain|Scaffolding|Obsidian|Leather|String|Gunpowder|Iron Bars|Wheat|Sand|Dirt|Gravel|Water|Lava|Coal|Redstone|Bone Meal|Netherrack|Stone|Cobblestone|Kelp|Bamboo|Sugar Cane|Cactus|Cocoa|Honey|Milk|Slime|Ice|Packed Ice|Blue Ice|Moss|Mud|Copper|Amethyst|Quartz|Lapis|Emerald|Diamond|Gold|Iron|Netherite|Flint)$/.test(name) || /Armor$/.test(name)) return name;
     return an(name) + " " + name;
   }
 
@@ -238,6 +238,18 @@
   const FAMILY_WORDS = { pickaxe: "Pickaxe", pick: "Pickaxe", pickax: "Pickaxe", axe: "Axe", shovel: "Shovel", spade: "Shovel", hoe: "Hoe", sword: "Sword",
     helmet: "Helmet", chestplate: "Chestplate", leggings: "Leggings", pants: "Leggings", boots: "Boots" };
   function byName(name) { build(); return D.items.find((i) => i.name === name); }
+  const FAMILY_SHAPE = {
+    Pickaxe: [3, 2, "3 across the top row, then 2 sticks down the middle"], Axe: [3, 2, "3 in the top-left corner (an L shape), then 2 sticks down the middle"],
+    Shovel: [1, 2, "1 on top, then 2 sticks under it"], Hoe: [2, 2, "2 across the top-left, then 2 sticks down the middle"], Sword: [2, 1, "2 in a column with 1 stick under them"],
+    Helmet: [5, 0, "3 across the top row and 1 on each side below"], Chestplate: [8, 0, "every slot except the top middle"],
+    Leggings: [7, 0, "3 across the top and 2 down each side"], Boots: [4, 0, "2 down each side of the bottom two rows"] };
+  function familyAnswer(fam) {
+    const [n, sticks, shape] = FAMILY_SHAPE[fam];
+    const tool = sticks > 0;
+    const low = fam.toLowerCase();
+    const one = fam === "Leggings" || fam === "Boots" ? low : an(low) + " " + low;
+    return `${U.capitalizeFirst(one)} ${fam === "Leggings" || fam === "Boots" ? "take" : "takes"} ${n} of your material${tool ? ` and ${sticks} stick${sticks > 1 ? "s" : ""}` : ""}: ${shape}. Use ${tool ? "planks (wooden), cobblestone (stone), iron ingots, gold ingots or diamonds" : "leather, iron ingots, gold ingots or diamonds"}. For netherite, upgrade a diamond one at a smithing table. Want a specific one, like ${fam === "Leggings" || fam === "Boots" ? "iron " + low : "an iron " + low}?`;
+  }
 
   // ---------- main entry ----------
   function answer(m, state) {
@@ -273,6 +285,7 @@
     if (/\b(human|humans|real life|irl|in real life|human body|world war|ww1|ww2|wwii|history|biology|chemistry|physics|in science|in math|president|country|countries|planet|solar system|in the ocean)\b/.test(text) && !/\b(minecraft|mc|in the game|in game)\b/.test(text)) return null;
     // "what's your favorite mob?" / "do you like creepers?" are about Pip, and "I know what a creeper is" isn't a question
     if (/\bpiston door|redstone door|2x2 door\b/.test(text)) return null;
+    if (/\bnether\b/.test(text) && /\b(scary|scared|too scary|frightening|spooky|safe for|creepy)\b/.test(text)) { const g = D.guides.find((x) => x.q.includes("is the nether scary")); if (g) return done(state, { text: g.a, kind: "guide" }, null); }
     // "all my zombies in my mob farm fell in the lava and died lmaooo rip": a story, not a question
     if (!m.isQuestion && !/\b(how|what|where|why|which|can|should|help|tips?|recipe|best way)\b/.test(text) && /\b(fell|died|burned|burnt|drowned|exploded|blew up|despawned|got blown up)\b/.test(text)) return null;
     if (/\b(safe|parental controls?|family settings|strangers|turn off (the )?chat|chat off)\b/.test(text) && /\b(minecraft|servers?|online|multiplayer|realms?)\b/.test(text)) { const g = D.guides.find((x) => x.q.includes(/parental|chat|block/.test(text) ? "minecraft parental controls" : "is minecraft safe for kids")); if (g) return done(state, { text: g.a, kind: "guide" }, null); }
@@ -282,6 +295,15 @@
 
     if (/\bwhat (is|does|are) (hp|health points|hearts)( mean| in minecraft)?\b|\bwhat does hp stand for\b/.test(text)) { const g = D.guides.find((x) => x.q.includes("what is hp")); if (g) return done(state, { text: g.a, kind: "guide" }, null); }
     let mentions = findMentions(toks);
+    // "how do i make a sword" / "hoe recipe": no material named, so show the whole family
+    const famTok = toks.find((t) => FAMILY_WORDS[t]);
+    if (famTok && !toks.some((t) => MATERIAL_WORDS[t]) && !mentions.some((x) => x.len > 1) && (famTok !== "pick" || mcWords || recentMC) &&
+        (/\b(craft|crafting|make|recipe|build|how do (i|you|u) get)\b/.test(text) || want === "recipe")) {
+      const fam = FAMILY_WORDS[famTok];
+      const res = done(state, { text: familyAnswer(fam), kind: "recipe" }, { kind: "item", ref: byName("Iron " + fam) || byName("Wooden " + fam) });
+      mc.familyOnly = true;
+      return res;
+    }
     if (!mentions.length && mc.last && mc.last.kind === "mob" && turn - mc.turn <= 3 && /\b(a|the|an|get|pink|blue|red|white|black|brown|baby|golden|purple|orange|green|yellow|gray|grey)\s+(one|ones)\b/.test(text)) {
       const mob = mc.last.ref.name.toLowerCase();
       const t2 = text.replace(/\b(one|ones)\b/g, mob);
@@ -314,10 +336,13 @@
         const fam = famW ? FAMILY_WORDS[famW] : last.ref.family;
         const mat = matW ? MATERIAL_WORDS[matW] : last.ref.material;
         const guess = byName(mat + " " + fam) || byName((mat === "Golden" ? "Golden " : mat + " ") + fam);
-        if (guess && guess !== last.ref) mentions = [{ at: 0, len: 1, phrase: guess.name.toLowerCase(), hits: [{ kind: "item", ref: guess }] }];
+        if (guess && (guess !== last.ref || mc.familyOnly)) mentions = [{ at: 0, len: 1, phrase: guess.name.toLowerCase(), hits: [{ kind: "item", ref: guess }] }];
       }
       const notGame = /\b(what time|what day|what date|what year|how are you|how is it going|how's it going|what is it like|forget it|never mind|nevermind|nvm|is it (true|real|going|ok|okay|raining|cold|hot)|do you like it|i like it|i love it|i hate it|love it|hate it|get it|got it|i know|that's it|thats it|that is it|this is it|it's ok|its ok|it is ok|was it fun|who is it|what is it about|is that you|was that)\b/.test(text);
-      if (!notGame && (!mentions.length || want === "info") && /\b(it|that|this|them|those|one|ones)\b/.test(text) && (want || /\?$/.test(m.clean)) && !mentions.some((x) => x.len > 1)) {
+      // "how do i get it" / "what does it drop" point back at the last thing; a long question that happens to contain "it" or "that" doesn't
+      const pronObj = /\b(craft|make|get|find|mine|smelt|brew|tame|breed|kill|beat|defeat|fight|spawn|use|build|enchant|feed|ride|farm|grow|plant|cook|obtain|repair|fix|place|light|activate|power|summon|trade for|buy|sell|recipe for)\s+(it|that|this|them|those|one|ones)\b|\b(what|how)\s+(does|do|did|is|are)\s+(it|that|this|they|those)\s+(do|drop|eat|work|spawn|look like|attack|for)\b|\bwhere (is|are|do|does|can i find|to find|would i find) (it|that|this|they|those|them)\b|\b(is|are) (it|that|they|those) (rare|common|hostile|passive|friendly|dangerous|strong|useful|worth it)\b|\bhow (rare|common|strong) (is|are) (it|that|they)\b/.test(text);
+      const offTopic = /\b(capital|country|countries|sun|earth|moon|planet|tax|percent|salary|earn|divorce|son|daughter|kid|child|cope|feel|feeling|worried|worries|sister|brother|mum|mom|dad|wife|husband|school|homework|recipe|oven|flight|weather|time zone)\b/.test(text);
+      if (!notGame && !offTopic && (!mentions.length || want === "info") && (pronObj || toks.length <= 6 && /\b(it|that|this|them|those|one|ones)\b/.test(text)) && (want || /\?$/.test(m.clean)) && !mentions.some((x) => x.len > 1)) {
         mentions = [{ at: 0, len: 1, phrase: last.ref.name.toLowerCase(), hits: [{ kind: last.kind, ref: last.ref }] }];
       }
     }
@@ -557,6 +582,7 @@
     mc.turn = state.turn || 0;
     mc.topicTurn = mc.turn;
     if (last) mc.last = last;
+    mc.familyOnly = false;
     return res;
   }
 

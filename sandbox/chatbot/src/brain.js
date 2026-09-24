@@ -228,6 +228,7 @@
 
       // 1) memory facts ("my name is...", "I have a dog", "my favorite color is...") and threads to follow up on
       const facts = out ? [] : MEM.extract(mem, m, expect);
+      this._curFacts = facts;
       if (!out && !(st.care > 0) && !(P.safety && P.safety.sensitive(m))) MEM.noteThread(mem, m);
       // the diary may keep "my parents are getting divorced" (so Pip can remember it), never anything from a safety moment
       if (!out && !(st.care > 0 && /^(overdose|crisis|abuse|neglect|grooming|sextortion|meetstranger|friendcrisis|runaway)$/.test(st.careKind || ""))) MEM.noteDiary(mem, m);
@@ -243,9 +244,17 @@
       }
       // 2) whatever Pip was waiting for (a rename or "forget" command goes first)
       if (!out && expect && /\b(i will call you|i'?ll call you|your name is now|your new name is|call you|forget (my|everything|all))\b/.test(m.plain)) out = this._commands(m, c);
+      if (!out && expect && !/^(name|linecheck|linetell|age|petname|personname)$/.test(expect.kind)) out = this._social(m, c);
       if (!out && expect) out = this._onExpect(expect, m, c, facts);
       // 3) a running game
-      if (!out && st.game) { const g = S.gameTurn(m, c); if (g) out = Object.assign(g, { source: "game:" + (st.game ? st.game.type : "end") }); }
+      if (!out && st.game) {
+        const g = S.gameTurn(m, c);
+        if (g) out = Object.assign(g, { source: "game:" + (st.game ? st.game.type : "end") });
+        // "b. ok im done w spelling. i have a soccer match on saturday im the goalie": the news still counts
+        const ev = g && !st.game && facts.find((f) => f.type === "event");
+        if (ev) out.text += ` And good luck with your ${ev.what}${ev.when && ev.when !== "soon" ? " " + ev.when : ""}${facts.some((f) => f.type === "position") ? ", " + facts.find((f) => f.type === "position").value : ""}! 🍀`;
+      }
+      if (!out) out = this._social(m, c);
       // 4) commands, "another one!", and memory questions
       if (!out) out = this._commands(m, c);
       if (!out) out = this._more(m, c);
@@ -257,9 +266,14 @@
         out = { text: pick(["Honestly? Just a gut feeling! 😄 What would you pick?", "No big reason, it just felt right! 😄 Would you have picked the other one?"]), source: "skill:choose" };
       if (!out) out = this._line(m);
       // 5) facts just learned get a warm acknowledgement
-      const loud = facts.filter((f) => !f.quiet);
+      const loud = facts.filter((f) => !f.quiet && !(f.type === "age" && f.same && m.tokens.length > 4));
 
       const asks = /\?/.test(m.clean) || m.isQuestion;
+      // "Anyway, did you get that my son is called Sam and he's 9?"
+      if (!out && facts.length && /^(?:(?:anyway|so|and|ok|okay|also|but)[, ]+)?(?:did|do) (?:you|u) (?:get|catch|hear|understand|remember|know|save|note)\b/.test(m.plain)) {
+        const bits = facts.map((f) => f.type === "person" ? `your ${f.rel} is ${f.name}` : f.type === "pinfo" && f.age !== undefined ? `${mem.people[f.rel] ? (facts.some((x) => x.type === "person" && x.rel === f.rel) ? (f.rel === "son" || f.rel === "brother" ? "he's" : f.rel === "daughter" || f.rel === "sister" ? "she's" : mem.people[f.rel] + " is") : mem.people[f.rel] + " is") : "your " + f.rel + " is"} ${f.age}` : f.type === "pinfo" && f.birthday ? `${mem.people[f.rel] || "your " + f.rel}'s birthday is ${f.birthday}` : f.type === "age" ? `you're ${f.value}` : f.type === "job" ? `you're ${U.aOrAn(f.value)} ${f.value}` : f.type === "name" ? `your name is ${f.value}` : f.type === "pet" ? (f.name ? `your ${f.kind} is ${f.name}` : `you have ${U.aOrAn(f.kind)} ${f.kind}`) : f.type === "location" ? `you live in ${f.value}` : null).filter(Boolean);
+        if (bits.length) out = { text: `Yes! Got it: ${U.listJoin(bits)}. 😊`, source: "memory:confirm" };
+      }
       if (!out && loud.length && !(asks && loud.every((f) => /^(person|like|favorite|dislike|note)$/.test(f.type)))) out = this._ackFacts(loud, m, c);
       // 6) exact skills
       if (!out) out = this._skills(m, c, trace);
@@ -286,9 +300,11 @@
       if (st.care > 0 && hardCare && /^skill:(math|units|capital|knowledge|dictionary|minecraft)/.test(out.source || "") && st.turn % 2 === 0)
         out.text += st.careKind === "overdose" ? " (And please tell an adult about the pills today. 💙)" : " (And remember, I'm here if you want to talk. 💙)";
       if (st.care > 0 && /^(crisis|friendcrisis|hurt|pillq)$/.test(st.careKind || "") && !(P.safety && P.safety.check(m, {}, mem)) &&
-          /\b(jk|just kidding|i was (just )?(joking|kidding)|it was a joke|its a joke|it'?s (just )?an expression|just an expression|figure of speech|not literally|i meant (hair )?dye|i meant|i promise|i didn'?t mean it|i did not mean it|i'?m (fine|ok|okay|good)|im (fine|ok|okay|good)|i am (fine|ok|okay|good)|i feel (happy|fine|good|better))\b/.test(m.plain)) {
-        const joke = /\b(expression|figure of speech|not literally|i meant (hair )?dye|dye|i meant)\b/.test(m.plain);
-        out = { text: joke ? "Oh, got it, just an expression! 😅 Sorry for the worry. I take that stuff seriously because I care. So, what's up?" : "Okay. 💙 I'm really glad you're okay. If those feelings ever come back, please tell a grown-up or call or text 988 (Childline 0800 1111 in the UK). I'm always here to talk too. What do you want to do now?", source: "safety:clear" };
+          /\b(jk|just kidding|i was (just )?(joking|kidding)|it was a joke|its a joke|it'?s (just )?an expression|just an expression|figure of speech|not literally|i meant (hair )?dye|i meant(?! (it|that|what|every))|i promise|i didn'?t mean it|i did not mean it|i'?m (fine|ok|okay|good)|im (fine|ok|okay|good)|i am (fine|ok|okay|good)|i feel (happy|fine|good|better))\b/.test(m.plain)) {
+        const joke = /\b(expression|figure of speech|not literally|i meant (hair )?dye|dye|i meant(?! (it|that|what|every)))\b/.test(m.plain);
+        const good = /^(event:(win|madeup|fun|homework)|news|feelings:happy|expect:followup|skill|memory|intent:(joke|game|riddle|trivia))/.test(out.source || "") && !/^expect:followup-bad/.test(out.source || "");
+        if (good) { st.care = 0; st.ventTurns = 0; if (joke) { mem.careFollow = null; st.careKind = null; } out.text = (joke ? "Oh, got it, just an expression! 😅 " : "Okay, I'm glad you're okay! 💙 ") + out.text; }
+        else out = { text: joke ? "Oh, got it, just an expression! 😅 Sorry for the worry. I take that stuff seriously because I care. So, what's up?" : "Okay. 💙 I'm really glad you're okay. If those feelings ever come back, please tell a grown-up or call or text 988 (Childline 0800 1111 in the UK). I'm always here to talk too. What do you want to do now?", source: "safety:clear" };
         st.care = 0; st.ventTurns = 0;
         if (joke) { mem.careFollow = null; st.careKind = null; }
       }
@@ -302,8 +318,10 @@
         out = { text: (wantsFun && st.careKind !== "overdose" ? (wantsFun === "game" ? "We can play in a minute, I promise. " : "I'll tell you one in a minute, I promise. ") : "") + (wantsFun ? care.replace(/^([^💙]*)💙\s*/, "$1") : care), source: "safety:care", expect: { kind: "vent" } };
       }
       if (st.care > 0) st.care--;
-      if (/\b(i (just |already |literally )?asked|like i said|i (just|already) said|that is not what i (asked|said|meant)|that's not what i (asked|said|meant)|not what i asked|i told you already|i already told you)\b/.test(m.plain) && !/^(oops|sorry|my bad|oh)/i.test(out.text) && !/^(neural|react|fallback|eliza|safety)/.test(out.source || ""))
+      if (/\b(i (just |already |literally )?asked|like i said|i (just|already) said|that is not what i (asked|said|meant)|that's not what i (asked|said|meant)|not what i asked|i told you already|i already told you)\b/.test(m.plain) && !/\b(oops|sorry|my bad|messed)\b/i.test(out.text.slice(0, 60)) && !/^oh\b/i.test(out.text) && !/^(neural|react|fallback|eliza|safety)/.test(out.source || ""))
         out.text = pick(["Oops, sorry! 😅 ", "My bad! ", "Oh, sorry about that! "]) + out.text;
+      { const sp = /It's spelled ((?:[A-Z]-)+[A-Z])\b/.exec(out.text || ""); if (sp) st.lastSpelled = { w: sp[1].replace(/-/g, "").toLowerCase(), turn: st.turn }; }
+      if (st.prefixOnce) { if (!/^safety/.test(out.source || "")) out.text = st.prefixOnce + out.text.charAt(0).toUpperCase() + out.text.slice(1); st.prefixOnce = null; }
       out = this._extraSentences(m, out);
       out.text = this._restoreCase(out.text, m.clean);
       if (greetBack && !/^(hi|hey|hello|good (morning|afternoon|evening)|oh hi|welcome|nice to meet you)\b/i.test(out.text) && !(mem.name && out.text.startsWith(mem.name))) out.text = greetBack + out.text;
@@ -392,7 +410,7 @@
           const f = facts.find((x) => x.type === "name");
           if (f && facts.filter((x) => !x.quiet || x.type === "age").length >= 2) return null; // several facts: _ackFacts answers them together
           if (f) return this._nameAck(f.value, m, c);
-          if (/\b(no|nope|why|secret|not telling|i (do not|don't|dont) want|rather not|none of your|guess)\b/.test(t) && m.tokens.length <= 8)
+          if (/\b(no|nope|why|secret|not telling|i (do not|don't|dont) want|rather not|none of your|guess)\b/.test(t) && m.tokens.length <= 8 && !/^(why|what|how|who|where|when|which) (?!do (you|u) (want|need)|should i)\w+/.test(t))
             return { text: pick(["That's okay! I'll just call you friend. 😊 So, what's up?", "No problem! A mystery friend, how exciting. 🕵️ What would you like to talk about?"]), source: "expect:name" };
           return null;
         }
@@ -523,7 +541,9 @@
               MEM.rearmEvent(this.mem, what, w && w[1]);
               return { text: pick([`Oh, it hasn't happened yet! Good luck with your ${what}, you've got this. 🍀`, `Ah, okay! I'll ask you again after your ${what}. 😊 Are you ready for it?`]), source: "expect:followup", expect: { kind: "open", topic: what } };
             }
-            if (ex.about === "upcoming") {
+            const doneNow = /\b(took it|already (took|did|had|played)|it'?s over|its over|is over|was (today|this morning|earlier)|this morning|i took|we played|i did it|finished|just got back|got back from|it went|went (well|badly|bad|ok|okay|great|good|fine|terrible))\b/.test(t);
+            if (doneNow) { const evn = (this.mem.events || []).find((e) => e.what === what); if (evn) evn.done = true; }
+            if (ex.about === "upcoming" && !doneNow) {
               if (bad || /\b(nervous|scared|worried|anxious|not ready|stressed)\b/.test(t)) { this._mood("anxious"); return { text: pick([`It's totally normal to be nervous before a ${what}. 💙 You've prepared more than you think! Want a quick breathing trick: in for 4, hold for 4, out for 6?`, `Aw, being nervous just means you care. 💙 What part worries you most?`]), source: "expect:followup", expect: { kind: "vent", emotion: "anxious" } }; }
               if (good || meh) return { text: pick([`Love that confidence! 💪 You're going to do great. Tell me how it went afterwards!`, `Awesome! 🍀 I'll be rooting for you. Let me know how it goes!`]), source: "expect:followup" };
               break;
@@ -535,7 +555,13 @@
             break;
           }
           if (ex.about === "care") {
-            const told = /\b(i told|told (her|him|them|my|someone|a teacher|my mom|my dad)|talked to|i called|she knows|he knows|they know|we went|went to the (doctor|hospital)|doctor said)\b/.test(t) && !/\b(didn'?t|did not|haven'?t|have not|never)\b/.test(t);
+            const told = /\b(i told(?! (you|u|ya|pip)\b)|told (her|him|them|my|someone|a teacher|my mom|my dad)|talked to|i called|she knows|he knows|they know|we went|went to the (doctor|hospital)|doctor said)\b/.test(t) && !/\b(didn'?t|did not|haven'?t|have not|never)\b/.test(t);
+            // "im fine i told u that was a joke": the worry was a misunderstanding, so let it go and answer the rest
+            if (!ex.hard && /\b(joke|joking|kidding|jk|an expression|figure of speech|not literally|i'?m (fine|ok|okay|good)|im (fine|ok|okay|good)|i am (fine|ok|okay|good))\b/.test(t) && !(P.safety && P.safety.risk(m))) {
+              this.mem.careFollow = null; this.state.care = 0; this.state.careKind = null;
+              this.state.prefixOnce = pick(["Got it, sorry for worrying! 😅 ", "Okay, good! 😊 "]);
+              break;
+            }
             const body = /\b(stomach|dizzy|throw(ing)? up|threw up|vomit\w*|sick|pain|hurts|headache|can'?t (wake|stay awake)|sleepy|slept)\b/.test(t);
             if (ex.label === "overdose" && (body || /\b(didn'?t|did not|haven'?t|no)\b/.test(t))) return { text: "Please tell your mom or another adult today, and get checked by a doctor. 💙 A stomach ache or feeling sleepy after taking pills can be serious, even a day later. You can also call Poison Control at 1-800-222-1222 (US) or 911 (999 / 112). You won't be in trouble for asking for help.", source: "safety:care", expect: { kind: "vent" } };
             // "he's being nice again, he bought me a controller": calmer days don't make it okay
@@ -814,7 +840,7 @@
       if (parts.length < 2 || !out || !out.text) return out;
       const src = out.source || "";
       let extras = 0;
-      if (/^(safety|game|expect|command|event:grief|event:bullied|skill:time|skill:recipe|memory:name)/.test(src)) return out;
+      if (/^(safety|game|expect|command|event:grief|event:bullied|skill:time|skill:recipe|memory:name|social:artist|social:songs)/.test(src)) return out;
       for (const part of parts) {
         const pm = N.analyze(part);
         // a feeling mentioned next to a request
@@ -868,10 +894,18 @@
           return { text: `${U.capitalizeFirst(b[0])} and ${b[1]}! Got it, I'll remember both. 😊${tail}`, source: "memory:several", expect: { kind: "open", topic: "about" } };
         }
       }
+      // "I'm a nurse and I work night shifts. My son Sam is 9": the job and the kid in one breath
+      const all = this._curFacts || facts;
+      const jobF = all.find((x) => x.type === "job"), perF = all.find((x) => x.type === "person" && !/ and /.test(x.name));
+      if (jobF && perF && !jobF.same && jobF.value !== "student") {
+        const pa = all.find((x) => x.type === "pinfo" && x.rel === perF.rel && x.age !== undefined);
+        return { text: `${U.capitalizeFirst(U.aOrAn(jobF.value))} ${jobF.value}, and your ${perF.rel} ${perF.name}${pa ? " is " + pa.age : ""}! Got it. 😊 ${/\bnight(s| shifts?)?\b/.test(m.plain) ? "Night shifts must be really tiring. " : ""}What do you two like doing together?`, source: "memory:several", expect: { kind: "open", topic: "family" } };
+      }
       const f = facts.find((x) => x.type === "name") || facts.find((x) => x.type === "event") || facts.find((x) => x.type === "pet") ||
         facts.find((x) => x.type === "favorite") || facts.find((x) => x.type === "age") || facts.find((x) => x.type === "note") ||
         facts.find((x) => x.type === "birthday") || facts.find((x) => x.type === "location") || facts.find((x) => x.type === "job") ||
-        facts.find((x) => x.type === "school") || facts.find((x) => x.type === "position") || facts.find((x) => x.type === "age_odd") || facts.find((x) => x.type === "birthday_bad") || facts.find((x) => x.type === "person") || facts.find((x) => x.type === "like") || facts.find((x) => x.type === "dislike");
+        facts.find((x) => x.type === "school") || facts.find((x) => x.type === "position") || facts.find((x) => x.type === "age_odd") || facts.find((x) => x.type === "birthday_bad") || facts.find((x) => x.type === "person") || facts.find((x) => x.type === "pinfo" && x.birthday) || facts.find((x) => x.type === "like") || facts.find((x) => x.type === "dislike");
+      if (!f) return null;
       const P0 = C.persona;
       switch (f.type) {
         case "name": {
@@ -908,6 +942,9 @@
           const plural = /s$/.test(f.what) && !/(ss|us)$/.test(f.what);
           const aw = plural ? f.what : U.aOrAn(f.what) + " " + f.what;
           const fun = /\b(party|trip|vacation|holiday|sleepover|concert|playdate|camp|movie|zoo|beach|museum|park|wedding|visit|hike|prom)\b/.test(f.what);
+          // "i have a chem exam on friday and im lowkey freaking out"
+          if (f.worry) { this._mood("anxious"); return { text: pick([`${U.capitalizeFirst(aw)}${when}, and you're stressing about it. 😬 That's so normal. What part feels hardest?`, `Oof, ${aw}${when}. Being nervous just means you care. 💙 What's worrying you most about it?`]), source: "memory:event", expect: { kind: "vent", emotion: "anxious" } }; }
+          if (/^(?:ok |okay |pls |please |and )?remember\b/.test(m.plain)) return { text: `Got it! Your ${f.what}${when}${facts.some((x) => x.type === "position") ? ", and you're the " + facts.find((x) => x.type === "position").value : ""}. I'll remember. 📝`, source: "memory:event" };
           if (fun) return { text: pick([`Ooh, ${aw}${when}! 🎉 That sounds so fun! Are you excited?`, `${U.capitalizeFirst(aw)}${when}? Awesome! What are you looking forward to most?`]), source: "memory:event", expect: { kind: "open", topic: f.what } };
           return { text: pick([`Good luck with your ${f.what}${when}! 🍀 Are you feeling ready?`, `Ooh, ${aw}${when}! How are you feeling about ${plural ? "them" : "it"}?`, `I'll be rooting for you on your ${f.what}${when}! 💪 Nervous at all?`]), source: "memory:event", expect: { kind: "open", topic: f.what } };
         }
@@ -918,7 +955,15 @@
         case "age_odd": return { text: `${f.value}?! 😮 That would make you ${f.value > 122 ? "older than anyone who has ever lived" : "one of the oldest people in the world"}! Are you pulling my leg? 😄 How old are you really?`, source: "memory:age", expect: { kind: "age" } };
         case "birthday_bad": return { text: `Hmm, ${f.value} only has ${f.max === 29 ? "28 days (29 in a leap year)" : f.max + " days"}! 🤔 When's your real birthday?`, source: "memory:birthday" };
         case "position": return { text: `${U.capitalizeFirst(f.value)}! ${/guard/.test(f.value) ? "🏀 The one who runs the whole offense." : /goal|keeper/.test(f.value) ? "🧤 The last line of defense!" : "💪"} I'll remember that.`, source: "memory:position" };
-        case "person": return { text: f.ages ? `${f.name}! ${f.ages[0]} and ${f.ages[1]}, lovely ages. I'll remember your ${f.rel}. 😊` : / and /.test(f.name) ? `${f.name}! I'll remember your ${f.rel}. 😊` : `${f.name}! I'll remember your ${f.rel}'s name. 😊`, source: "memory:person" };
+        case "pinfo": {
+          if (f.birthday) return { text: `${f.birthday}, noted! 🎂 I'll remember ${f.name ? f.name + "'s" : "your " + f.rel + "'s"} birthday.${MEM.daysUntilText(f.birthday)}`, source: "memory:birthday" };
+          return null;
+        }
+        case "person": {
+          const pa = facts.find((x) => x.type === "pinfo" && x.rel === f.rel && x.age !== undefined);
+          if (pa && !f.ages) return { text: `${f.name}, ${pa.age}! ${pa.age < 13 ? "Lovely age. " : ""}I'll remember your ${f.rel}. 😊`, source: "memory:person" };
+          return { text: f.ages ? `${f.name}! ${f.ages[0]} and ${f.ages[1]}, lovely ages. I'll remember your ${f.rel}. 😊` : / and /.test(f.name) ? `${f.name}! I'll remember your ${f.rel}. 😊` : `${f.name}! I'll remember your ${f.rel}'s name. 😊`, source: "memory:person" };
+        }
         case "like": {
           const v = f.value;
           const pl = P0.likes.find((l) => v.toLowerCase().includes(l));
@@ -1003,8 +1048,38 @@
         if (said) return { text: `Yep, ${said} is what I got too: ${lm.expr} = ${lm.result}. ✅`, source: "skill:math" };
         return { text: `Hmm, I checked again: ${lm.expr} = ${lm.result}. I'm pretty confident! 🧮 Which part looks wrong to you?`, source: "skill:math" };
       }
+      const ch = P.math.chem(m.clean);
+      if (ch) return { text: ch.text, source: "skill:chem" };
       const fs = P.math.fractionSteps(m.clean);
       if (fs) return { text: fs.text, source: "skill:math" };
+      {
+        const Q = P.math.Q, fmt = (q) => P.math.format(q, 2).text;
+        const money = (q, cur) => (cur ? cur : "") + (cur ? Number(q.toDecimal(2)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : fmt(q));
+        const curOf = (t) => /£|\bpounds?\b|\bquid\b/.test(t) ? "£" : /€|\beuros?\b/.test(t) ? "€" : /\$|\bdollars?\b|\bbucks\b/.test(t) ? "$" : "";
+        // "I worked 4 shifts of 12.5 hours at 23.40 pounds an hour. How much did I earn?"
+        let pw = /\b(\d+(?:\.\d+)?)\s+shifts?\s+of\s+(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\b[^.?!]*?\bat\s*[£$€]?\s*(\d+(?:\.\d+)?)\s*(?:pounds?|dollars?|euros?|bucks)?\s*(?:an|per|a|\/)\s*(?:hour|hr|h)\b/i.exec(m.clean);
+        let hw = !pw && /\b(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\b[^.?!]*?\bat\s*[£$€]?\s*(\d+(?:\.\d+)?)\s*(?:pounds?|dollars?|euros?|bucks)?\s*(?:an|per|a|\/)\s*(?:hour|hr|h)\b/i.exec(m.clean);
+        if ((pw || hw) && /\b(how much|earn|earned|make|made|paid|pay|get|total|work out)\b/i.test(m.clean)) {
+          const cur = curOf(m.clean);
+          const parts = pw ? [pw[1], pw[2], pw[3]] : [hw[1], hw[2]];
+          const tot = parts.map((x) => Q.parse(x)).reduce((a, b) => a.mul(b));
+          this.state.lastMath = { expr: parts.join(" × "), result: tot.toDecimal(), turn: this.state.turn, cur };
+          return { text: `${parts.join(" × ")} = ${fmt(tot)}, so you earned ${money(tot, cur)}${pw ? ` for ${pw[1]} shifts` : ""} (before tax). 💷`.replace(" 💷", cur === "$" ? " 💵" : cur === "€" ? " 💶" : " 💷"), source: "skill:math" };
+        }
+        // "if 20 percent of that goes to tax, how much is left?" / "what's 15% of that?"
+        const lm = this.state.lastMath;
+        const pc = /(\d+(?:\.\d+)?)\s*(?:%|percent|per cent)/.exec(m.plain);
+        if (lm && this.state.turn - lm.turn <= 4 && pc && /\b(that|it|this|the total|what'?s left|is left)\b/.test(m.plain) && !/\d+(?:\.\d+)?\s*(?:%|percent|per cent)\s*(?:of|off)\s*\d/.test(m.plain)) {
+          const base = Q.parse(String(lm.result).replace(/,/g, ""));
+          const part = Q.parse(pc[1]).mul(base).div(Q.parse("100"));
+          const cur = lm.cur || curOf(m.clean);
+          const left = /\b(left|remain\w*|after|take home|keep|net|leftover)\b/.test(m.plain);
+          const add = /\b(add|plus|more|increase|raise|rise|tip|on top)\b/.test(m.plain) && !left;
+          const res = left ? base.sub(part) : add ? base.add(part) : part;
+          this.state.lastMath = { expr: "", result: res.toDecimal(), turn: this.state.turn, cur };
+          return { text: left ? `${pc[1]}% of ${money(base, cur)} is ${money(part, cur)}, so ${money(res, cur)} is left.` : add ? `${pc[1]}% of ${money(base, cur)} is ${money(part, cur)}, so the new total is ${money(res, cur)}.` : `${pc[1]}% of ${money(base, cur)} is ${money(part, cur)}.`, source: "skill:math" };
+        }
+      }
       r = P.math.solve(m.clean) || P.math.solve(m.plain);
       if (r && r.notes && r.notes.includes("word")) {
         const n = +r.result.replace(/,/g, "");
@@ -1025,7 +1100,7 @@
         let s = r.exact ? `${ex} = ${cur}${r.result}` : `${ex} ≈ ${cur}${r.result}`;
         if (r.fraction && !r.exact) s += ` (exactly ${r.fraction})`;
         if (r.extra) s += r.extra.replace(/(total is|you pay) /, "$1 " + cur);
-        this.state.lastMath = { expr: r.expr, result: r.result, turn: this.state.turn };
+        this.state.lastMath = { expr: r.expr, result: r.result, turn: this.state.turn, cur };
         if (r.notes.includes("negpow")) s += ". Heads up: the power comes before the minus sign, so -2^2 means -(2^2). (-2)^2 would be positive.";
         if (r.notes.includes("pct")) s += " (the % is taken of the first number, like on a calculator)";
         return { text: this._flair(["", "", "Easy! ", "Let me calculate... ", "🧮 "]) + s, source: "skill:math" };
@@ -1172,13 +1247,146 @@
       }
       if (/\b(not|never|stop|forget|wrong|listening|listen|hate|dumb|stupid|useless|boring|mid|ugh|whatever|sense|joke|kidding)\b/.test(t)) return null;
       if (/^(what|which|who)\b/.test(lastQ.replace(/^.*?\b(?=(what|which|who)\b)/, "")) && m.tokens.length <= 5 && m.emotion.valence >= 0 && !/^(i|you|we|it|my|no|yes|ok|she|he|they|his|her|its|this|that|there|the)\b/.test(t) &&
-          !/\b(thanks|thank|wow|lol|lmao|omg|bruh|okay|sure|yeah|nah|whatever|idk|what|why|huh|nothing|same)\b/.test(t) && !/[🙄💀😒]/u.test(m.clean)) {
+          !/\b(thanks|thank|wow|lol|lmao|omg|bruh|okay|sure|yeah|nah|whatever|idk|what|why|huh|nothing|same|wtf|wth|smh|seriously|really|ugh|stop|weird|rude)\b/.test(t) && !/[🙄💀😒😭😐😑]|\?/u.test(m.clean)) {
         const ans = m.clean.replace(/[.!]+$/, "").replace(/^(rn|mostly|probably|prob|maybe|like|um|uh|i guess|definitely)\s+/i, "");
         if (/^who\b/.test(lastQ.replace(/^.*?\b(?=who\b)/, ""))) {
           const names = U.titleCase(ans.toLowerCase());
           return { text: pick([`${names}! 🔥 Nice picks.`, `Ooh, ${names}! Good taste. 😄`]), source: "ack:answer", score: 0.6 };
         }
         return { text: pick([`${U.capitalizeFirst(ans)}? Nice! 😊`, `Ooh, ${ans}! Cool.`, `${U.capitalizeFirst(ans)}, nice choice! 😄`]), source: "ack:answer", score: 0.5 };
+      }
+      return null;
+    }
+
+    // "ugh this fractions homework is killing me", "stoichiometry and moles. i just dont get it": offer real help
+    _homework(m) {
+      const t = m.plain;
+      const SUBJ = "fractions?|decimals?|percent\\w*|algebra|equations?|long division|division|multiplication|times tables|math|maths|geometry|spelling|essay|book report|science|history|homework|project|studying|reading|chem|chemistry|stoichiometry|moles?|molar mass|physics|biology|bio";
+      let hw = new RegExp("\\b(" + SUBJ + ")\\b[^.!?]{0,30}\\b(is |are )?(killing me|so hard|too hard|really hard|hard|confusing|impossible|annoying|the worst|takes forever|so boring)\\b|\\bi (?:do not|don'?t|dont) (?:get|understand) (?:my |the |these |this )?(" + SUBJ + ")\\b|\\bstuck on (?:my |the |this )?(" + SUBJ + "|problem)\\b").exec(t);
+      if (!hw && /\b(i (just )?(do not|don'?t|dont) (get|understand) it|makes no sense|so confusing|i'?m lost|im lost)\b/.test(t)) hw = new RegExp("\\b(" + SUBJ + ")\\b").exec(t);
+      if (hw) hw = [hw[0], hw[1] || hw[4] || hw[5]];
+      if (hw && !m.isQuestion && !/\b(what is|how (do|to)|solve|calculate)\b/.test(t)) {
+        const subj = hw[1];
+        const mathy = /^(fractions?|decimals?|percent\w*|algebra|equations?|long division|division|multiplication|times tables|math|maths|geometry)$/.test(subj);
+        const ex = /^fraction/.test(subj) ? "like 3/4 + 1/6" : /^decimal/.test(subj) ? "like 2.5 × 1.2" : /^percent/.test(subj) ? "like 15% of 80" : /^(algebra|equations?)$/.test(subj) ? "like 2x + 5 = 17" : /division/.test(subj) ? "like 156 ÷ 12" : "and I'll work it out step by step";
+        const chem = /^(chem|chemistry|stoichiometry|moles?|molar mass)$/.test(subj);
+        if (chem) return { text: "Stoichiometry trips up SO many people! 🧪 The whole idea: grams → moles (divide by the molar mass) → use the ratio from the balanced equation → back to grams if needed. I can do the number part with you: try \"molar mass of H2O\" or \"how many moles in 36 g of water\".", source: "event:homework", score: 0.88, expect: { kind: "open", topic: "chemistry" } };
+        return { text: mathy ? pick([`Ugh, ${subj} can be so tricky! 😩 Want some help? Give me one of the problems, ${ex}.`, `${U.capitalizeFirst(subj)}, huh? 😅 I'm actually good at those! Type one in, ${ex}.`])
+          : subj === "spelling" ? "Spelling can be tough! 😅 Want to practice? Say \"spelling game\", or ask me how to spell any word."
+          : pick([`Ugh, homework that drags on is the worst. 😩 Want to take a 5-minute break and then do one small part at a time? I can help with math or word meanings!`, `Hang in there! 💪 Breaking it into small pieces helps. What part are you stuck on?`]), source: "event:homework", score: 0.88, expect: { kind: "open", topic: "homework" } };
+      }
+      return null;
+    }
+
+    // small social moves a friend is expected to get right
+    _social(m, c) {
+      const t = m.plain, st = this.state, mem = this.mem;
+      const lastBot = c.lastBot || "";
+      const risky = P.safety && P.safety.risk(m);
+      let r;
+      // "why tho" right after Pip gave advice
+      if (/^(why|why tho|why though|how come|but why|why\?+)\s*[?!.]*$/.test(t) && /^advice/.test(st.lastSource || ""))
+        return { text: pick(["Mostly because that's what tends to work for people: small, honest steps make things less awkward, and they show you care. 💙 Want another idea?", "Because waiting and guessing usually makes things feel bigger than they are. A small first step clears the air way faster. 💙"]), source: "advice:why" };
+      // "can u just say good luck", "u could at least say yay"
+      if ((r = /\b(?:can|could|will|would) (?:you|u) (?:just |at least |pls |please )?say ([a-z' ]{2,24}?)(?: to me| for me| pls| please)?\s*[?!.]*$|\b(?:you|u) could (?:at least |just )?(?:say|have said) ([a-z' ]{2,24}?)\s*[?!.]*$|^(?:just |pls |please )?say ([a-z' ]{2,24}?)(?: pls| please)?\s*[?!.]*$/.exec(t))) {
+        const w = (r[1] || r[2] || r[3]).trim().replace(/^(it|that) /, "");
+        const today = (mem.events || []).find((e) => !e.done && Math.abs(MEM.dueOf(e) - Date.now()) < 20 * 3600e3);
+        const SAY = { "good luck": `GOOD LUCK!!! 🍀${today ? ` You've got this${/match|game|tournament/.test(today.what) && mem.position ? ", " + mem.position : ""}! ${/match|game|tournament|race/.test(today.what) ? (/soccer|football/.test(today.what) ? "⚽" : "🏆") : "💪"}` : " You've got this! 💪"}`,
+          yay: "YAY!!! 🎉🎉 I'm so happy for you!", woohoo: "WOOHOO!!! 🎉", "lets go": "LET'S GOOO!!! 🔥", "let's go": "LET'S GOOO!!! 🔥", congrats: "CONGRATS!!! 🎉🥳 So proud of you!", congratulations: "CONGRATULATIONS!!! 🎉🥳 So proud of you!",
+          "well done": "WELL DONE!!! 🎉 So proud of you!", "good job": "GOOD JOB!!! 🙌", "happy birthday": "HAPPY BIRTHDAY!!! 🎂🎉🎈", sorry: "I'm really sorry. 😔 I'll do better.", "thank you": "Thank you! 😊", thanks: "Thanks! 😊",
+          hi: "Hi! 👋😊", hello: "Hello! 👋😊", "good night": "Good night! 🌙 Sleep well!", goodnight: "Good night! 🌙 Sleep well!", "good morning": "Good morning! ☀️", "go team": "GO TEAM!!! 📣🎉", cheese: "CHEEEESE! 📸😁", "i love you": "Aww, I really like chatting with you too! 💙", "you're welcome": "You're welcome! 😊" };
+        if (SAY[w]) return { text: SAY[w], source: "social:say" };
+      }
+      // "is it one c two s?" right after Pip spelled a word
+      const ls = st.lastSpelled;
+      if (ls && st.turn - ls.turn <= 3 && (r = /\b(one|two|three|1|2|3|single|double) ([a-z])(?:'?s)?\b(?:,? (?:and )?(one|two|three|1|2|3|single|double) ([a-z])(?:'?s)?\b)?/.exec(t)) && (/\?/.test(m.clean) || /^(is it|so|wait)\b/.test(t))) {
+        const N = { one: 1, two: 2, three: 3, "1": 1, "2": 2, "3": 3, single: 1, double: 2 };
+        const res = [[r[1], r[2]], [r[3], r[4]]].filter((x) => x[0]).map(([n, ch]) => ({ ch, want: N[n], have: ls.w.split("").filter((x) => x === ch).length }));
+        const ok = res.every((x) => x.have === x.want);
+        const desc = res.map((x) => `${["no", "one", "two", "three", "four"][x.have] || x.have} ${x.ch.toUpperCase()}${x.have === 1 ? "" : "'s"}`).join(" and ");
+        const tip = (P.skills.SPELL_TIPS || {})[ls.w];
+        return { text: `${ok ? "Yes!" : "Not quite:"} "${ls.w}" has ${desc}: ${ls.w.toUpperCase().split("").join("-")}.${tip ? " " + tip : ""}`, source: "skill:words" };
+      }
+      // "was i right??" after a quiz answer
+      const lg = st.lastGameResult;
+      if (lg && st.turn - lg.turn <= 5 && /\b(was i right|was it right|did i get (it|that|the last one|the last word|the word|that one)( right)?|did i spell (it|that) right|was that right|am i right|was that correct|did i win)\b/.test(t))
+        return { text: lg.right ? `Yes! You got it right: ${lg.word.toUpperCase().split("").join("-")}. 🎉` : `Not quite: it's spelled ${lg.word.toUpperCase().split("").join("-")}${lg.said && lg.said !== "?" ? ` (you wrote ${lg.said})` : ""}. So close!`, source: "social:game" };
+      // "u always say that", "you keep saying the same thing"
+      if (/\b(you|u) (always|keep|just keep|keep on) (say|saying|said) (that|the same|this|it)\b|\b(you|u) (said|say) that (already|every time|again|like \d+ times)\b|\bsame (thing|answer|reply) (again|every time|over and over)\b|\bstop saying that\b|\bthat'?s (literally )?the same thing\b|\b(you|u) (keep|kept) repeating\b|\b(you|u) keep saying\b/.test(t)) {
+        if (lastBot) st.recent.push(lastBot);
+        return { text: pick(["You're right, I repeat myself sometimes. 😅 I'm a small homemade AI with a limited set of replies. I'll try to mix it up!", "Ha, fair! 😅 My reply list isn't that long. Tell me more and I'll try to say something better."]), source: "social:repeat" };
+      }
+      // "u didnt even ask about ava"
+      if ((r = /\b(?:you|u) (?:didn'?t|did not|didnt|never|haven'?t|havent|forgot to) (?:even )?ask(?:ed)? (?:me )?about ([a-z]+(?: [a-z]+)?)\b/.exec(t)) || (r = /\b(?:you|u) forgot (?:about )?(?:my )?([a-z]+)\b/.exec(t))) {
+        const x = r[1].replace(/^(my|the|our) /, "").replace(/ (tho|though|lol|again)$/, "");
+        const ev = (mem.events || []).slice().reverse().find((e) => e.what.split(" ").includes(x.split(" ").pop()));
+        const nm = MEM.looksLikeName(x, m.clean, true) && !P.nlp.knownWord(x) ? U.titleCase(x) : null;
+        if (ev || nm) return { text: ev ? `You're right, I'm sorry! 💙 How did your ${ev.what} go?` : `You're right, I'm sorry! 💙 How are things with ${nm}?`, source: "social:ask", expect: ev ? { kind: "followup", about: "event", what: ev.what } : { kind: "open", topic: nm } };
+      }
+      // "my name is not Exhausted, it's David"
+      if ((r = /\bmy name (?:is not|isn'?t|isnt|aint) ([a-z]+)\b|\b(?:i'?m|im|i am) not called ([a-z]+)\b/.exec(t)) && mem.name && (r[1] || r[2]) !== mem.name.toLowerCase()) {
+        return { text: `Sorry, ${mem.name}! 😅 I know your name.${/\b(tired|exhausted|sleepy|drained|wiped)\b/.test(t) ? " And I hear you: you're really tired. Those shifts sound brutal." : ""}`, source: "social:name" };
+      }
+      if (risky) return null;
+      const hwk = this._homework(m); if (hwk) return hwk;
+      // "i kinda like someone" / "i have a crush on someone but im not telling u who"
+      if (/\b(i (kinda |kind of |really |lowkey |think i |sorta |might )?(like|have a crush on|am crushing on|got a crush on) (someone|somebody|a (boy|girl|guy|person)|this (boy|girl|guy|person) in my class)|i have a crush|i got a crush|i'?m crushing on|im crushing on|i mean like a crush|like a crush)\b/.test(t)) {
+        this._mood("happy");
+        const secret = /\b(not telling|won'?t tell|wont tell|not gonna tell|secret)\b/.test(t);
+        return { text: secret ? "That's totally fine, your secret's safe! 🤐 What do you like about them?" : pick(["Ooh, a crush! 😊 That's exciting (and a little nerve-wracking). What do you like about them?", "Aww, a crush! 💕 How did it start? Do you talk much?"]), source: "social:crush", expect: { kind: "open", topic: "crush" } };
+      }
+      // "a gut feeling?? ur a bot u dont have a gut"
+      if (/\b(you|u|ur a bot|you'?re a bot|ur an ai) (don'?t|dont|do not|can'?t|cant) (even )?(have|has|got|feel) (a |an |any )?(gut|brain|feelings|heart|stomach|body|taste|ears|eyes)\b/.test(t))
+        return { text: pick(["Ha, fair point! 😄 No gut here, just code. I go with what usually works for people.", "True! 😅 I'm all code, no stomach. Call it a best guess, then."]), source: "social:bot" };
+      // "u dont know what those are do u"
+      if (/\b(you|u) (don'?t|dont|do not) (even )?know what (that|those|it|this|they) (is|are)\b|\byou have no idea what (that|those|it) (is|are)\b/.test(t))
+        return { text: "Honestly? I only know a little bit! 😅 Tell me about it, what's the best part?", source: "social:know" };
+      // "nice?? wtf" - Pip said something odd
+      if (/\b(wtf|wth|what the heck|what the hell)\b/.test(t) && /\?\?|^(nice|cool|interesting|great|awesome|good|ok|okay)\b/.test(m.clean.toLowerCase()) && m.tokens.length <= 5)
+        return { text: "Sorry, that came out totally wrong! 😅 What were you saying?", source: "social:oops" };
+      // "we're good now" / "she replied and we made up"
+      if (/\b(we'?re|we are) (good|ok|okay|fine|cool|friends) (now|again)\b|\b(she|he|they) (replied|texted back|answered)\b.{0,30}\b(good|fine|ok|okay|made up)\b|\bwe made up\b/.test(t) && m.emotion.valence > -0.5) {
+        this._mood("happy"); st.lastGoodText = "You two are good again!";
+        return { text: pick(["YAY! 🎉 I'm so happy you two are good again! Reaching out was brave.", "That's awesome! 💙 See, texting first was worth it. I'm really happy for you!"]), source: "event:madeup" };
+      }
+      // artists: "do u like olivia rodrigo", "whats ur fav sza song", "lets talk about sza"
+      const art = C.artistOf && C.artistOf(t);
+      if (art) {
+        const obj = art.p === "she" ? "her" : art.p === "he" ? "him" : "them", pos = art.p === "she" ? "her" : art.p === "he" ? "his" : "their";
+        const other = art.songs.filter((x) => x !== art.pick);
+        if (/\b(fav|fave|favorite|favourite|best|top)\b.{0,20}\bsongs?\b|\b(what|which) (song|one)\b/.test(t) && /\b(ur|your|you|u|yours|pip)\b/.test(t))
+          return { text: `Ooh, tough one! I'd pick "${art.pick}". 🎧 "${other[0]}" is a close second. What's yours?`, source: "social:artist", expect: { kind: "open", topic: art.name } };
+        if (/\b(do|did|would) (you|u) (like|love|listen to|know|enjoy)\b|\bwhat do (you|u) think (of|about)\b|\b(thoughts|opinion) on\b|\bhave (you|u) heard\b|\bis (she|he|they) good\b/.test(t))
+          return { text: `${art.name}? ${pick(["Love", "Big fan of", "I really like"])} ${pos} music! 🎵 "${art.songs[0]}" and "${art.songs[1]}" are so good. What's your favorite song by ${obj}?`, source: "social:artist", expect: { kind: "open", topic: art.name } };
+        if (/\b(let'?s|lets|let us|can we) talk about\b|\bi (love|like|listen to|am obsessed with|stan|adore)\b|\bobsessed with\b/.test(t))
+          return { text: `${art.name}! 🎵 ${art.p === "they" ? "They have" : U.capitalizeFirst(art.p) + " has"} so many good songs. Mine's "${art.pick}". What's your favorite?`, source: "social:artist", expect: { kind: "open", topic: art.name } };
+      }
+      const songs = C.songsIn ? C.songsIn(t) : [];
+      if (songs.length && /\b(fav|fave|favorite|favourite|love|listening to|obsessed with|on repeat|songs? (rn|right now|lately))\b/.test(t))
+        return { text: `Great picks! 🎧 ${songs.map((x) => `"${x.title}" by ${x.artist}`).join(" and ")} ${songs.length > 1 ? "are both" : "is"} so good.`, source: "social:songs" };
+      // "arent u happy for me"
+      if (/\b(aren'?t|are not|arent) (you|u) happy for me\b|\bbe happy for me\b|\bare (you|u) (not )?(even )?happy for me\b/.test(t))
+        return { text: `Of course I'm happy for you! 🎉 ${st.lastGoodText || "That's awesome news!"}`, source: "social:happy" };
+      // "ok that one was kinda funny ngl"
+      if (/^(?:ok |okay |lol |haha |omg |ngl |wait )*(?:that|this|the \w+) (?:one )?(?:was|is) (?:actually |kinda |kind of |pretty |so |really |lowkey |honestly )*(?:funny|good|hilarious|great|not bad)\b|\bgood one\b|^lol (?:ok |okay )?that was (?:actually )?(?:funny|good)\b/.test(t) && /joke|riddle|mcjoke/.test(st.lastSource || ""))
+        return { text: /\b(kinda|kind of|lowkey|not bad)\b/.test(t) ? "Haha, I'll take 'kinda funny'! 😄 Want another one?" : pick(["Yesss, a laugh! 😆 Want another?", "Haha, thank you! 😄 I've got more where that came from. Another?"]), source: "social:funny", expect: { kind: "yesno", yes: "joke" } };
+      // "i texted her" / "i talked to him"
+      if (/^(?:ok |so |well |yeah |yes |ya |i did\.? |guess what\.? )*i (?:finally |just |already )?(?:texted|messaged|dmed|called|talked to|said sorry to|apologized to|asked) (?:her|him|them|[a-z]+)\b(?!.*\b(?:and|but) (?:she|he|they)\b)/.test(t) && m.tokens.length <= 10 && !/\b(replied|answered|said|ignored|left me on read)\b/.test(t))
+        return { text: pick(["Ooh, you did it! 💙 That took guts. How did it go?", "You reached out! 💙 That's brave. What happened?"]), source: "social:did", expect: { kind: "open", topic: "friend" } };
+      // "maybe ill ask him", "my mom said maybe we can video call on the weekend"
+      if (/\b(maybe|i think|probably|prob) (i'?ll|i will|ill|i can|we can|we could|i could|i should|we will|we'?ll) (ask|talk to|invite|try|say hi to|sit with|play with|join|video call|facetime|call|text|message|hang out|visit)\b|\b(i'?m|im|i am) (gonna|going to) (ask|talk to|invite|say hi to|sit with|play with|join)\b/.test(t) && !/\b(sad|scared|afraid|nervous|worried)\b/.test(t)) {
+        const who = /\b(?:ask|invite|talk to|say hi to|sit with|play with) ([a-z]+)\b/.exec(t);
+        const nm = who && /^(him|her|them)$/.test(who[1]) ? who[1] : who && MEM.looksLikeName(who[1], m.clean, true) && !P.nlp.knownWord(who[1]) ? U.titleCase(who[1]) : null;
+        const will = nm === "him" ? "he'll" : nm === "her" ? "she'll" : nm && nm !== "them" ? nm + " will" : "they'll";
+        return { text: /\b(video call|facetime|call)\b/.test(t) ? "A video call sounds great! 😊 It's not the same as every day, but it's something to look forward to." : pick([`That's a great idea! 😊 I bet ${will} be happy you asked.`, "Ooh, I love that plan! 💙 Asking is the hardest part, and you've got this."]), source: "social:plan", expect: { kind: "open", topic: "friends" } };
+      }
+      // "guess what i talked to omar today!! we played tag and hes coming over"
+      if (/\b(i (finally |actually )?(talked|spoke) to|made a new friend|(he|she|they)('?s| is| are| s|s) coming over|(he|she) said yes|invited me|sat with me)\b/.test(t) && m.emotion.valence >= 0 && (/!|guess what/.test(m.clean.toLowerCase()) || /\b(new friend|coming over|said yes)\b/.test(t))) {
+        const nm = /\b(?:talked to|spoke to|with) ([a-z]+)\b/.exec(t);
+        const name = nm && MEM.looksLikeName(nm[1], m.clean, true) && !/^(him|her|them|my|the|a|me|everyone)$/.test(nm[1]) && !P.nlp.knownWord(nm[1]) ? U.titleCase(nm[1]) : null;
+        st.lastGoodText = name ? `You and ${name} are becoming friends!` : "You made a new friend!";
+        const she = /\bshe\b/.test(t);
+        return { text: pick([`YAY! 🎉 That's so awesome!${name ? " You talked to " + name + "!" : ""}${/coming over/.test(t) ? ` And ${she ? "she's" : "he's"} coming over? ` : " "}Sounds like a new friend! 😄`, `No way, that's great news! 🥳 ${name ? name + " sounds fun. " : ""}I'm so happy for you!`]).replace(/\s+/g, " "), source: "social:friend" };
       }
       return null;
     }
@@ -1194,6 +1402,7 @@
       const excited = /\bguess what\b/.test(m.plain) || (m.clean.match(/!/g) || []).length >= 2 || /[A-Z]{4,}/.test(m.clean);
       if (!excited || m.isQuestion || m.emotion.valence < -0.2 || /\?|\b(what|how|why|where|when|which|who) (do|does|did|is|are|can|should|would)\b/.test(m.clean.toLowerCase())) return null;
       const body = m.plain.replace(/^(and |so |ok |omg |oh my god |yay |guess what |and guess what |pip |hey )+/, "").replace(/^guess what\s*/, "").replace(/[.!?]+$/, "").trim();
+      if (body.split(" ").length > 14 || /\b(not|never|no|can you|could you|just say|stop|why)\b|n'?t\b/.test(body) || /😭|😤|😠|😡|🙄/u.test(m.clean)) return null;
       const cl = /^((?:i|we|my \w+|[a-z]+) (?:is|are|am|was|got|get|have|has|won|passed|made|finally|just|will|can|am going to|is going to|are going to|got to|get to|'m|'re|'s)\b.{3,80})$/.exec(body);
       if (!cl) return /\bguess what\b/.test(m.plain) && body.length < 3 ? { text: "What?! Tell me! 👀", source: "news", score: 0.8 } : null;
       let echo = reflect(cl[1]).replace(/\bI\b/g, "you").replace(/^you\b/, "You");
@@ -1314,7 +1523,8 @@
       if (/\b(we|i) (are moving|am moving|have to move|had to move|just moved|are going to move|will move|moved) (to|house|away|next|this|in)\b/.test(t) && !/\bmoved on\b/.test(t)) {
         return { text: pick(["Moving is a big change! 📦 How do you feel about it: excited, nervous, or a bit of both?", "Whoa, a move! 🏠 That's a lot. Are you excited or kind of sad about it?"]), source: "event:moving", score: 0.85, expect: { kind: "open", topic: "moving" } };
       }
-      if (/\b(apologi[sz]ed|said sorry|made up|we'?re (friends|good|okay|ok|cool) again|we are (friends|good|okay|ok|cool) again|we talked it out|we worked it out)\b/.test(t) && m.emotion.valence > -0.5) {
+      if (/\b(apologi[sz]ed|said sorry|made up|we'?re (friends|good|okay|ok|cool|fine) (again|now)|we are (friends|good|okay|ok|cool|fine) (again|now)|we talked it out|we worked it out|(she|he|they) (replied|texted back|answered) and we'?re (good|ok|okay|fine|cool))\b/.test(t) && m.emotion.valence > -0.5) {
+        this.state.lastGoodText = "You two are good again!";
         this._mood("happy");
         return { text: pick(["Aw, that's so good to hear! 💙 I'm really glad you two made up. That takes guts.", "Yay! 😊 Making up after a fight is hard, and you did it. How do you feel now?"]), source: "event:madeup", score: 0.88, expect: { kind: "open", topic: "good news" } };
       }
@@ -1350,24 +1560,41 @@
         this._mood("sad");
         return { text: pick(["Oh no, I'm sorry. 😔 One test doesn't define you, though. Do you know what went wrong?", "That's really disappointing, I'm sorry. 💙 Everyone fails sometimes, and it's how we learn. How are you feeling about it?"]), source: "event:failed", score: 0.9, expect: { kind: "vent", emotion: "sad" } };
       }
-      if (/\b(i )?(passed|aced|nailed) (my|the|a|an) (test|exam|quiz|class|driving test|interview)\b|\bi got (an a|a good grade|the job|accepted|a promotion|first place)\b|\b(i|we) (finally )?(killed|beat|defeated|slayed|slew|took down) (the )?(ender ?dragon|dragon|wither|warden|elder guardian)\b|\bi (hit|got|scored|made|threw|bowled) (a |an |my first |the winning )?(home ?run|homer|grand slam|goal|touchdown|three pointer|hat trick|buzzer beater|hole in one|strike ?out|century)\b|\b(i|we|our team) (won|beat them|crushed it|destroyed them)\b|\b(i )?(scored|dropped|had) (\d+|a) (points|goals|touchdowns|runs|baskets|threes)\b|\bbuzzer beater\b|\bhat trick\b/.test(t) && !/\b(what is|what's|whats|know what|do (you|u) know)\b/.test(t)) {
+      if (/\b(i )?(passed|aced|nailed) (my|the|a|an) (test|exam|quiz|class|driving test|interview)\b|\bi got (an a|a good grade|the job|accepted|a promotion|first place)\b|\b(i )?got (an? |a )?(a\+?|a-|b\+?|b-|100|9\d|a hundred)( percent|%)?( on| in|!|$)|\b(i|we) (finally )?(killed|beat|defeated|slayed|slew|took down) (the )?(ender ?dragon|dragon|wither|warden|elder guardian)\b|\bi (hit|got|scored|made|threw|bowled) (a |an |my first |the winning )?(home ?run|homer|grand slam|goal|touchdown|three pointer|hat trick|buzzer beater|hole in one|strike ?out|century)\b|\b(i|we|our team) (won|beat them|crushed it|destroyed them)\b|\b(i )?(scored|dropped|had) (\d+|a) (points|goals|touchdowns|runs|baskets|threes)\b|\bbuzzer beater\b|\bhat trick\b/.test(t) && !/\b(what is|what's|whats|know what|do (you|u) know)\b/.test(t)) {
         this._mood("happy");
+        const grade = /\bgot (?:an? |a )?(a\+?|a-|b\+?|b-|100|9\d|a hundred)( percent|%)?\b/.exec(t);
+        if (grade && !/\b(i got a (good|new|big|little|dog|cat|puppy|kitten|phone|job|bike|game|present))\b/.test(t)) {
+          const g = grade[1].toUpperCase().replace(/^A HUNDRED$/, "100");
+          const worried = (this.mem.events || []).some((e) => /\b(test|exam|quiz)\b/.test(e.what || "")) || /\b(thought i failed|i think i failed|chem|test|exam|quiz)\b/.test(this.state.history.filter((h) => h.role === "user").slice(-30).map((h) => h.text.toLowerCase()).join(" "));
+          return { text: /^\d/.test(g) ? pick([`${g}${grade[2] ? "%" : ""}?! 🎉 That's amazing! All that work paid off!`, `WOW, ${g}${grade[2] ? "%" : ""}! 🥳 You should be really proud!`]) : pick([`${g === "A" || g === "A+" ? "An" : "A"} ${g}?! 🎉 ${worried ? "After all that worrying? " : ""}That's awesome! You should be proud!`, `YES! ${g === "A" || g === "A+" ? "An" : "A"} ${g}! 🥳 ${worried ? "See, you knew more than you thought! " : ""}How are you celebrating?`]), source: "event:win", score: 0.93, expect: { kind: "open", topic: "good news" } };
+        }
         const gw = /\b(ender ?dragon|the dragon|wither|warden|elder guardian)\b/.exec(t);
         if (gw) return { text: pick([`YOOO, you beat the ${gw[1] === "the dragon" ? "Ender Dragon" : U.titleCase(gw[1].replace(/^enderdragon$/, "ender dragon"))}!! 🐉🎉 That's huge! Did you ${/dragon/.test(gw[1]) ? "grab the dragon egg" : "get the loot"}?`, `No way, the ${U.titleCase(gw[1].replace(/^the /, ""))}?! 🎉 That's a big deal! How long did it take?`]), source: "event:win", score: 0.92, expect: { kind: "open", topic: "good news" } };
         const hr = /\b(home ?run|homer|grand slam|goal|touchdown|three pointer|a three|hat trick|buzzer beater|strike ?out|a strike|a try|a century|a hole in one)\b/.exec(t);
         if (hr) return { text: pick([`A ${hr[1].replace(/^a /, "").replace(/^homerun$/, "home run")}?! 🎉 That's awesome! How did it feel?`, `YES! A ${hr[1].replace(/^a /, "").replace(/^homerun$/, "home run")}! 🔥 I bet everyone was cheering!`]), source: "event:win", score: 0.92, expect: { kind: "open", topic: "good news" } };
         return { text: pick(["WOW, congratulations!! 🎉🎉 I'm so proud of you! How are you celebrating?", "That's amazing! 🥳 You worked for it and it paid off! Tell me everything!", "YES! 🎉 Great job! How does it feel?"]), source: "event:win", score: 0.9, expect: { kind: "open", topic: "good news" } };
       }
-      // "ugh this fractions homework is killing me": offer real help
-      const hw = /\b(fractions?|decimals?|percent\w*|algebra|equations?|long division|division|multiplication|times tables|math|maths|geometry|spelling|essay|book report|science|history|homework|project|studying|reading)\b[^.!?]{0,30}\b(is |are )?(killing me|so hard|too hard|really hard|hard|confusing|impossible|annoying|the worst|takes forever|so boring)\b|\bi (do not|don'?t|dont) (get|understand) (my |the |these |this )?(fractions?|decimals?|algebra|equations?|math|maths|homework|division)\b|\bstuck on (my |the |this )?(fractions?|math|maths|homework|equation|problem)\b/.exec(t);
-      if (hw && !m.isQuestion && !/\b(what is|how (do|to)|solve|calculate)\b/.test(t)) {
-        const subj = hw[1];
-        const mathy = /^(fractions?|decimals?|percent\w*|algebra|equations?|long division|division|multiplication|times tables|math|maths|geometry)$/.test(subj);
-        const ex = /^fraction/.test(subj) ? "like 3/4 + 1/6" : /^decimal/.test(subj) ? "like 2.5 × 1.2" : /^percent/.test(subj) ? "like 15% of 80" : /^(algebra|equations?)$/.test(subj) ? "like 2x + 5 = 17" : /division/.test(subj) ? "like 156 ÷ 12" : "and I'll work it out step by step";
-        return { text: mathy ? pick([`Ugh, ${subj} can be so tricky! 😩 Want some help? Give me one of the problems, ${ex}.`, `${U.capitalizeFirst(subj)}, huh? 😅 I'm actually good at those! Type one in, ${ex}.`])
-          : subj === "spelling" ? "Spelling can be tough! 😅 Want to practice? Say \"spelling game\", or ask me how to spell any word."
-          : pick([`Ugh, homework that drags on is the worst. 😩 Want to take a 5-minute break and then do one small part at a time? I can help with math or word meanings!`, `Hang in there! 💪 Breaking it into small pieces helps. What part are you stuck on?`]), source: "event:homework", score: 0.88, expect: { kind: "open", topic: "homework" } };
+      // "calm down, it was a joke" right after Pip checked in
+      if ((/\b(calm down|chill|relax|it'?s a joke|its a joke|was a joke|joking|kidding|jk|just an expression|an expression)\b/.test(t) && /^(safety:checkin|react:careful|safety:clear)/.test(this.state.lastSource || "") ||
+           /\b(calm down|chill out|chill|relax)\b/.test(t) && /\b(joking|joke|kidding|not hurting|i'?m fine|im fine|i am fine|i'?m ok|im ok)\b/.test(t)) && !(P.safety && P.safety.risk(m)))
+        return { text: pick(["Haha okay, okay! 😅 I'm calm. I just like to make sure you're good.", "Got it, my bad! 😅 I take that stuff seriously, but I get it now. So what's up?"]), source: "event:clarify", score: 0.92 };
+      // "my mom is gonna kill me when she sees my grade lol"
+      if (/\b(mom|mum|dad|parents|mother|father)( is| are|'s| s)? (going to|gonna|will|would) (literally |actually |so )?(kill|murder|ground) me\b/.test(t) && /\b(grade|grades|report card|test|exam|quiz|score|f\b|d\b|c\b|failed|phone|broke|lost)\b/.test(t))
+        return { text: pick(["Uh oh! 😬 Grade trouble? What did you get? Telling them first, with a plan (like extra study time), usually makes it way less scary.", "Yikes, the dreaded grade talk! 😅 What happened? Honestly, parents tend to take it better when they hear it from you first."]), source: "event:worry", score: 0.88, expect: { kind: "open", topic: "school" } };
+      // "i had volleyball practice today and im dead"
+      if (/\b(practice|training|game|match|tryouts?|workout|gym)\b/.test(t) && /\b(i'?m|im|i am|feel|feeling|so) (so |literally |actually |completely )?(dead|exhausted|tired|wiped|wrecked|done|sore|drained)\b/.test(t) && !/\b(not|nothing)\b/.test(t)) {
+        const tp = C.topicOf(t);
+        return { text: pick([`Sounds like a tough ${/tryout/.test(t) ? "tryout" : "practice"}! 😅 Rest up and drink lots of water.${tp && tp.name !== "that sport" ? ` How long have you been playing ${tp.name}?` : ""}`, `Haha, a good kind of dead, I hope! 🥵 Stretch tonight so you're not too sore tomorrow.`]), source: "event:sport", score: 0.88 };
       }
+      // "coach made us do like 50 suicides"
+      if (/\b(coach|practice|training|pe|gym class)\b/.test(t) && /\b(suicides|laps|sprints|burpees|push ?ups|sit ?ups|wall sits|miles|drills)\b/.test(t) && /\b(made us|had us|we did|we had to|like \d+|\d+ )\b/.test(t)) {
+        const n = /\b(\d+)\b/.exec(t);
+        return { text: pick([`${n ? n[1] + "?! " : ""}😵 That coach doesn't mess around! Your legs must be jelly. Stretch and drink lots of water!`, `Oof, ${n ? n[1] + " of those" : "that"} sounds brutal! 🥵 You survived though. Legend.`]), source: "event:sport", score: 0.88 };
+      }
+      // "mia said shes gonna kill me if i touch her phone again lol"
+      if (/\b(sister|brother|mia|she|he|they)\b.{0,20}\b(going to|gonna|will) (kill|murder) me if\b/.test(t) && /\b(lol|lmao|haha|😂)\b/.test(t + " " + m.clean))
+        return { text: pick(["Haha, sounds like her phone is officially off-limits! 😅📵", "LOL, siblings and their phones. 😂 Maybe don't touch it... for your own safety. 😜"]).replace("her phone", /\bphone\b/.test(t) ? "her phone" : "that"), source: "event:sibling", score: 0.86 };
+      { const hwk = this._homework(m); if (hwk) return hwk; }
       // "i meant like hair dye 😂": a clarification, not a new topic
       const meant = /^(?:(?:wait|no|nooo*|lol|haha|omg|what|wdym)[\s?!.,]+)*(?:what\?*\s*)?i meant (?:like |the |a )?([a-z][a-z ]{1,30}?)(?:\s+(?:lol|haha|lmao|obviously|duh))?\s*$/.exec(t.replace(/[^a-z ?]/g, " ").replace(/\s+/g, " ").trim()) ||
         /\bi meant (?:like |the |a )?([a-z][a-z ]{1,25}?)(?= lol| haha| not |[.!?,]|$)/.exec(t);
@@ -1405,6 +1632,18 @@
         const spot = /\bhid (?:in|under|behind|inside|on top of) (?:the |a |my )?([a-z]+(?: [a-z]+)?)/.exec(t);
         return { text: pick([`${spot ? "The " + spot[1].replace(/ (under|and|for|with).*$/, "") + "?! 😂 " : ""}That's a legendary hiding spot! Nobody finding you is the best feeling.`, `Haha, sneaky! 🕵️ ${spot ? "The " + spot[1].replace(/ (under|and|for|with).*$/, "") + " is genius. " : ""}Did they ever find you?`]), source: "event:fun", score: 0.88, expect: { kind: "open", topic: "fun" } };
       }
+      // "my little brother keeps coming into my room without knocking"
+      if (/\bmy (little |big |baby |younger |older )?(sister|brother)\b.{0,40}\b(coming into my room|comes into my room|come into my room|coming in my room|barg\w* in|without knocking|won'?t knock|doesn'?t knock|going through my|reads? my (diary|texts|phone))\b/.test(t)) {
+        const he = /\bbrother\b/.test(t) ? "he" : "she";
+        return { text: pick([`Ugh, no knocking is the WORST. 😤 Maybe a "please knock" sign on your door? Or ask your parents to back up a knock-first rule for everyone.`, `Oh no, zero privacy! 😤 Siblings, huh. Does ${he} do it to bug you, or just forget?`]), source: "event:sibling", score: 0.9, expect: { kind: "open", topic: "family" } };
+      }
+      // "my best friend ava has been ignoring me since this whole group chat drama"
+      if (/\bmy (best friend|bff|bestie|friend|best mate)\b.{0,30}\b(ignoring me|ignores me|mad at me|not talking to me|stopped talking to me|won'?t talk to me|left me on read|unfollowed me|blocked me|hates me now|took (\w+'?s? )?side)\b/.test(t)) {
+        this._mood("sad");
+        const nm = /\bmy (?:best friend|bff|bestie|friend|best mate) ([a-z]+)\b/.exec(t);
+        const who = nm && MEM.looksLikeName(nm[1], m.clean, true) && !/^(has|is|was|keeps|just|and|since)$/.test(nm[1]) ? U.titleCase(nm[1]) : "your best friend";
+        return { text: pick([`Ugh, that really hurts, especially with ${who}. 💙 Friend drama is the worst. What happened?`, `Oh no. 😔 Being ignored by ${who} must feel awful. Do you know what set it off?`]), source: "event:friendfight", score: 0.9, expect: { kind: "vent", emotion: "sad" } };
+      }
       if (/\bmy (little |big |baby |younger |older )?(sister|brother)\b.{0,30}\b(keeps|won'?t stop|wont stop|keep|always) (singing|humming|screaming|yelling|copying|following|bugging|annoying|poking|talking)\b/.test(t)) {
         const song = /\b(singing|humming)\b/.test(t);
         return { text: song ? pick(["Haha, the same song on repeat! 😅 Siblings know exactly how to drive you nuts. What song is it?", "Oh no, the song loop! 😂 Is it at least a good song?"]) : pick(["Siblings can be SO annoying sometimes! 😅 What's she doing?".replace("she", /brother/.test(t) ? "he" : "she"), "Ugh, I feel you! 😤 Have you tried headphones? 😄"]), source: "event:sibling", score: 0.86, expect: { kind: "open", topic: "family" } };
@@ -1435,7 +1674,7 @@
       if (!e.label || e.strength < 0.9) return null;
       const t = m.norm;
       const self = /\b(i am|i'm|im|i feel|i felt|i have been|i've been|feeling|felt|i get|i got|makes me|made me|i was|today (was|is|has been)|my day (was|is|has been)|this day|life is|life sucks|everything is|i hate my life|i am so|so)\b/.test(t) || m.tokens.length <= 3;
-      if (!self || m.isQuestion && !/^(why do i|why am i)\b/.test(t)) return null;
+      if (!self || m.isQuestion && !/^(why do i|why am i)\b/.test(t) && !/(^|[.!]\s*)(ok|okay|alright|right|k|happy now|see|satisfied)\s*\?+\s*$/i.test(m.clean)) return null;
       if (/\b(you|u) (are|r|make me)\b/.test(t) && !/\bmake me\b/.test(t)) return null;
       if (e.label === "love" || (e.label === "happy" && e.valence < 0.5)) return null;
       this._mood(e.label);
@@ -1681,6 +1920,7 @@
         const start = mm[1] === "" || /[.!?]/.test(mm[1]);
         if (COMMON.test(low) || (P.nlp.STOP && P.nlp.STOP.has(low))) continue;
         if (start && P.nlp.knownWord(low)) continue;
+        if (low.length >= 6 && P.nlp.knownWord(low) && /(ed|ing|ly|ful|ous|ive|less|able)$/.test(low)) continue;
         pn.set(low, w);
       }
       return s.replace(/\b[a-z][a-z']+\b(?!:)/g, (w) => (pn.has(w) ? pn.get(w) : w));

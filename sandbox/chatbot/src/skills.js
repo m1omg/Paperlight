@@ -114,7 +114,8 @@
     if (!g) return null;
     const t = m.norm;
     const isOption = g.opts && g.opts.some((o) => o.toLowerCase() === m.clean.toLowerCase().replace(/[^a-z]/g, ""));
-    if (QUIT.test(t) && m.tokens.length <= 6 && !isOption) {
+    const wordAnswer = g.type === "spelltype" && m.tokens.length === 1 && !/^(stop|quit|exit|cancel|nevermind)$/.test(t);
+    if (QUIT.test(t) && m.tokens.length <= 6 && !isOption && !wordAnswer) {
       st.game = null;
       if ((g.type === "trivia" || g.type === "spell") && g.asked) return { text: `Game over! You got ${g.score} out of ${g.asked}. ${g.score >= g.asked * 0.7 ? "Impressive! 🏆" : "Nice try! 😊"}` };
       if (g.type === "rps" && g.you + g.me) return { text: `Good game! Final score: you ${g.you}, me ${g.me}. ${g.you > g.me ? "You win! 🏆" : g.you < g.me ? "I win this time! 😄" : "It's a tie!"}` };
@@ -151,6 +152,7 @@
         const low = m.clean.toLowerCase().replace(/[^a-z]/g, "");
         if (!low || m.tokens.length > 3) return idle(g, st);
         st.game = null;
+        st.lastGameResult = { right: low === g.w, word: g.w, said: low, turn: st.turn };
         if (low === g.w) return { text: `Yes! ${g.w.toUpperCase().split("").join("-")}. Perfect! 🎉 Want another word?`, expect: { kind: "yesno", yes: "spell" } };
         return { text: `So close! It's ${g.w.toUpperCase().split("").join("-")}. You wrote ${low.toUpperCase().split("").join("-")}. Try it once more?`, expect: { kind: "yesno", yesText: "Okay, type it again! ✏️", then: null } };
       }
@@ -158,15 +160,23 @@
         const low = m.clean.toLowerCase().replace(/[^a-z ]/g, " ").trim();
         let pickd = null;
         const letter = /^(?:option |answer |it'?s |its |i think )?([abc])\b/.exec(low);
-        if (letter && low.split(/\s+/).length <= 3) pickd = g.opts["abc".indexOf(letter[1])];
+        const lead = /^\s*([abc])\s*[.!,)]\s+\S/i.exec(m.clean);
+        if (letter && (low.split(/\s+/).length <= 3 || lead)) pickd = g.opts["abc".indexOf(letter[1])];
         else pickd = g.opts.find((o) => low.split(/\s+/).includes(o.toLowerCase()));
         if (!pickd) {
           if (/\b(i do not know|idk|no idea|not sure|dunno|skip|pass)\b/.test(t)) pickd = "?";
+          else if (m.tokens.length === 1 && /^[a-z]{3,}$/.test(low)) return { text: "Just pick A, B or C! 😊 (Or say stop.)", chips: g.opts.concat(["Stop"]) };
           else return idle(g, st);
         }
         g.asked++;
         const right = pickd === g.w[0];
         if (right) g.score++;
+        st.lastGameResult = { right, word: g.w[0], said: pickd, turn: st.turn };
+        // "b. ok im done w spelling": score it, then stop
+        if (/\b(i'?m|im|i am) done\b|\bdone (with|w) (spelling|this|the quiz)\b|\b(stop|no more|enough)\b/.test(low.replace(/^[abc]\s+/, ""))) {
+          st.game = null;
+          return { text: `${right ? "Correct! ✅" : `Not quite: it's spelled ${g.w[0].toUpperCase().split("").join("-")}.`} Final score: ${g.score}/${g.asked}. ${g.score >= g.asked * 0.7 ? "Nice spelling! 🏆" : "Good practice! 💪"}` };
+        }
         const verdict = right ? pick(["Correct! ✅", "Yes! Perfect spelling! 🎉", "That's right! ✏️"]) : `Not quite: it's spelled ${g.w[0].toUpperCase().split("").join("-")}.`;
         const tip = SPELL_TIPS[g.w[0]] ? " " + SPELL_TIPS[g.w[0]] : "";
         if (g.asked >= 5) { st.game = null; return { text: `${verdict}${tip} That's 5 words: you got ${g.score}/5! ${g.score >= 4 ? "Spelling champion! 🏆" : "Nice practice! 💪"} Again?`, expect: { kind: "yesno", yes: "spell" } }; }
@@ -197,6 +207,9 @@
         g.tries++;
         if (n === g.target) { st.game = null; return { text: `🎉 YES! It was ${g.target}! You got it in ${g.tries} ${g.tries === 1 ? "try. Are you a mind reader?!" : "tries."} Play again?`, expect: { kind: "yesno", yes: "guess" } }; }
         if (n < 1 || n > 100) return { text: "It's between 1 and 100! 😄" };
+        if (g.lo !== undefined && n <= g.lo) { g.tries--; return { text: `Remember, it's higher than ${g.lo}! 😄` }; }
+        if (g.hi !== undefined && n >= g.hi) { g.tries--; return { text: `Remember, it's lower than ${g.hi}! 😄` }; }
+        if (n < g.target) g.lo = Math.max(g.lo === undefined ? 0 : g.lo, n); else g.hi = Math.min(g.hi === undefined ? 101 : g.hi, n);
         const diff = Math.abs(n - g.target);
         const warm = diff <= 3 ? " You're super close! 🔥" : diff <= 10 ? " Getting warm!" : "";
         return { text: (n < g.target ? "Higher! ⬆️" : "Lower! ⬇️") + warm };
@@ -661,6 +674,34 @@
     [["how long is a marathon"], "A marathon is 42.195 km (26.2 miles). 🏃"],
     [["how often are the olympics", "when are the olympics"], "The Olympics happen every 4 years, and the Summer and Winter Games alternate, so there's one every 2 years. 🏅"],
     [["who is the president", "who is the president of the united states", "who is the prime minister"], "Leaders change with elections, and I can't go online to check the latest, so I'd better not guess! 🗳️"],
+    // science homework
+    [["why do volcanoes erupt", "why do volcanos erupt", "how do volcanoes erupt", "how does a volcano work", "what makes a volcano erupt"], "Deep underground it's so hot that rock melts into magma. 🌋 Magma is lighter than the rock around it and full of gas, so it pushes up through cracks. When the pressure gets too big, it bursts out: that's an eruption, and the magma is called lava once it's outside!"],
+    [["is a blue whale bigger than a dinosaur", "bigger than a dinosaur", "is the blue whale bigger than dinosaurs", "was any dinosaur bigger than a blue whale"], "Yes! 🐋 The biggest dinosaurs (like Argentinosaurus) were very long, but a blue whale is heavier: up to about 150 to 200 tonnes, more than any dinosaur we know of. Being in the water helps hold up all that weight!"],
+    [["how long does it take light from the sun to reach earth", "how long does sunlight take to reach earth", "how long does light take from the sun"], "About 8 minutes and 20 seconds! ☀️ Light is super fast (about 300,000 km per second), but the Sun is about 150 million km away. So when you see the Sun, you're seeing it as it was 8 minutes ago."],
+    [["what is a covalent bond", "covalent bond", "what are covalent bonds"], "A covalent bond is when two atoms share electrons to hold together. ⚛️ It usually happens between non-metals, like the O and H atoms in water (H₂O) or the C and O in CO₂."],
+    [["what is an ionic bond", "ionic bond", "what are ionic bonds"], "An ionic bond is when one atom gives electrons to another, so one becomes positive and the other negative, and they stick together because opposites attract. 🧂 It happens between metals and non-metals, like Na and Cl in table salt (NaCl)."],
+    [["what is molar mass", "what does molar mass mean", "molar mass definition"], "Molar mass is the mass of one mole of a substance, in grams per mole (g/mol). 🧪 You add up the atomic masses from the periodic table: water (H₂O) = 2 × 1.008 + 15.999 ≈ 18.02 g/mol. Ask me \"molar mass of CO2\" and I'll work it out!"],
+    [["what is avogadro's number", "what is avogadros number", "define avogadro's number", "avogadro number", "what is avogadro constant"], "Avogadro's number is 6.022 × 10²³: the number of particles (atoms or molecules) in one mole of anything. 🧪 It's like a chemist's \"dozen\", just unbelievably bigger."],
+    [["what is stoichiometry", "what does stoichiometry mean"], "Stoichiometry is the math of chemical reactions: using a balanced equation to work out how much of each substance reacts or is made. 🧪 The usual path: grams → moles (÷ molar mass) → mole ratio from the equation → grams (× molar mass)."],
+    [["what is a proton", "what is a neutron", "what is an electron", "what are protons neutrons and electrons"], "Atoms are made of three tiny parts: protons (positive, in the center), neutrons (no charge, also in the center) and electrons (negative, zooming around outside). ⚛️ The number of protons decides which element it is."],
+    [["what is the periodic table"], "The periodic table lists all the elements in order of how many protons they have, arranged so elements that behave alike line up in columns. 🧪 There are 118 elements, from hydrogen (1) to oganesson (118)."],
+    [["what is mitosis"], "Mitosis is how a cell copies itself: it duplicates its DNA and splits into two identical cells. 🔬 That's how you grow and heal cuts!"],
+    [["what is a cell", "what are cells"], "Cells are the tiny living building blocks of every living thing. 🔬 You're made of about 37 trillion of them! Each one has a job, like muscle cells, nerve cells or blood cells."],
+    [["what is friction"], "Friction is the force that slows things down when two surfaces rub together. 🛷 It's why a ball stops rolling, and why your hands get warm when you rub them."],
+    [["what is energy"], "Energy is what lets things move, heat up or change. ⚡ It comes in many forms (movement, heat, light, electricity, chemical energy in food) and it can change from one form to another, but it's never used up or created from nothing."],
+    // sports and games people ask about
+    [["what does a libero do", "what is a libero", "what's a libero", "libero volleyball"], "The libero is volleyball's defensive specialist! 🏐 They play in the back row, wear a different-colored jersey, and their job is to dig hard hits and make great passes. They can't attack the ball above the net, but they swap in and out without counting as a sub."],
+    [["what is dress to impress", "dress to impress roblox"], "Dress to Impress is a Roblox fashion game: you get a theme and a few minutes to style your avatar, then everyone votes on the runway! 👗 What's your best theme?"],
+    [["what is doors roblox", "doors roblox game", "what is roblox doors"], "Doors is a spooky Roblox horror game: you go through a hotel room by room, hiding from monsters like Rush and sneaking past the Figure. 🚪👀 Have you made it far?"],
+    [["what is adopt me", "adopt me roblox"], "Adopt Me! is a Roblox game where you adopt and raise pets, trade them and decorate your house. 🐶 Do you have a favorite pet in it?"],
+    [["what is brookhaven", "brookhaven roblox"], "Brookhaven is a Roblox roleplay town: you get a house, cars and jobs, and make up your own stories with other players. 🏡"],
+    [["what is blox fruits", "blox fruits roblox"], "Blox Fruits is a Roblox pirate adventure where you level up, fight bosses and eat Devil-Fruit-style powers. 🍎⚔️"],
+    [["can you make real tnt", "can you make tnt in real life", "can you make real tnt irl", "is tnt real", "how do you make real tnt"], "Real explosives are no joke: they're super dangerous, and only trained experts are allowed to handle them. 🙅 So that one stays in the game! In Minecraft, TNT is 5 gunpowder and 4 sand in a checkerboard."],
+    // Minecraft words for grown-ups
+    [["what is a mob in minecraft", "what's a mob", "what is a mob", "what does mob mean in minecraft", "what are mobs"], "In Minecraft, a mob is any creature (short for \"mobile\"): friendly animals like cows, pigs and sheep, and monsters like zombies, skeletons and creepers. 🐷🧟 Monsters mostly come out at night or in dark caves."],
+    [["what does y mean in minecraft", "what does y=-59 mean", "what is y level", "how do i see what y level i'm at", "how do i see my coordinates", "how do i find my y level"], "Y is the height in the world. 📏 Sea level is Y=63, the bottom of the world is Y=-64, and diamonds are most common around Y=-59, deep underground. To see it: on Java press F3 (look for the XYZ line); on Bedrock turn on \"Show Coordinates\" in the world settings."],
+    [["is the nether scary", "is the nether scary for kids", "is the nether too scary"], "It's a bit spooky: the Nether is dark red, full of lava, and ghasts make crying sounds and shoot fireballs. 🔥 Most kids love it anyway, especially with a grown-up along. Tips: water evaporates there, so bring blocks to wall off lava, wear at least one piece of gold armor so piglins stay calm, and play on Peaceful if it's too much."],
+    [["what is creative mode", "what is survival mode", "creative vs survival", "what is the difference between creative and survival"], "Survival: you gather everything yourself, get hungry and fight monsters. 🗡️ Creative: you get every block for free, can fly and can't get hurt, so it's pure building. 🏰 Lots of kids build in Creative and adventure in Survival."],
   ];
   let faqIndex = null, this_ = false;
   // words the knowledge base asks about are real words: never "correct" buzzer beater into "buz better"
@@ -673,7 +714,9 @@
   function faq(m) {
     if (!faqIndex) { faqIndex = new P.nlp.TfIdf(); FAQ.forEach(([qs], i) => qs.forEach((q) => faqIndex.add(q, i))); }
     // "can you explain what a mole is in chemistry? simply pls" -> "what is a mole in chemistry"
-    const simple = m.plain.split(/(?<=[.!?])\s+/)[0].replace(/^(can|could|would|will) (you|u) (please )?(explain|tell me|say|teach me)( to me)?\s+/, "").replace(/^(explain|tell me|teach me|do you know)\s+/, "")
+    const sents = m.plain.split(/(?<=[.!?])\s+/);
+    const first = sents.find((x) => /\?|^(what|why|how|who|where|when|which|is|are|do|does|did|can|could|define)\b/.test(x) && x.split(" ").length >= 3) || sents[0];
+    const simple = first.replace(/^(can|could|would|will) (you|u) (please )?(explain|tell me|say|teach me)( to me)?\s+/, "").replace(/^(explain|tell me|teach me|(?:do|did|does) (?:you|u) (?:even |really |actually )?know)\s+/, "")
       .replace(/^(what|who|how) (a|an|the)? ?([a-z ]+?) (is|are|was|were)\b/, "$1 $4 $2 $3").replace(/\s+/g, " ").trim();
     if (simple !== m.plain && !this_) { this_ = true; try { const r2 = faq(P.nlp.analyze(simple)); if (r2) return r2; } finally { this_ = false; } }
     // entries with their own pattern match anywhere ("I saw a small brown bird with a red breast...")
@@ -832,6 +875,8 @@
     let raw = m.clean.split(/(?<=[.!?])\s+/).pop().replace(/[?!.]+$/, "");
     // "are you real or just code?" is about Pip, and numbers are compared by the calculator
     if (/^(are|r) (you|u)\b/i.test(raw) || /\d/.test(raw) && /\b(bigger|smaller|larger|greater|less|more)\b/i.test(raw)) return null;
+    // "should i text her first or wait?" is a friendship question, not a coin flip
+    if (/\b(text|message|dm|call|tell|ask|say sorry|apologi[sz]e|talk to|break up|forgive|invite|wait for)\b/i.test(raw) && /\b(her|him|them|my (friend|mom|mum|dad|crush|bf|gf|sister|brother|parents))\b/i.test(raw)) return null;
     raw = raw.replace(/^(nah|no|yes|yeah|ok|okay|hmm|so|well|lol|haha)[,.]?\s+/i, "");
     const r = /^(?:(?:should i|do i|would you|which is better|what(?:'s| is) better|which one|pick one|choose|you choose|do you prefer|do u prefer|which do you prefer|what do you prefer|do you like|do u like|do you love|which do you like(?: more| better)?|what do you like(?: more| better)?|are you team|team)[:,]?\s+)?(.{1,40}?),? or (.{1,40}?)(?:\s+(?:better|more|best))?$/i.exec(raw);
     if (!r || m.tokens.length > 16) return null;
@@ -844,5 +889,5 @@
     return pick([`I'd go with ${ch}! 😄`, `Hmm... ${ch}! Final answer.`, `${U.capitalizeFirst(ch)}, definitely.`, `My pick: ${ch}! But what do you think?`]);
   }
 
-  P.skills = { capitalsList: CAP, define, lookup, start, gameTurn, askQuestion, daysUntil, dateMath, timeMath, currency, petFood, capital, faq, wordTools, choose, deal, timeText, dateText };
+  P.skills = { SPELL_TIPS, capitalsList: CAP, define, lookup, start, gameTurn, askQuestion, daysUntil, dateMath, timeMath, currency, petFood, capital, faq, wordTools, choose, deal, timeText, dateText };
 })(typeof window !== "undefined" ? (window.Pip = window.Pip || {}) : (global.Pip = global.Pip || {}));

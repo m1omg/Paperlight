@@ -315,8 +315,9 @@
     try {
       const { value, notes } = evaluate(expr);
       const f = format(value);
-      if (wantFraction && isQ(value)) return { expr: prettyExpr(expr), result: value.isInt() ? f.text : value.toString(), exact: true, fraction: null, notes, value, extra: value.isInt() ? "" : ` (≈ ${withCommas(value.toDecimal(6))})` };
-      return { expr: prettyExpr(expr), result: f.text, exact: f.exact, fraction: f.fraction, notes, value };
+      const shown = /(%|\bpercent|\bper cent)\s*of\b/.test(s) ? prettyExpr(expr).replace(/% × /g, "% of ") : prettyExpr(expr);
+      if (wantFraction && isQ(value)) return { expr: shown, result: value.isInt() ? f.text : value.toString(), exact: true, fraction: null, notes, value, extra: value.isInt() ? "" : ` (≈ ${withCommas(value.toDecimal(6))})` };
+      return { expr: shown, result: f.text, exact: f.exact, fraction: f.fraction, notes, value };
     } catch (e) {
       if (e instanceof CalcError) return { expr: prettyExpr(expr), error: e.message };
       return null;
@@ -577,5 +578,93 @@
     return { text: `${out}${dec} ✏️ ${hint}`, value: val };
   }
 
-  P.math = { Q, evaluate, solve, convert, compare, format, toExpression, CalcError, scaleRecipe, fractionSteps };
+  // ---------- school chemistry: molar mass, grams <-> moles ----------
+  // standard atomic weights (IUPAC, rounded the way school tables print them)
+  const ATOMIC = { H: "1.008", He: "4.0026", Li: "6.94", Be: "9.0122", B: "10.81", C: "12.011", N: "14.007", O: "15.999", F: "18.998", Ne: "20.180",
+    Na: "22.990", Mg: "24.305", Al: "26.982", Si: "28.085", P: "30.974", S: "32.06", Cl: "35.45", Ar: "39.948", K: "39.098", Ca: "40.078",
+    Sc: "44.956", Ti: "47.867", V: "50.942", Cr: "51.996", Mn: "54.938", Fe: "55.845", Co: "58.933", Ni: "58.693", Cu: "63.546", Zn: "65.38",
+    Ga: "69.723", Ge: "72.630", As: "74.922", Se: "78.971", Br: "79.904", Kr: "83.798", Rb: "85.468", Sr: "87.62", Ag: "107.87", Sn: "118.71",
+    I: "126.90", Xe: "131.29", Cs: "132.91", Ba: "137.33", Pt: "195.08", Au: "196.97", Hg: "200.59", Pb: "207.2", U: "238.03" };
+  const COMPOUNDS = { water: "H2O", "table salt": "NaCl", salt: "NaCl", "sodium chloride": "NaCl", sugar: "C12H22O11", sucrose: "C12H22O11", glucose: "C6H12O6",
+    "carbon dioxide": "CO2", "carbon monoxide": "CO", oxygen: "O2", "oxygen gas": "O2", hydrogen: "H2", "hydrogen gas": "H2", nitrogen: "N2", methane: "CH4", ammonia: "NH3",
+    "baking soda": "NaHCO3", "sodium bicarbonate": "NaHCO3", ethanol: "C2H5OH", "hydrochloric acid": "HCl", "sulfuric acid": "H2SO4", "sulphuric acid": "H2SO4",
+    "nitric acid": "HNO3", "acetic acid": "CH3COOH", vinegar: "CH3COOH", "calcium carbonate": "CaCO3", chalk: "CaCO3", "sodium hydroxide": "NaOH", ozone: "O3",
+    propane: "C3H8", butane: "C4H10", rust: "Fe2O3", "iron oxide": "Fe2O3", "magnesium oxide": "MgO", "potassium chloride": "KCl", "calcium chloride": "CaCl2",
+    "copper sulfate": "CuSO4", "silver nitrate": "AgNO3", "hydrogen peroxide": "H2O2", aspirin: "C9H8O4", caffeine: "C8H10N4O2", "calcium hydroxide": "Ca(OH)2",
+    "potassium permanganate": "KMnO4", "sodium carbonate": "Na2CO3", "ammonium nitrate": "NH4NO3", "magnesium chloride": "MgCl2", "aluminum oxide": "Al2O3", "aluminium oxide": "Al2O3" };
+  const SUB = { 0: "₀", 1: "₁", 2: "₂", 3: "₃", 4: "₄", 5: "₅", 6: "₆", 7: "₇", 8: "₈", 9: "₉" };
+  const pretty = (f) => f.replace(/\d/g, (d) => SUB[d]);
+  function parseFormula(f) {
+    // "Ca(OH)2" -> { Ca: 1, O: 2, H: 2 }
+    let i = 0;
+    function group() {
+      const out = {};
+      while (i < f.length && f[i] !== ")") {
+        let part;
+        if (f[i] === "(") { i++; part = group(); if (f[i] !== ")") return null; i++; }
+        else { const m = /^[A-Z][a-z]?/.exec(f.slice(i)); if (!m || !ATOMIC[m[0]]) return null; i += m[0].length; part = { [m[0]]: 1 }; }
+        if (!part) return null;
+        const n = /^\d+/.exec(f.slice(i)); const k = n ? +n[0] : 1; if (n) i += n[0].length;
+        for (const [el, c] of Object.entries(part)) out[el] = (out[el] || 0) + c * k;
+      }
+      return out;
+    }
+    const r = group();
+    return r && i === f.length && Object.keys(r).length ? r : null;
+  }
+  function molarMass(formula) {
+    const atoms = parseFormula(formula);
+    if (!atoms) return null;
+    let total = Q.parse("0");
+    const parts = [];
+    for (const [el, n] of Object.entries(atoms)) { total = total.add(Q.parse(ATOMIC[el]).mul(Q.parse(String(n)))); parts.push(`${n > 1 ? n + " × " : ""}${ATOMIC[el]} (${el})`); }
+    return { total, parts, atoms };
+  }
+  function chem(text) {
+    const raw = text.trim().replace(/[?!.]+$/, "");
+    const low = raw.toLowerCase();
+    if (!/\b(molar mass|molecular (mass|weight)|formula (mass|weight)|moles?|mol|grams? per mole|g\/mol|atoms|molecules)\b/.test(low)) return null;
+    // find the substance: a formula as typed (case matters: "CO" vs "Co") or a common name
+    const names = Object.keys(COMPOUNDS).sort((a, b) => b.length - a.length);
+    let formula = null, name = null;
+    for (const n of names) if (new RegExp("\\b" + n + "\\b").test(low)) { formula = COMPOUNDS[n]; name = n; break; }
+    if (!formula) {
+      const cands = raw.match(/\b(?:[A-Z][a-z]?\d*|\((?:[A-Z][a-z]?\d*)+\)\d*)+\b/g) || [];
+      const f = cands.find((x) => /\d|[A-Z].*[A-Z]/.test(x) && parseFormula(x)) || cands.find((x) => parseFormula(x) && x.length <= 2 && /^[A-Z]/.test(x) && !/^(I|A)$/.test(x));
+      if (f) formula = f;
+    }
+    if (!formula) return null;
+    const mm = molarMass(formula);
+    if (!mm) return null;
+    const M = mm.total;
+    const Mtxt = String(Math.round(M.toNumber() * 100) / 100);
+    const Mfull = format(M, 3).text;
+    const label = name ? `${U0(name)} (${pretty(formula)})` : pretty(formula);
+    const show = mm.parts.length > 1 ? `${mm.parts.join(" + ")} = ${Mfull}${Mfull !== Mtxt ? " ≈ " + Mtxt : ""} g/mol` : `${Mtxt} g/mol`;
+    const num = (re) => { const r = re.exec(low); return r ? r[1] : null; };
+    const AV = Q.parse("6.02214076").mul(Q.parse("100000000000000000000000"));
+    const g = num(/(\d+(?:\.\d+)?)\s*(?:g|grams?)\b/), mol = num(/(\d+(?:\.\d+)?)\s*(?:mol|moles?)\b/);
+    if (/\bhow many (moles|mol)\b/.test(low) && g) {
+      const n = Q.parse(g).div(M);
+      return { text: `${label}: molar mass = ${show}. So ${g} g ÷ ${Mtxt} g/mol = ${format(n, 3).text} mol${Math.abs(n.toNumber() - Math.round(n.toNumber())) < 0.01 ? ` (about ${Math.round(n.toNumber())})` : ""}. 🧪` };
+    }
+    if (/\bhow many (grams?|g)\b|\b(mass|weight) of \d/.test(low) && mol) {
+      const w = Q.parse(mol).mul(M);
+      return { text: `${label}: molar mass = ${show}. So ${mol} mol × ${Mtxt} g/mol = ${format(w, 2).text} g. 🧪` };
+    }
+    if (/\bhow many (molecules|atoms|particles)\b/.test(low) && (mol || g)) {
+      const n = mol ? Q.parse(mol) : Q.parse(g).div(M);
+      const count = n.mul(AV).toNumber();
+      const sci = count.toExponential(3).replace(/e\+?(-?\d+)/, (x, e) => " × 10" + String(e).replace(/-?\d/g, (d) => ({ "-": "⁻", 0: "⁰", 1: "¹", 2: "²", 3: "³", 4: "⁴", 5: "⁵", 6: "⁶", 7: "⁷", 8: "⁸", 9: "⁹" }[d])));
+      const perMolecule = /\batoms\b/.test(low) ? Object.values(mm.atoms).reduce((a, b) => a + b, 0) : 1;
+      const tot = (count * perMolecule).toExponential(3).replace(/e\+?(-?\d+)/, (x, e) => " × 10" + String(e).replace(/\d/g, (d) => "⁰¹²³⁴⁵⁶⁷⁸⁹"[d]));
+      return { text: `${mol ? mol + " mol" : `${g} g ÷ ${Mtxt} g/mol = ${format(n, 3).text} mol`}, × 6.022 × 10²³ = ${sci} molecules${perMolecule > 1 ? `, and each has ${perMolecule} atoms, so ${tot} atoms` : ""}. 🧪` };
+    }
+    if (/\b(molar mass|molecular (mass|weight)|formula (mass|weight)|mass of (one|1|a) mole|g\/mol|grams? per mole)\b/.test(low))
+      return { text: `Molar mass of ${label}: ${show}. 🧪` };
+    return null;
+  }
+  function U0(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+  P.math = { Q, evaluate, solve, convert, compare, format, toExpression, CalcError, scaleRecipe, fractionSteps, chem, molarMass };
 })(typeof window !== "undefined" ? (window.Pip = window.Pip || {}) : (global.Pip = global.Pip || {}));
