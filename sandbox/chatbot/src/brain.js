@@ -270,12 +270,16 @@
 
       const asks = /\?/.test(m.clean) || m.isQuestion;
       // "Anyway, did you get that my son is called Sam and he's 9?"
-      if (!out && facts.length && /^(?:(?:anyway|so|and|ok|okay|also|but)[, ]+)?(?:did|do) (?:you|u) (?:get|catch|hear|understand|remember|know|save|note)\b/.test(m.plain)) {
+      if (!out && facts.length && (/^(?:(?:anyway|so|and|ok|okay|also|but)[, ]+)?(?:did|do) (?:you|u) (?:get|catch|hear|understand|remember|know|save|note)\b/.test(m.plain) || /\b(?:did|do) (?:you|u) (?:get|catch|hear|understand|save|note) (?:that|it)\b/.test(m.plain))) {
         const bits = facts.map((f) => f.type === "person" ? `your ${f.rel} is ${f.name}` : f.type === "pinfo" && f.age !== undefined ? `${mem.people[f.rel] ? (facts.some((x) => x.type === "person" && x.rel === f.rel) ? (f.rel === "son" || f.rel === "brother" ? "he's" : f.rel === "daughter" || f.rel === "sister" ? "she's" : mem.people[f.rel] + " is") : mem.people[f.rel] + " is") : "your " + f.rel + " is"} ${f.age}` : f.type === "pinfo" && f.birthday ? `${mem.people[f.rel] || "your " + f.rel}'s birthday is ${f.birthday}` : f.type === "age" ? `you're ${f.value}` : f.type === "job" ? `you're ${U.aOrAn(f.value)} ${f.value}` : f.type === "name" ? `your name is ${f.value}` : f.type === "pet" ? (f.name ? `your ${f.kind} is ${f.name}` : `you have ${U.aOrAn(f.kind)} ${f.kind}`) : f.type === "location" ? `you live in ${f.value}` : null).filter(Boolean);
         if (bits.length) out = { text: `Yes! Got it: ${U.listJoin(bits)}. 😊`, source: "memory:confirm" };
       }
       // "I live in London... If I call her at 7 pm my time, what time is it for her?": the question comes first
       if (!out && asks && loud.length && loud.every((f) => /^(location|job|school|pinfo)$/.test(f.type))) { const sk = this._skills(m, c, trace); if (sk) out = sk; }
+      if (!out && !loud.length && facts.length && facts.every((f) => f.same || (f.type === "pinfo" && f.age !== undefined)) && facts.some((f) => /^(age|pinfo|job|name)$/.test(f.type)) && !m.isQuestion) {
+        const bits = facts.map((f) => f.type === "age" ? `you're ${f.value}` : f.type === "pinfo" ? `${mem.people[f.rel] || "your " + f.rel} is ${f.age}` : f.type === "job" ? `you're ${U.aOrAn(f.value)} ${f.value}` : f.type === "name" ? `you're ${f.value}` : null).filter(Boolean);
+        if (bits.length) out = { text: `Right, I've got it: ${U.listJoin(bits)}. 😊`, source: "memory:confirm" };
+      }
       if (!out && loud.length && !(asks && loud.every((f) => /^(person|like|favorite|dislike|note)$/.test(f.type)))) out = this._ackFacts(loud, m, c);
       // 6) exact skills
       if (!out) out = this._skills(m, c, trace);
@@ -844,7 +848,7 @@
       if (parts.length < 2 || !out || !out.text) return out;
       const src = out.source || "";
       let extras = 0;
-      if (/^(safety|game|expect|command|event:grief|event:bullied|skill:time|skill:recipe|memory:name|social:artist|social:songs|more:|intent:joke)/.test(src)) return out;
+      if (/^(safety|game|expect|command|event:grief|event:bullied|skill:time|skill:recipe|memory:name|memory:event-today|social:artist|social:songs|more:|intent:joke)/.test(src)) return out;
       for (const part of parts) {
         const pm = N.analyze(part);
         // a feeling mentioned next to a request
@@ -924,7 +928,7 @@
           const a = f.value;
           // they answered "what's your name?" with their age: still ask for the name
           if (!this.mem.name && this.state.lastExpect && this.state.lastExpect.kind === "name") return { text: `${a}${f.half ? " and a half" : ""}! ${a < 13 ? "That's a great age!" : "Cool!"} 😊 And what's your name?`, source: "memory:age", expect: { kind: "name" } };
-          const tail = a < 13 ? "That's a great age! 😊 What grade are you in?" : a < 20 ? "Nice! 😊 Are you in school?" : a < 30 ? "Cool! Do you work or study?" : "Cool! What do you do?";
+          const tail = a < 13 ? "That's a great age! 😊 What grade are you in?" : a < 20 ? "Nice! 😊 Are you in school?" : this.mem.job ? "Got it. 😊" : a < 30 ? "Cool! Do you work or study?" : "Cool! What do you do?";
           return { text: `${a}${f.half ? " and a half" : ""}! ${tail}`, source: "memory:age", expect: { kind: "open", topic: "school/work" } };
         }
         case "location": return { text: `${f.value}! ${pick(["Cool! 🌍 What's it like there?", "I've never been there (I've never been anywhere 😄). What's it like?", "Nice! What's your favorite thing about living there?"])}`, source: "memory:location", expect: { kind: "open", topic: "home" } };
@@ -964,7 +968,7 @@
           return null;
         }
         case "person": {
-          const pa = facts.find((x) => x.type === "pinfo" && x.rel === f.rel && x.age !== undefined);
+          const pa = (this._curFacts || facts).find((x) => x.type === "pinfo" && x.rel === f.rel && x.age !== undefined);
           if (pa && !f.ages) return { text: `${f.name}, ${pa.age}! ${pa.age < 13 ? "Lovely age. " : ""}I'll remember your ${f.rel}. 😊`, source: "memory:person" };
           return { text: f.ages ? `${f.name}! ${f.ages[0]} and ${f.ages[1]}, lovely ages. I'll remember your ${f.rel}. 😊` : / and /.test(f.name) ? `${f.name}! I'll remember your ${f.rel}. 😊` : `${f.name}! I'll remember your ${f.rel}'s name. 😊`, source: "memory:person" };
         }
@@ -1442,7 +1446,8 @@
       const adult = this._isAdult();
       for (const a of C.advice) {
         // tips written for children (divorce seen from a kid's side) aren't for grown-ups
-        if (adult && a.say.some((x) => /kids with divorce|pick a side|Mom and Dad aren't going to|you're a kid|School counselor|school counselor/.test(x))) continue;
+        if (adult && !a.forAdults && a.say.some((x) => /kids with divorce|pick a side|Mom and Dad aren't going to|you're a kid|School counselor|school counselor/.test(x))) continue;
+        if (!adult && a.forAdults && !/\b(my (son|daughter|kid|child)|as (his|her) (dad|mom|mum|parent))\b/.test(t)) continue;
         const recentText = t + " " + this.state.history.filter((h) => h.role === "user").slice(-5).map((h) => h.text.toLowerCase()).join(" ");
         if (a.re.test(t) && (a.need.test(t) || ((a.need.source.includes("divorc") || a.need.source.includes("friend|mean")) && a.need.test(recentText)))) return { text: S.deal(this.state, "advice:" + a.re.source.slice(0, 30), a.say), source: "advice", score: /\b(tips?|advice)\b/.test(m.plain) || (m.isQuestion && a.re.test(m.plain)) ? 0.95 : 0.86 };
       }
@@ -1607,6 +1612,17 @@
       // "my mom is gonna kill me when she sees my grade lol"
       if (/\b(mom|mum|dad|parents|mother|father)( is| are|'s| s)? (going to|gonna|will|would) (literally |actually |so )?(kill|murder|ground) me\b/.test(t) && /\b(grade|grades|report card|test|exam|quiz|score|f\b|d\b|c\b|failed|phone|broke|lost)\b/.test(t))
         return { text: pick(["Uh oh! 😬 Grade trouble? What did you get? Telling them first, with a plan (like extra study time), usually makes it way less scary.", "Yikes, the dreaded grade talk! 😅 What happened? Honestly, parents tend to take it better when they hear it from you first."]), source: "event:worry", score: 0.88, expect: { kind: "open", topic: "school" } };
+      // "I'm exhausted. Four night shifts in a row", "you sleep during the day but it's never real sleep"
+      if (/\b(night shifts?|shifts? in a row|double shifts?|work(ing)? nights|on nights)\b/.test(t) && /\b(exhausted|tired|wiped|drained|knackered|barely|can'?t|never real sleep|no sleep)\b/.test(t) || /\b(never (real|proper|good) sleep|barely (sleep|slept)|can'?t (sleep|get any sleep) during the day|sleep during the day)\b/.test(t) && m.emotion.valence <= 0.2) {
+        this._mood("tired");
+        return { text: /\bshifts? in a row|four|4|five|5|three|3\b/.test(t) && /\bshift/.test(t) ? pick(["Several night shifts in a row would flatten anyone. 💙 Are you getting any proper rest between them?", "That's a brutal run of nights. 💙 How are you managing sleep with Sam's schedule?"]) : "That sounds exhausting: day sleep never feels as deep, and then you're straight back to parenting. 💙 Do you get any time at all that's just for you?", source: "event:tired", score: 0.9, expect: { kind: "vent", emotion: "tired" } };
+      }
+      // "its my soccer match today!!! im so nervous lol"
+      if (/\b(nervous|scared|anxious|butterflies|freaking out|stressed)\b/.test(t) && /\b(today|tonight|tomorrow|in an hour|soon)\b/.test(t) && /\b(match|game|test|exam|recital|tryouts?|race|performance|show|play|presentation|speech|audition|tournament)\b/.test(t)) {
+        const what = /\b(match|game|test|exam|recital|tryouts?|race|performance|show|play|presentation|speech|audition|tournament)\b/.exec(t)[1];
+        const pos = this.mem.position;
+        return { text: `${/match|game|tournament|race|tryout/.test(what) ? "Game day nerves! ⚽".replace("⚽", /soccer|football/.test(t) || /goal/.test(pos || "") ? "⚽" : "🏆") : "Big day nerves! 💙"} That just means you care. Try 3 slow breaths (in for 4, out for 6) before it starts${pos ? `, and remember: you're the ${pos}, and you've practiced for this` : ", and remember how much you've practiced"}. You've got this! 💪`, source: "event:nerves", score: 0.9 };
+      }
       // "i had volleyball practice today and im dead"
       if (/\b(practice|training|game|match|tryouts?|workout|gym)\b/.test(t) && /\b(i'?m|im|i am|feel|feeling|so) (so |literally |actually |completely )?(dead|exhausted|tired|wiped|wrecked|done|sore|drained)\b/.test(t) && !/\b(not|nothing)\b/.test(t)) {
         const tp = C.topicOf(t);

@@ -289,7 +289,12 @@
       if ((pr = new RegExp("\\bmy (" + PEOPLE + ")(?:,? ([a-z]+),?)? (?:is|turned|just turned|turns|who is|whos|who's) (\\d{1,2})(?: years? old| yo)?\\b").exec(t))) { rel = pr[1]; age = +pr[3]; }
       else if ((pr = /\b([a-z]+) (?:is|turned|just turned) (\d{1,2})(?: years? old| yo)?\b/.exec(t)) && relOfName(pr[1])) { rel = relOfName(pr[1]); age = +pr[2]; }
       else if ((pr = /(?:^\s*|[.!,;]\s*|\band |\bbut |\blol |\bhaha )(?:he|she)(?:'s| is| s|s) (?:only |just |like )?(\d{1,2})(?: years? old| yo)?\b(?! (?:hours?|minutes?|mins?|feet|inches|cm|pounds|lbs|kg|points|goals))/.exec(t)) && mem._lastRel && !/\b(my (dog|cat|puppy|kitten|hamster|pet))\b/.test(t)) { rel = mem._lastRel; age = +pr[1]; }
-      if (rel && age >= 0 && age < 110 && !/^(friend|friends|teacher|boss|crush)$/.test(rel) || rel && age >= 0 && age < 110 && /\bmy (friend|crush|best friend)\b/.test(t)) facts.push({ type: "pinfo", rel, age, quiet: true });
+      if (rel && age >= 0 && age < 110 && !/^(friend|friends|teacher|boss|crush)$/.test(rel) || rel && age >= 0 && age < 110 && /\bmy (friend|crush|best friend)\b/.test(t)) {
+        facts.push({ type: "pinfo", rel, age, quiet: true, same: !!(mem.pinfo && mem.pinfo[rel] && mem.pinfo[rel].age === age) });
+        // "My son Sam is 9": introducing someone, so say it back
+        const pf = facts.find((f) => f.type === "person" && f.rel === rel);
+        if (pf && pf.quiet && mem.people[rel] !== pf.name) pf.quiet = false;
+      }
       const MONTHS = "january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec";
       const DATE = "((?:" + MONTHS + ") \\d{1,2}(?:st|nd|rd|th)?|\\d{1,2}(?:st|nd|rd|th)? (?:of )?(?:" + MONTHS + "))";
       if ((pr = new RegExp("\\b(?:my (" + PEOPLE + ")(?:'s| s|s)|([a-z]+)(?:'s| s)) (?:birthday|bday|birth day) is (?:on )?(?:the )?" + DATE).exec(t))) {
