@@ -2,7 +2,7 @@
    - a byte-level BPE tokenizer (same algorithm as GPT-2, vocabulary trained on our dialogue corpus)
    - "PipGPT": a small decoder-only transformer trained from scratch to continue conversations
    - a dual encoder (2-layer transformer) that scores how well a reply fits a context; it retrieves
-     human-written replies from a bank of ~60k lines and also judges the GPT's own samples.
+     replies from a bank of ~58k dialogue-dataset lines and also judges the GPT's own samples.
    Weights are exported by training/export.py into data/*.js as base64 int8 (dequantized at load). */
 (function (P) {
   "use strict";
@@ -634,7 +634,7 @@
       const userVal = P.nlp.emotion(P.nlp.words(P.nlp.normalize(userText, { spell: false }))).valence;
       const userAsked = /\?\s*$/.test(userText) || /^(do|does|did|are|is|was|were|can|could|will|would|should|have|has)\b/i.test(userText.trim());
       const cands = [];
-      // 1) retrieval from the bank of human-written replies
+      // 1) retrieval from the reply bank
       if (this.bankText) {
         // someone is opening up about something hard: only lines from the empathetic-listener dataset
         const srcOk = (h) => !opts.deepVent || h.src === "empathetic";

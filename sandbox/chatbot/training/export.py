@@ -115,7 +115,7 @@ def export_encoder():
     obj = {"texts": bank, "dim": int(E.shape[1]), "emb": blob}
     if srcs:
         obj["src"] = srcs
-    write_js("bank.js", "bank", obj, f"{len(bank)} human-written replies with their encoder embeddings")
+    write_js("bank.js", "bank", obj, f"{len(bank)} replies from dialogue datasets, with their encoder embeddings")
     # the message each reply originally answered (for keyword matching in the browser)
     want = {t: i for i, t in enumerate(bank)}
     ctx = [""] * len(bank)

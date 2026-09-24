@@ -174,7 +174,7 @@ def main():
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--out", default=os.path.join(HERE, "runs", "enc"))
     ap.add_argument("--resume", action="store_true", help="continue from runs/enc/final.pt with a fresh schedule")
-    ap.add_argument("--human_x", type=int, default=1, help="repeat pairs from the human-written datasets this many times")
+    ap.add_argument("--human_x", type=int, default=1, help="repeat pairs from the human-written (non-SODA) datasets this many times")
     args = ap.parse_args()
     torch.set_num_threads(args.threads)
     torch.set_flush_denormal(True)

@@ -10,8 +10,8 @@ for this project:
 - hand-written personality, rules and a dialogue manager (JavaScript)
 - a Minecraft knowledge base (crafting grids, smelting, brewing, mobs, ores, enchantments, guides)
 - two neural networks **trained from zero** on public conversation datasets:
-  - a **retrieval network** (a small transformer "dual encoder") that picks fitting replies from about 60,000
-    human-written lines and judges every candidate reply,
+  - a **retrieval network** (a small transformer "dual encoder") that picks fitting replies from about 58,000
+    lines of public dialogue datasets and judges every candidate reply,
   - **PipGPT**, a 7.4-million-parameter GPT-style language model that writes its own replies.
 
 It runs completely offline in your browser (or in a terminal with Node.js). No server, no account, no data leaves your device.
@@ -106,11 +106,11 @@ forward pass with a key/value cache, and nucleus sampling.
 | Architecture | 2-layer bidirectional transformer, d=256, two 128-d heads ("dual encoder") | 8-layer decoder-only transformer, d=256, 4 heads, 256-token context |
 | Parameters | 2.8M | 7.4M |
 | Trained on | 2.1M (context → reply) pairs, contrastive loss with in-batch negatives | ~60M tokens of dialogue, next-token prediction, then a persona fine-tune on listener-style replies |
-| Job | scores how well a reply fits the conversation; finds the best of ~58,000 human-written lines | writes new replies; 4 samples per turn, judged by the retrieval network |
+| Job | scores how well a reply fits the conversation; finds the best of ~58,000 dataset lines | writes new replies; 4 samples per turn, judged by the retrieval network |
 | How good | picks the real human reply out of 10 candidates 55% of the time (random: 10%) | validation loss 1.91 (perplexity ≈ 6.8) after pretraining |
 | Size in the browser | 4 MB + 18 MB reply bank | 10 MB (int8 weights) |
 
-Human-written replies were filtered so Pip doesn't claim a human life ("my wife", "I'm a nurse", "last weekend I..."):
+The dataset replies were filtered so Pip doesn't claim a human life ("my wife", "I'm a nurse", "last weekend I..."):
 it's an AI friend and says so.
 
 Training ran on a 4-core CPU with no GPU: about 4.5 hours for the retrieval network, 5 hours of pretraining for
@@ -143,6 +143,14 @@ Only datasets are downloaded, no models:
 [PersonaChat](https://huggingface.co/datasets/bavard/personachat_truecased) and
 [Blended Skill Talk](https://huggingface.co/datasets/ParlAI/blended_skill_talk) (research datasets from Facebook AI / ParlAI).
 Several of these licenses are non-commercial, so this is a personal and educational project.
+
+**Who wrote the lines?** Everything rule-based (personality, answers, advice, jokes, games, safety replies, the
+Minecraft knowledge base) was written for Pip. The retrieval network's ~58,000 reply lines come from the datasets:
+about 63% (36,728 lines) were written by people (EmpatheticDialogues, PersonaChat, Blended Skill Talk, DailyDialog),
+and about 37% (21,231 lines) come from SODA, which AllenAI generated with a GPT-3.5 language model. SODA is also
+most of the training text, because the human-written datasets are small: about 94% of PipGPT's pretraining text and
+78% of the retrieval network's training pairs. No language model runs inside Pip and no model weights were downloaded:
+both networks were trained from zero, mostly on text another AI wrote.
 
 ## Safety for kids
 

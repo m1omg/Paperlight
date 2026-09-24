@@ -180,7 +180,7 @@
       <div id="brainNow"><p>Send a message and this shows every candidate reply, where it came from and its score. Pip picks the best one.</p></div>
       <h2>What's inside</h2>
       <dl class="stats" id="modelStats"></dl>
-      <p>Rules and a knowledge base answer the things they can answer exactly: math, Minecraft recipes, memory and games. For open chat, the retrieval network scores about 60,000 human-written lines, and PipGPT writes a few replies of its own. The same network scores both kinds.</p>
+      <p>Rules and a knowledge base answer the things they can answer exactly: math, Minecraft recipes, memory and games. For open chat, the retrieval network scores about 58,000 lines from public dialogue datasets, and PipGPT writes a few replies of its own. The same network scores both kinds.</p>
     </section>
     <section class="pane" id="pane-memory" hidden>
       <h2>What Pip remembers about you</h2>
@@ -193,7 +193,7 @@
         <label for="renameInput">Pip's name</label>
         <div class="inline"><input type="text" id="renameInput" maxlength="20"><button class="btn" id="renameBtn" type="button">Rename</button></div>
       </div>
-      <label class="toggle"><input type="checkbox" id="optGen" checked> <span>Let PipGPT write replies<br><span class="muted">When off, open chat only uses human-written lines from the reply bank (faster).</span></span></label>
+      <label class="toggle"><input type="checkbox" id="optGen" checked> <span>Let PipGPT write replies<br><span class="muted">When off, open chat only uses lines from the reply bank (faster).</span></span></label>
       <label class="toggle"><input type="checkbox" id="optPace" checked> <span>Natural typing pace<br><span class="muted">Pip waits a moment before answering, like a person typing.</span></span></label>
       <button class="btn" id="clearChat" type="button">Clear the chat window</button>
       <p class="muted" style="margin-top:14px">Clearing the window keeps Pip's memory. Use "Forget everything" in the Memory tab to wipe that too.</p>
