@@ -681,10 +681,78 @@
     return text.replace(/\.\.$/, ".");
   }
 
+  // ---------- synonyms and crossword help ----------
+  // hand-picked everyday synonyms first (WordNet's lists are full of rare words), WordNet for the rest
+  const SYN = { said: "shouted whispered replied asked explained exclaimed answered cried mumbled giggled", happy: "glad cheerful joyful delighted content merry jolly thrilled pleased elated",
+    sad: "unhappy down gloomy miserable upset blue heartbroken glum sorrowful", big: "large huge giant enormous massive gigantic vast", small: "little tiny mini petite miniature wee teeny",
+    good: "great excellent fantastic wonderful awesome superb fine brilliant", bad: "awful terrible horrible poor dreadful nasty", nice: "kind friendly lovely pleasant sweet gentle caring",
+    fun: "enjoyable exciting entertaining amusing delightful", funny: "hilarious silly amusing comical goofy witty", scared: "afraid frightened terrified nervous fearful spooked",
+    angry: "mad furious upset annoyed cross grumpy irate", fast: "quick speedy rapid swift zippy", slow: "sluggish unhurried leisurely gradual", smart: "clever bright intelligent wise brainy",
+    pretty: "beautiful lovely gorgeous cute attractive", went: "travelled walked headed ran hurried wandered journeyed", walk: "stroll stride march wander hike stomp tiptoe",
+    run: "sprint dash race jog dart hurry", look: "see watch stare glance peek gaze observe", like: "enjoy love adore prefer fancy", very: "really extremely super incredibly truly totally",
+    cold: "chilly freezing icy frosty cool", hot: "warm boiling scorching sweltering baking", tired: "sleepy exhausted drowsy weary", scary: "frightening spooky creepy terrifying eerie",
+    ate: "gobbled munched devoured nibbled chomped", eat: "munch gobble devour nibble chomp feast", think: "believe suppose imagine reckon consider", beautiful: "gorgeous lovely stunning pretty attractive",
+    important: "key major vital essential significant", easy: "simple effortless straightforward", hard: "difficult tough tricky challenging", quiet: "silent hushed calm peaceful soft",
+    loud: "noisy booming deafening thunderous", interesting: "fascinating intriguing exciting curious", boring: "dull tedious dreary tiresome", cool: "awesome amazing great epic neat",
+    amazing: "incredible astonishing awesome fantastic wonderful", love: "adore cherish treasure", help: "assist aid support", start: "begin launch", end: "finish stop close conclude",
+    old: "ancient aged elderly antique", new: "fresh modern recent", great: "excellent wonderful fantastic terrific superb", talkative: "chatty loquacious gabby", brave: "courageous bold fearless daring heroic",
+    kind: "caring gentle nice thoughtful generous", strong: "powerful mighty sturdy tough", weak: "feeble frail flimsy", rich: "wealthy well-off", clean: "spotless tidy neat",
+    dirty: "messy filthy grubby muddy", wet: "soaked damp soggy drenched", dry: "parched arid dusty", shiny: "sparkly glossy gleaming bright", dark: "dim gloomy shadowy murky" };
+  let thesMap = null;
+  function thesaurus(w) {
+    const blob = P.data && P.data.thesaurus;
+    if (!blob) return [];
+    if (!thesMap) { thesMap = new Map(); for (const line of blob.split("\n")) { const i = line.indexOf("\t"); thesMap.set(line.slice(0, i), line.slice(i + 1).split(" ")); } }
+    return thesMap.get(w) || thesMap.get(w.replace(/s$/, "")) || [];
+  }
+  const NUMW = { three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
+  const ORD = { first: 1, second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6, seventh: 7, eighth: 8, "1st": 1, "2nd": 2, "3rd": 3, "4th": 4, "5th": 5, "6th": 6, "7th": 7 };
+  function wordHelp(m, recent) {
+    const t = m.plain.replace(/[?!.]+$/, "");
+    let r = /\b(?:another|other|different|better|fancier|simpler|a|any)?\s*(?:\d+|\w+)?[- ]?(?:letter )?words? (?:for|that means?|meaning|like|instead of)\s+["']?([a-z]+)["']?/.exec(t) ||
+      /\bsynonyms? (?:for|of|to)\s+["']?([a-z]+)/.exec(t) || /\bwhat (?:is|s) (?:a |the )?synonym (?:for|of)\s+([a-z]+)/.exec(t) || /\b([a-z]+)\s+synonyms?\b/.exec(t);
+    if (!r || /^(it|that|this|the|a|word|words|letter|letters|me|you)$/.test(r[1])) return null;
+    const w = r[1];
+    const lenM = /\b(\d{1,2})[- ]?letters?\b/.exec(m.clean.toLowerCase()) || new RegExp("\\b(" + Object.keys(NUMW).join("|") + ")[- ]letters?\\b").exec(t);
+    const len = lenM ? (+lenM[1] || NUMW[lenM[1]]) : null;
+    // letter clues: "the second letter is L", "I have the second letter as L", "starts with b", "ends in e", "_L___"
+    const clues = [];
+    const low = m.clean.toLowerCase();
+    for (const mm of low.matchAll(/\b(first|second|third|fourth|fifth|sixth|seventh|eighth|1st|2nd|3rd|4th|5th|6th|7th) letter (?:is |as |of |=)?(?:an? )?["']?([a-z])\b/g)) clues.push([ORD[mm[1]] - 1, mm[2]]);
+    for (const mm of low.matchAll(/\b(?:the )?([a-z]) (?:as|is) the (first|second|third|fourth|fifth|sixth|seventh|eighth) letter\b/g)) clues.push([ORD[mm[2]] - 1, mm[1]]);
+    const sw = /\b(?:starts?|starting|begins?|beginning) with (?:an? |the letter )?["']?([a-z])\b/.exec(low), ew = /\b(?:ends?|ending) (?:with|in) (?:an? |the letter )?["']?([a-z])\b/.exec(low);
+    // "_L___" or "?l???": placeholders inside the word (a "?" at the very end is just a question mark)
+    const pat = /(?:^|\s)([a-z?_*]{3,12})(?=\s|$)/i.exec(m.clean.replace(/[^a-z?_* ]/gi, " ").split(/\s+/).filter((x) => (/[_*]/.test(x) || /\?[a-z?]/i.test(x)) && x.replace(/[^?_*]/g, "").length >= 1 && /[a-z]/i.test(x)).join(" "));
+    const crossword = len || clues.length || sw || ew || pat;
+    const own = (SYN[w] || "").split(" ").filter(Boolean);
+    let pool = own.concat(thesaurus(w).filter((x) => !own.includes(x)));
+    if (crossword) {
+      // a crossword can need a rarer word: add synonyms of synonyms
+      const more = [];
+      // only through the everyday synonyms: WordNet's second-hand links wander off ("happy" -> "bright" -> "alert")
+      const near = new Set([w].concat(own, thesaurus(w)));
+      for (const x of own.length ? own : pool.slice(0, 4)) for (const y of (SYN[x] || "").split(" ").concat(thesaurus(x))) {
+        if (!y || y === w || pool.includes(y) || more.includes(y)) continue;
+        // keep it only if it's close to the meaning from two sides (so "down" doesn't bring in "devour")
+        if (thesaurus(y).concat((SYN[y] || "").split(" ")).filter((z) => near.has(z)).length >= 2) more.push(y);
+      }
+      pool = pool.concat(more);
+      const fits = pool.filter((x) => /^[a-z]+$/.test(x) && (!len || x.length === len) && clues.every(([i, ch]) => x[i] === ch) && (!sw || x[0] === sw[1]) && (!ew || x[x.length - 1] === ew[1]) &&
+        (!pat || (pat[1].length === x.length && [...pat[1].toLowerCase()].every((ch, i) => /[?_.*]/.test(ch) || x[i] === ch))));
+      const shape = `${len ? len + " letters" : "that shape"}${clues.length ? ", " + clues.map(([i, ch]) => `${["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th"][i]} letter ${ch.toUpperCase()}` ).join(", ") : ""}`;
+      if (fits.length) return `For "${w}" with ${shape}, try: ${fits.slice(0, 5).map((x) => x.toUpperCase()).join(", ")}. ✏️${fits.length === 1 ? " Does it fit?" : " Does one of those fit?"}`;
+      return `Hmm, I can't find a word for "${w}" with ${shape} in my word list. 🤔 Some words for "${w}": ${pool.slice(0, 6).join(", ") || "none that I know"}. Do you have any other letters?`;
+    }
+    if (!pool.length) return null;
+    return `Some other words for "${w}": ${pool.slice(0, 7).join(", ")}. ✏️`;
+  }
+
   // ---------- word tools ----------
   function wordTools(m) {
     const t = m.plain, raw = m.clean;
     let r;
+    const wh = wordHelp(m);
+    if (wh) return wh;
     if ((r = /\bhow many (?:letters|characters|chars) (?:are )?(?:there )?in (?:the word |the name )?["']?([a-z'-]+)["']?/i.exec(raw))) {
       const w = r[1].replace(/[^a-z]/gi, "");
       return `"${r[1]}" has ${w.length} letter${w.length === 1 ? "" : "s"}.`;
