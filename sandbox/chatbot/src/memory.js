@@ -9,7 +9,7 @@
   function blank() {
     return {
       v: 1, name: null, age: null, ageAt: null, location: null, birthday: null, job: null, school: null,
-      likes: [], dislikes: [], favorites: {}, pets: [], people: {}, notes: [], events: [], moods: [], threads: [],
+      likes: [], dislikes: [], favorites: {}, pets: [], people: {}, notes: [], events: [], moods: [], threads: [], diary: [], topics: [],
       botName: "Pip", firstSeen: Date.now(), lastSeen: null, sessions: 0, messages: 0, facts: 0,
     };
   }
@@ -226,6 +226,32 @@
     for (const f of facts) apply(mem, f);
     return facts;
   }
+  // a small diary of what the user told Pip, so "do you remember what I was cooking?" works
+  const DIARY_SKIP = /\b(password|address|phone|number|email|kill|suicid\w*|hurt|abuse|touch\w*|secret)\b/;
+  function noteDiary(mem, m) {
+    if (m.isQuestion || m.tokens.length < 4 || m.tokens.length > 40 || DIARY_SKIP.test(m.plain)) return;
+    if (!/\b(i|i'm|im|my|we|me)\b/.test(m.plain)) return;
+    const d = (mem.diary = mem.diary || []);
+    const text = m.clean.replace(/\s+/g, " ").trim().slice(0, 140);
+    if (d.length && d[d.length - 1].text === text) return;
+    d.push({ text, at: Date.now() });
+    if (d.length > 60) d.shift();
+  }
+  const DSTOP = new Set("do you remember what where who when how which why i we was were am did had have said told went the a an my me you about that this it to of in on at for with and or but is are be been".split(" "));
+  function searchDiary(mem, q) {
+    const words = q.toLowerCase().replace(/[^a-z0-9' ]/g, " ").split(/\s+/).filter((w) => w.length > 2 && !DSTOP.has(w));
+    if (!words.length) return null;
+    const stem = (w) => w.replace(/(ing|ed|es|s)$/, "");
+    const ws = words.map(stem);
+    let best = null, bestScore = 0;
+    (mem.diary || []).forEach((e, i) => {
+      const ew = e.text.toLowerCase().replace(/[^a-z0-9' ]/g, " ").split(/\s+/).map(stem);
+      const score = ws.filter((w) => ew.includes(w)).length + i * 0.001;
+      if (score > bestScore) { best = e; bestScore = score; }
+    });
+    return bestScore >= 1 ? best : null;
+  }
+
   // things worth asking about next time: "my brother is annoying", "my team won", "my cat is sick"
   const THREAD_WHO = new RegExp("\\bmy (" + PEOPLE + "|" + PET + "|team|class|school|job|teacher|project|band|game|garden|car|phone|computer|room)\\b");
   function noteThread(mem, m) {
@@ -399,8 +425,23 @@
       if (!s.length) return { text: "Not much yet! Tell me about yourself: what's your name, and what do you like to do?" };
       return { text: `Here's what I remember: ${U.listJoin(s.slice(0, 9))}. ${U.pick(["Did I get it right?", "I pay attention! 😊", "Anything I should add?"])}` };
     }
-    if (/\b(what|where|when|who|how|which) (did|do|was|were|am|have|had) i (have|eat|do|go|see|say|buy|get|watch|play|wear|meet|call)\b/.test(t) && !/\bwhat did i (just )?say\b/.test(t)) {
-      return { text: U.pick(["Hmm, I don't know! You haven't told me. 😄 What was it?", "You'd have to tell me! I only know what you share with me. What was it?"]) };
+    // "what did we talk about yesterday?"
+    if (/\bwhat (did|have) we (talk|talked|chat|chatted|speak|spoke) about\b|\bwhat were we talking about\b|\bdo you remember (what we talked about|our (last )?(chat|conversation))\b/.test(t)) {
+      const now = Date.now(), start = mem.sessionStart || now;
+      const today = /\b(today|just now|earlier|before)\b/.test(t) && !/\byesterday|last time\b/.test(t);
+      const pool = (mem.topics || []).filter((x) => (today ? x.at >= start : x.at < start));
+      const labels = [];
+      for (const x of pool.slice().reverse()) if (!labels.includes(x.label)) labels.push(x.label);
+      if (!labels.length) return { text: today ? "We've only just started! 😊 What's on your mind?" : "Hmm, I don't have much saved from before. 😅 What's new with you?" };
+      return { text: `${today ? "So far we talked about" : "Last time we talked about"} ${U.listJoin(labels.slice(0, 5).reverse())}! 😊` };
+    }
+    // "do you remember what I was cooking?" -> search what they told Pip
+    if (/\b(do you remember|remember|what) (what|where|who|when|how|which|why)? ?(i|we) (was|were|am|did|had|have|said|told|went|ate|made|cooked|played|watched|got|bought)\b|\bwhat (was|were) i (doing|cooking|making|playing|watching|reading|eating|building|drawing)\b|\bwhat did i (tell you|say) about\b|\bwhat did i (have|eat|do|make|cook|watch|play|buy|get|build|draw)\b/.test(t) && !/\bwhat did i (just )?say\s*$/.test(t)) {
+      const hit = searchDiary(mem, m.plain);
+      const old = hit && mem.sessionStart && hit.at < mem.sessionStart && /\b(tonight|tomorrow|going to|gonna|will|cooking|making|planning|trying)\b/i.test(hit.text);
+      if (hit) return { text: U.pick([`You told me: "${hit.text}" 😊`, `I remember! You said: "${hit.text}"`]).replace(/([^.!?])"/, '$1."') + (old ? " " + U.pick(["How did it go?", "How did it turn out?"]) : "") };
+      if (/\b(did|was|were|had|told|said|went|ate|made|cooked|played|watched|got|bought)\b/.test(t))
+        return { text: U.pick(["Hmm, I don't think you told me that one! 😅 What was it?", "I don't remember you telling me that. What was it?"]) };
     }
     if ((r = /\bdo you remember (?:that |when |what |how |my |about )?(.{2,40})$/.exec(m.plain.replace(/[?!.]/g, "")))) {
       const q = r[1].replace(/\bmy\b/g, "").trim();
@@ -483,5 +524,5 @@
     try { if (storage) storage.setItem(KEY, JSON.stringify(mem)); } catch (e) { /* ignore */ }
   }
 
-  P.memory = { noteThread, blank, extract, apply, recall, forget, followUp, rearmEvent, dueDate, summary, load, save, looksLikeName, currentAge, petText, SLOTS };
+  P.memory = { noteThread, noteDiary, searchDiary, blank, extract, apply, recall, forget, followUp, rearmEvent, dueDate, summary, load, save, looksLikeName, currentAge, petText, SLOTS };
 })(typeof window !== "undefined" ? (window.Pip = window.Pip || {}) : (global.Pip = global.Pip || {}));

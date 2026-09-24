@@ -42,14 +42,22 @@
     for (const it of D.items) { addName(it.name, "item", it); for (const a of (it.aliases || "").split("|")) if (a) addName(a, "item", it); }
     for (const m of D.mobs) { const ref = { name: m[0], hp: m[1], type: m[2], info: m[3] }; addName(m[0], "mob", ref); for (const a of (m[4] || "").split("|")) if (a) addName(a, "mob", ref); }
     for (const e of D.enchants) { const ref = { name: e[0], max: e[1], on: e[2], info: e[3] }; addName(e[0], "ench", ref); }
-    for (const p of D.potions) { const ref = { name: p[0], ing: p[1], info: p[2] }; addName("potion of " + p[0], "potion", ref); addName(p[0] + " potion", "potion", ref); for (const a of (p[3] || "").split("|")) if (a) { addName(a + " potion", "potion", ref); addName("potion of " + a, "potion", ref); } }
+    for (const p of D.potions) { const ref = { name: p[0], ing: p[1], info: p[2], mods: p[4] }; addName("potion of " + p[0], "potion", ref); addName(p[0] + " potion", "potion", ref); for (const a of (p[3] || "").split("|")) if (a) { addName(a + " potion", "potion", ref); addName("potion of " + a, "potion", ref); } }
     for (const o of D.ores) { const ref = { name: o[0], y: o[1], tool: o[2], tip: o[3] }; addName(o[0] + " ore", "ore", ref); addName(o[0], "ore", ref); addName(o[0] + "s", "ore", ref); }
     // teach the spell checker the proper names only (aliases include typos like "pikaxe" on purpose)
     if (P.nlp && P.nlp.addWords) {
       const ws = new Set();
       const proper = D.items.map((i) => i.name).concat(D.mobs.map((x) => x[0]), D.enchants.map((x) => x[0]), D.potions.map((x) => x[0]), D.ores.map((x) => x[0]));
-      for (const nm of proper) for (const w of normPhrase(nm).split(" ")) if (w.length > 2) ws.add(w);
-      for (const w of "craft crafting crafted recipe smelt smelting enchant enchanting enchantment enchantments nether overworld stronghold potion potions brewing brew tame breed obsidian redstone minecraft pickaxe netherite creeper enderman".split(" ")) ws.add(w);
+      const plur = (w) => (/(s|x|sh|ch)$/.test(w) ? w + "es" : /[^aeiou]y$/.test(w) ? w.slice(0, -1) + "ies" : /f$/.test(w) ? w.slice(0, -1) + "ves" : w + "s");
+      for (const nm of proper) for (const w of normPhrase(nm).split(" ")) if (w.length > 2) { ws.add(w); ws.add(plur(w)); }
+      // game words the conversation corpus rarely uses (without them "slimes spawn" was "corrected" to "slides spain")
+      for (const w of ("craft crafts crafting crafted recipe recipes smelt smelts smelting smelted enchant enchants enchanting enchanted enchantment enchantments nether overworld stronghold " +
+        "strongholds potion potions brewing brew tame taming breed breeding obsidian redstone minecraft pickaxe pickaxes netherite creeper creepers enderman endermen spawn spawns spawning " +
+        "spawned respawn respawning despawn despawns spawner spawners biome biomes mob mobs hostile passive xp lapis deepslate cobble cobblestone planks ingot ingots nugget nuggets " +
+        "slime slimes slimeball slimeballs ghast ghasts blaze blazes piglin piglins hoglin hoglins warden wardens villager villagers pillager pillagers raid raids elytra trident " +
+        "axolotl axolotls sniffer sniffers armadillo armadillos scute scutes allay allays breeze mace shulker shulkers totem totems portal portals bastion bastions fortress fortresses " +
+        "mooshroom mooshrooms strider striders phantom phantoms drowned wither withers ender dragon dragons enchanter anvil anvils beacon beacons jukebox glowstone netherrack " +
+        "gamemode survival creative hardcore spectator seed seeds modded mods shader shaders texture multiplayer server servers realms bedrock java herobrine notch mojang steve alex").split(" ")) ws.add(w);
       P.nlp.addWords([...ws], 0.12);
     }
     guideIndex = new P.nlp.TfIdf();
@@ -111,6 +119,7 @@
     if (/sh$|ch$|x$/.test(name)) return name + "es";
     if (/y$/.test(name) && !/[aeiou]y$/.test(name)) return name.slice(0, -1) + "ies";
     if (/Leaf$/.test(name)) return name.replace(/Leaf$/, "Leaves");
+    if (/shelf$/.test(name)) return name.replace(/shelf$/, "shelves");
     return name + "s";
   }
   function ingredientText(it) {
@@ -153,7 +162,7 @@
   const an = (w) => U.aOrAn(w);
   function article(name) {
     if (/s$/.test(name) && !/(Glass|Compass|Grass|Boss)$/.test(name)) return name;
-    if (/^(TNT|Wool|Paper|Sugar|Bread|Glass|Concrete|Clay|Sandstone|Glowstone|Purpur|Coarse|Mossy|Snow Block|Honey Block|Chain|Scaffolding|Obsidian|Leather|String|Gunpowder|Iron Bars)/.test(name)) return name;
+    if (/^(TNT|Wool|Paper|Sugar|Bread|Glass|Concrete|Clay|Sandstone|Glowstone|Purpur|Coarse|Mossy|Snow Block|Honey Block|Chain|Scaffolding|Obsidian|Leather|String|Gunpowder|Iron Bars)/.test(name) || /Armor$/.test(name)) return name;
     return an(name) + " " + name;
   }
 
@@ -187,11 +196,12 @@
 
   function mobAnswer(mob, want) {
     if (want === "drops") {
-      const sent = mob.info.split(/(?<=[.!])\s+/).filter((x) => /drop/i.test(x));
-      if (sent.length) return { text: `${mob.type === "boss" ? "The " + mob.name : mob.name}: ${sent.join(" ")}`, kind: "mob" };
+      const subj = mob.type === "boss" ? "The " + mob.name : U.capitalizeFirst(an(mob.name)) + " " + mob.name;
+      const sent = mob.info.split(/(?<=[.!])\s+/).filter((x) => /drop/i.test(x)).map((x) => x.replace(/^(It )?drops\b/i, subj + " drops").replace(/^(It|They) (also )?(sometimes )?drops?\b/i, subj + " $2$3drops"));
+      if (sent.length) return { text: sent.map((x) => (/drops/.test(x) && !x.startsWith(subj) ? `${subj}: ${x}` : x)).join(" "), kind: "mob" };
     }
-    const hearts = mob.hp / 2;
-    const h = `${mob.hp} HP (${hearts % 1 ? hearts : hearts} heart${hearts === 1 ? "" : "s"})`;
+    const hearts = typeof mob.hp === "number" ? mob.hp / 2 : null;
+    const h = hearts === null ? `${mob.hp} HP (it varies)` : `${mob.hp} HP (${hearts} heart${hearts === 1 ? "" : "s"})`;
     if (want === "health") return { text: `${mob.type === "boss" ? "The " + mob.name : article(mob.name)} has ${h}.`, kind: "mob" };
     const kind = { boss: "a boss", hostile: "a hostile mob", passive: "a friendly (passive) mob", neutral: "a neutral mob (it only attacks if you provoke it)" }[mob.type] || "a " + mob.type + " mob";
     return { text: `${mob.type === "boss" ? "The " + mob.name : mob.name}: ${kind} with ${h}. ${mob.info}`, kind: "mob" };
@@ -203,7 +213,11 @@
   }
   function potionAnswer(p) {
     const base = /^none/.test(p.ing) ? `Brew it like this: ${p.ing.replace(/^none: /, "")}.` : `Water Bottle + Nether Wart makes an Awkward Potion, then add ${p.ing}.`;
-    return { text: `Potion of ${p.name}: ${base} ${p.info} (Redstone makes it last longer, glowstone makes it stronger, gunpowder makes it splash.)`, kind: "potion" };
+    const mod = p.mods === "rg" ? "Redstone makes it last longer, glowstone makes it stronger (but shorter), gunpowder makes it splash."
+      : p.mods === "r" ? "Redstone makes it last longer (glowstone does nothing for this one), gunpowder makes it splash."
+      : p.mods === "g" ? "Glowstone makes it stronger (it's instant, so redstone does nothing), gunpowder makes it splash."
+      : "Gunpowder makes it splash; redstone and glowstone don't change this one.";
+    return { text: `Potion of ${p.name}: ${base} ${p.info} (${mod})`, kind: "potion" };
   }
 
   // tool/armor "full set" cost
@@ -228,7 +242,7 @@
     const recentMC = turn - mc.topicTurn <= 4;
     const mcWords = MC_WORDS.test(text);
 
-    const want =
+    let want =
       /\b(y level|y-level|y lvl|what level|which level|what lvl|which lvl|what height|best level|best lvl|how deep|what layer)\b/.test(text) ? "ylevel" :
       /\b(brew|brewing|potion|potions)\b/.test(text) ? "brew" :
       /\benchant(ment|ments|ing)?s?\b/.test(text) && !/\benchant(ing|ment)? table\b/.test(text) ? "enchant" :
@@ -241,11 +255,20 @@
       /\b(get|find|obtain|collect|farm|found|locate|mine|where|spawn|spawns)\b/.test(text) ? "obtain" :
       /\b(what is|what are|what does|tell me about|explain|use for|used for|good for|info|use (it|them|this|that|one) for|what is it for|what s it for|what does (it|that|this) do|what do (they|those) do)\b/.test(text) ? "info" : null;
 
+    // "how many bones are in the human body?", "forget it. when did ww2 end?": real-world questions, not the game
+    if (/\b(human|humans|real life|irl|in real life|human body|world war|ww1|ww2|wwii|history|biology|chemistry|physics|in science|in math|president|country|countries|planet|solar system|in the ocean)\b/.test(text) && !/\b(minecraft|mc|in the game|in game)\b/.test(text)) return null;
     // "what's your favorite mob?" / "do you like creepers?" are about Pip, and "I know what a creeper is" isn't a question
     if (/\b(your|yours|urs) (favou?rite|fav|fave)\b|\bwhat(?: is| s|s)? (yours|urs)\b|\bdo (you|u) (like|love|hate|enjoy)\b|\b(what do|do) you think (of|about)\b/.test(text)) return null;
     if (/\bi (already |do )?know (what|how|where|who|that)\b/.test(text) && !/\b(but|so) (what|how|where|why|can|do|does|is)\b/.test(text)) return null;
 
     let mentions = findMentions(toks);
+    // drop things the user says they DON'T mean
+    const negd = mentions.filter((x) => new RegExp("\\bnot (the |a |an )?" + x.phrase + "\\b").test(text));
+    if (negd.length && negd.length < mentions.length) mentions = mentions.filter((x) => !negd.includes(x));
+    const followLike = /^(what about|how about|and|what of)\b/.test(text) && toks.length <= 6;
+    if (!want && followLike && mc.lastWant && turn - mc.turn <= 2 && /^(ylevel|obtain|drops|brew|tame|kill|health|smelt)$/.test(mc.lastWant)) want = mc.lastWant;
+    mc.pendingWant = want;
+    state.mcYes = /^(is it true|is it possible|can (you|u|i|we) (really |actually )?(make|craft|get|build))\b/.test(text);
     const shortFollow = mc.last && turn - mc.turn <= 2 && toks.length <= 4 &&
       (/^(what about|how about|and|or|what|how|which|where)\b/.test(text) || /\?$/.test(m.clean) || toks.some((t) => MATERIAL_WORDS[t] || FAMILY_WORDS[t]));
     if (!want && !m.isQuestion && !/\b(recipe|how to|tell me|show me)\b/.test(text) && !shortFollow) return null;
@@ -262,7 +285,8 @@
         const guess = byName(mat + " " + fam) || byName((mat === "Golden" ? "Golden " : mat + " ") + fam);
         if (guess && guess !== last.ref) mentions = [{ at: 0, len: 1, phrase: guess.name.toLowerCase(), hits: [{ kind: "item", ref: guess }] }];
       }
-      if ((!mentions.length || want === "info") && /\b(it|that|this|them|those|one|ones)\b/.test(text) && (want || /\?$/.test(m.clean)) && !mentions.some((x) => x.len > 1)) {
+      const notGame = /\b(what time|what day|what date|what year|how are you|how is it going|how's it going|what is it like|forget it|never mind|nevermind|nvm|is it (true|real|going|ok|okay|raining|cold|hot)|do you like it|i like it|i love it|i hate it|love it|hate it|get it|got it|i know|that's it|thats it|that is it|this is it|it's ok|its ok|it is ok|was it fun|who is it|what is it about|is that you|was that)\b/.test(text);
+      if (!notGame && (!mentions.length || want === "info") && /\b(it|that|this|them|those|one|ones)\b/.test(text) && (want || /\?$/.test(m.clean)) && !mentions.some((x) => x.len > 1)) {
         mentions = [{ at: 0, len: 1, phrase: last.ref.name.toLowerCase(), hits: [{ kind: last.kind, ref: last.ref }] }];
       }
     }
@@ -305,7 +329,7 @@
       "bane of arthropods|sharpness": "Sharpness wins almost always: Bane of Arthropods only helps against spiders, bees and silverfish.",
     };
     const enchMentioned = D.enchants.map((e) => e[0].toLowerCase()).filter((n) => text.includes(n));
-    if (enchMentioned.length >= 2 && /\b(or|vs|versus|better|best|which)\b/.test(text)) {
+    if (enchMentioned.length >= 2 && /\b(or|vs|versus|better|best|which|same|together|both|combine|combined|with|and)\b/.test(text)) {
       const key = enchMentioned.slice(0, 2).sort().join("|");
       const hit = COMP[key] || Object.entries(COMP).find(([k]) => k.split("|").every((x) => enchMentioned.includes(x)));
       if (hit) return done(state, { text: typeof hit === "string" ? hit : hit[1], kind: "ench" }, null);
@@ -319,6 +343,37 @@
         const res = recipeAnswer(hits[0].ref) || obtainAnswer(hits[0].ref);
         if (res) return done(state, res, { kind: "item", ref: hits[0].ref });
       }
+    }
+
+    // "how many books do I need for 15 bookshelves?", "how many scraps for 1 netherite ingot?"
+    const cnt = /\bhow (?:many|much) ([a-z]+(?: [a-z]+)?) (?:do i need |do you need |does it take |are needed |is needed |would i need |will i need )?(?:for|to (?:make|craft)|in) (?:a |an |one |all |the |all the |my )?(\d+|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty)? ?([a-z][a-z ]{2,30}?)\??$/.exec(text);
+    if (cnt) {
+      const n = cnt[2] ? (+cnt[2] || { two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, fifteen: 15, twenty: 20 }[cnt[2]]) : 1;
+      const target = findMentions(cnt[3].split(" ").filter(Boolean)).map((x) => x.hits.find((h) => h.kind === "item" && (h.ref.grid || h.ref.shapeless))).find(Boolean);
+      const lastItem = mc.last && mc.last.kind === "item" && (mc.last.ref.grid || mc.last.ref.shapeless) ? mc.last.ref : null;
+      const it = target ? target.ref : /^(them|it|that|those|all|one)$/.test(cnt[3].trim()) ? lastItem : null;
+      if (it) {
+        const want1 = sing(cnt[1].split(" ").pop());
+        for (const [nm, c] of ingredientCounts(it)) {
+          if (nm.toLowerCase().split(/\s+/).map(sing).includes(want1) || sing(nm.toLowerCase()) === sing(cnt[1])) {
+            const total = c * n;
+            return done(state, { text: n > 1 ? `You need ${total} ${plural(nm, total)} for ${n} ${plural(it.name, n)} (${c} each${it.makes > 1 ? `, and each craft makes ${it.makes}` : ""}).` : `You need ${c} ${plural(nm, c)} for ${article(it.name)}.`, kind: "count" }, { kind: "item", ref: it });
+          }
+        }
+      }
+    }
+    // "bruh so how many sticks is that" right after a recipe
+    const cnt2 = /\bhow many ([a-z]+(?: [a-z]+)?) (?:is that|do i need|does it need|does that need|in total|total|is it|are there)\b/.exec(text);
+    if (cnt2 && mc.last && mc.last.kind === "item" && turn - mc.turn <= 3 && (mc.last.ref.grid || mc.last.ref.shapeless)) {
+      const want1 = sing(cnt2[1].split(" ").pop());
+      const nn = /\bfor (?:all |all the |the )?(\d+)\b/.exec(text);
+      const n = nn ? +nn[1] : 1, it = mc.last.ref;
+      for (const [nm, c] of ingredientCounts(it)) if (nm.toLowerCase().split(/\s+/).map(sing).includes(want1))
+        return done(state, { text: n > 1 ? `That's ${c * n} ${plural(nm, c * n)} for ${n} ${plural(it.name, n)} (${c} each).` : `${article(it.name)} takes ${c} ${plural(nm, c)}.`, kind: "count" }, null);
+    }
+    // "how do I put mending on my sword?" -> anvil
+    if (/\b(put|add|apply|get|combine)\b.{0,30}\b(it|this|that|mending|enchant\w*|book|books|sharpness|protection|efficiency|fortune|unbreaking|looting|silk touch|infinity|power)\b.{0,20}\bon(to)? (my |a |the |your )?[a-z]+/.test(text) || /\bhow (do|can) i (use|apply) (an |the |this |my )?enchanted book\b/.test(text)) {
+      return done(state, { text: "Use an anvil! 🔨 Put your item (like the sword) in the first slot and the enchanted book in the second slot, then take the result. It costs some XP levels. (Combining two of the same enchantment can level it up, like Sharpness III + III = IV.)", kind: "guide" }, null);
     }
 
     // "how many iron ingots do I need for it?" right after a recipe
@@ -353,8 +408,8 @@
       // and the more of them the better ("repair my elytra" beats plain "elytra")
       let best = null;
       for (const g of guideIndex.query(m.stems, 6)) {
-        if (g.score < 0.4) continue;
         const key = g.doc.stems.filter((w) => !P.nlp.STOP.has(w) && w.length > 2 && !/^(make|made|get|find|how|best|use|work|build)$/.test(w));
+        if (g.score < (key.length >= 2 ? 0.2 : 0.4)) continue;
         const ok = key.length && key.every((w) => m.stems.includes(w) || m.stems.some((x) => x.length > 3 && U.levenshtein(x, w, 1) <= 1));
         if (!ok) continue;
         const rank = key.length * 0.3 + g.score;
@@ -365,8 +420,10 @@
     if (guide && !guideIsMC(guide) && !mcWords && !recentMC) guide = null;
     // a game-only answer to a question that didn't mention the game gets a "Minecraft" label
     const label = (a) => (mcWords || recentMC ? a : "If you mean in Minecraft: " + a);
-    if (guide && guideScore > 0.75 && !(want === "recipe" && mentions.length && !guide.q.some((q) => mentions.some((x) => q.includes(x.phrase))))) {
-      return done(state, { text: label(guide.a), kind: "guide" }, null);
+    const craftable = want === "recipe" && mentions.some((x) => x.hits.some((h) => h.kind === "item" && (h.ref.grid || h.ref.shapeless || h.ref.smithing)));
+    if (guide && guideScore > 0.75 && !craftable && !(want === "drops" && mentions.some((x) => x.hits[0].kind === "mob")) && !(want === "recipe" && mentions.length && !guide.q.some((q) => mentions.some((x) => q.includes(x.phrase))))) {
+      const top1 = mentions.find((x) => guide.q.some((q) => q.includes(x.phrase)));
+      return done(state, { text: label(guide.a), kind: "guide" }, top1 ? { kind: top1.hits[0].kind, ref: top1.hits[0].ref } : null);
     }
     if (!mentions.length) {
       if (guide && (mcWords || recentMC || guideIsMC(guide))) {
@@ -387,6 +444,8 @@
       if ((want === "recipe" || want === "smelt") && h.kind === "item") s += 3;
       if (h.kind === "item" && (h.ref.grid || h.ref.shapeless || h.ref.smithing)) s += 0.5;
       if (h.kind === "mob" && (!want || want === "info")) s += 1;
+      if (h.kind === "mob" && /\bspawns?\b|\bwhere (do|does|can) (i find )?\w+ (live|spawn)/.test(text)) s += 3;
+      s -= mt.at * 0.05;
       scored.push({ s, mt, h });
     }
     scored.sort((a, b) => b.s - a.s);
@@ -400,7 +459,7 @@
       if (!(want === "recipe" && h.kind === "item") && !gameVerb) return null;
       if (guide) return null;
     }
-    if (guide && want !== "recipe" && (h.kind !== "item" || want === "obtain" || want === "info") && guide.q.some((q) => q.includes(mt.phrase))) {
+    if (guide && want !== "recipe" && (h.kind !== "item" || want === "obtain" || want === "info") && guide.q.some((q) => q.includes(mt.phrase)) && !(want === "drops" && h.kind === "mob")) {
       return done(state, { text: guide.a, kind: "guide" }, { kind: h.kind, ref: h.ref });
     }
 
@@ -445,6 +504,9 @@
 
   function done(state, res, last) {
     const mc = state.mc;
+    mc.lastWant = mc.pendingWant;
+    if (state.mcYes && res.kind === "recipe" && !/^yes/i.test(res.text)) res.text = "Yes! " + res.text;
+    state.mcYes = false;
     res.text = U.capitalizeFirst(res.text);
     mc.turn = state.turn || 0;
     mc.topicTurn = mc.turn;

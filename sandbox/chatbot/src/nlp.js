@@ -226,7 +226,7 @@
       scores[cat] = (scores[cat] || 0) + w;
     }
     const joined = " " + tokens.join(" ") + " ";
-    if (/ (by myself|on my own|no one to|nobody to|(do not|don't|dont) (really |even )?have (anyone|anybody|any friends)|no friends|have nobody|have no one|nobody to talk to|sit alone|eat alone) /.test(joined)) scores.lonely = (scores.lonely || 0) + 1.2;
+    if (/ (by myself|on my own|no one to|nobody to|(do not|don't|dont) (really |even )?have (anyone|anybody|any friends)|no friends|have nobody|have no one|nobody to talk to|sit alone|eat alone|nobody (listens|cares|does|understands|gets it)|no one (listens|cares|understands)|(does not|doesn't|doesnt|do not|don't|dont) (even )?listen) /.test(joined)) scores.lonely = (scores.lonely || 0) + 1.2;
     let best = null, bestV = 0;
     for (const k in scores) if (scores[k] > bestV) { best = k; bestV = scores[k]; }
     const positive = (scores.happy || 0) + (scores.love || 0) * 0.5;
@@ -245,7 +245,12 @@
     const toks = words(norm);
     const stems = toks.map(stem);
     const isQuestion = /\?\s*$/.test(clean) || QWORDS.test(norm) || /\b(right|yeah|no)\?$/.test(norm);
-    const emo = emotion(toks);
+    let emo = emotion(toks);
+    // "great. even the ai doesn't listen to me": a sarcastic "great" in front of a complaint
+    if (/^(great|perfect|awesome|wonderful|fantastic|nice|cool|lovely|brilliant|wow|thanks|oh great|just great|oh wow|oh nice|yay)[.,!]+\s+\S/i.test(clean.trim())) {
+      const rest = emotion(toks.slice(toks[1] === "great" || toks[1] === "wow" || toks[1] === "nice" ? 2 : 1));
+      if (rest.valence < 0 || /\b(not|never|nobody|no one|even|ugh|hate|doesn'?t|don'?t|didn'?t|can'?t|won'?t)\b/.test(norm)) emo = Object.assign({}, rest, { valence: Math.min(rest.valence, 0) - 0.6, label: rest.label || "sad", strength: Math.max(rest.strength, 0.9), sarcasm: true });
+    }
     return {
       raw: String(raw || ""), clean, lower: clean.toLowerCase(), norm, plain, tokens: toks, stems,
       content: stems.filter((w) => !STOP.has(w)), isQuestion, emotion: emo,

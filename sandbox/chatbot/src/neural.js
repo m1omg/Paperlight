@@ -461,6 +461,8 @@
   // things a from-scratch AI friend must not claim (port of the filter used to build the reply bank)
   const PERSONA = /\b(my (wife|husband|girlfriend|boyfriend|son|daughter|kids?|children|mom|mum|mother|dad|father|parents|brothers?|sisters?|job|boss|co-?workers?|grand\w+|aunt|uncle|cousins?|baby|car|truck|house|apartment|dog|dogs|cat|cats|pets?|puppy|teacher|class|school|college|university|degree|fianc\w*|church|roommate|body|legs?|arms?|stomach|doctor|office|room|bed|phone|hometown|town|city|country|favorite \w+ (is|are))|i('m| am) (a |an )?(\d+|teacher|nurse|doctor|student|mom|dad|mother|father|lawyer|chef|waitress|waiter|cashier|farmer|vegan|vegetarian|married|single|divorced|pregnant|retired|christian|muslim|jewish|atheist|engaged|parent|writer|artist|musician|singer|engineer|programmer|in (school|college|high school|the army)|from|at work|home|on my way|driving|allergic|human|a (boy|girl|man|woman|guy|lady))|i (work|worked|live|lived|study|studied|teach|taught|drive|drove|grew up|was born|go to (school|college|church|work)|moved|graduated|retired|married|divorced|broke up|just got back|went to|visited|bought|ate|cooked|slept|woke up)\b|i('ve| have|ve| had| got) (a |an |two |three |four |\d+ )?(kids?|children|sons?|daughters?|dogs?|cats?|brothers?|sisters?|husband|wife|boyfriend|girlfriend|job|car|house|pets?|horses?|siblings?|baby)|i('ve| have) been (working|living|married|studying|going)|years? old|my name|call me|when i was (a kid|a child|young|little|younger|in|\d+)|(last|this) (week|night|year|month|weekend|morning)|yesterday|<\|me\|>)/i;
   const BAD = /\b(fuck\w*|shit\w*|bitch\w*|cunt|nigg\w*|fag\w*|retard\w*|slut\w*|whore\w*|dick\w*|cock\w*|pussy|porn\w*|rape\w*|sex\w*|nazi\w*|kill (yourself|you)|kys|die)\b/i;
+  // lines that are fine between adults but wrong from a kid-friendly bot, or too heavy to say by accident
+  const RISKY = /\b(honey|sweetie|sweetheart|babe|baby girl|darling|sexy|hot girl|kiss\w*|date|dating|punch\w*|stab\w*|shoot\w*|gun|guns|knife|knives|revenge|beat (him|her|them|up)|kill\w*|murder\w*|dead|death|died|dies|dying|funeral|cancer|tumou?r|chemo|suicid\w*|loser|pathetic|stupid|idiot|dumb|ugly|fat|hate you|drunk|beer|wine|vodka|whiskey|alcohol|booze|weed|smok\w*|cigar\w*|drugs?|pills?|hangover|casino|gambl\w*|bet|lottery|divorc\w*|pregnan\w*|your kids|my kids|husband|wife|boyfriend|girlfriend|ex|mortgage|rent|taxes|salary|bills|lawyer|sue|police|jail|prison|arrest\w*|nothing matters|stabbed|pet loved you|rest in peace|rip)\b/i;
 
   // ---------- the neural chat engine ----------
   class Neural {
@@ -599,7 +601,11 @@
     ok(text, userText, recent) {
       const t = text.trim();
       if (t.length < 2 || t.split(/\s+/).length > 40) return false;
-      if (PERSONA.test(t) || BAD.test(t)) return false;
+      if (PERSONA.test(t) || BAD.test(t) || RISKY.test(t)) return false;
+      // numbers the user didn't mention are made up ("It's called 200144.")
+      if (/\d/.test(t) && !/\d/.test(userText)) return false;
+      // a retrieved "It means..." is a guessed definition
+      if (/^(it|that) means\b|\bstands for\b/i.test(t)) return false;
       if (/<\|(a|b|end)\|>/.test(t) || /[\/\\|_~^*#{}\[\]]/.test(t.replace(/<\|you\|>/g, ""))) return false;
       const low = t.toLowerCase().replace(/[^a-z ]/g, "");
       if (low === userText.toLowerCase().replace(/[^a-z ]/g, "")) return false;          // parroting

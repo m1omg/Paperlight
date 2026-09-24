@@ -48,6 +48,7 @@
   R("Chain", { grid: ["N", "I", "N"], key: { N: "Iron Nugget", I: "Iron Ingot" } });
   R("Paper", { grid: ["SSS"], key: { S: "Sugar Cane" }, makes: 3 });
   R("Book", { shapeless: ["Paper", "Paper", "Paper", "Leather"], aliases: "books" });
+  R("Leather", { grid: ["RR", "RR"], key: { R: "Rabbit Hide" }, aliases: "hide|leathers", info: "Mostly from cows, but 4 rabbit hide also make one." });
   R("Book and Quill", { shapeless: ["Book", "Ink Sac", "Feather"], aliases: "writable book|book & quill|quill" });
   R("Bookshelf", { grid: ["PPP", "BBB", "PPP"], key: { P: "Planks", B: "Book" }, aliases: "bookshelves|book shelf",
     info: "Put 15 bookshelves around an enchanting table (one block gap) to unlock level-30 enchantments." });
@@ -67,7 +68,7 @@
 
   // ---------- workstations ----------
   R("Enchanting Table", { grid: [" B ", "DOD", "OOO"], key: { B: "Book", D: "Diamond", O: "Obsidian" }, aliases: "enchantment table|enchant table|enchanting tabel",
-    info: "Spend XP levels and lapis lazuli to enchant gear. Surround it with 15 bookshelves for the best enchants." });
+    info: "Spend XP levels and lapis lazuli to enchant gear. For level 30 enchants, place 15 bookshelves around it with a one-block air gap between them and the table." });
   R("Anvil", { grid: ["BBB", " I ", "III"], key: { B: "Block of Iron", I: "Iron Ingot" }, info: "Repair, rename and combine enchanted items (costs XP)." });
   R("Grindstone", { grid: ["SLS", "P P"], key: { S: "Stick", L: "Stone Slab", P: "Planks" }, info: "Removes enchantments (and gives some XP back) and repairs items." });
   R("Smithing Table", { grid: ["II", "PP", "PP"], key: { I: "Iron Ingot", P: "Planks" }, info: "Upgrades diamond gear to netherite and adds armor trims." });
@@ -126,7 +127,7 @@
   for (const piece of Object.keys(ARMOR)) R("Chainmail " + piece, { how: "Chainmail armor can't be crafted. Get it from mobs that drop their armor, from chests, or by trading with an armorer villager.", family: piece, material: "Chainmail", aliases: "chain " + piece.toLowerCase() + "|chainmail " + piece.toLowerCase() });
   R("Turtle Shell", { grid: ["SSS", "S S"], key: { S: "Turtle Scute" }, aliases: "turtle helmet", info: "A helmet that gives you extra water breathing time." });
   R("Leather Horse Armor", { grid: ["L L", "LLL", "L L"], key: { L: "Leather" } });
-  R("Wolf Armor", { grid: ["S  ", "SSS", "S S"], key: { S: "Armadillo Scute" }, aliases: "dog armor", info: "Brush armadillos to get scutes." });
+  R("Wolf Armor", { grid: ["S  ", "SSS", "S S"], key: { S: "Armadillo Scute" }, aliases: "dog armor|armor for dogs|armor for my dog|armor for a dog|armor for your dog|dog armour|wolf armour", info: "It was added in 1.20.5, and your tamed wolf takes much less damage while wearing it. Brush armadillos (in savannas and badlands) to get scutes." });
 
   // ---------- combat ----------
   R("Bow", { grid: [" ST", "S T", " ST"], key: { S: "Stick", T: "String" }, aliases: "bows" });
@@ -261,11 +262,11 @@
     "Coal": ["Mine coal ore, very common in stone (best around Y=95). Or smelt logs into charcoal, which works the same.", "coal ore|coals"],
     "Lapis Lazuli": ["Mine lapis ore with a stone pickaxe or better, best around Y=0.", "lapis|lapis ore"],
     "Copper Ingot": ["Mine copper ore (best around Y=48, lots in dripstone caves) and smelt raw copper.", "copper|copper ore"],
-    "Netherite Scrap": ["Smelt ancient debris. Ancient debris is found in the Nether, best around Y=15. It needs a diamond pickaxe.", "ancient debris|netherite scrap"],
+    "Netherite Scrap": ["Find ancient debris in the Nether (best around Y=15, mine it with a diamond pickaxe), then smelt it in a furnace: each debris gives 1 netherite scrap.", "netherite scrap"],
     "Netherite Ingot": ["Mine ancient debris in the Nether (best around Y=15, bring a diamond pickaxe), smelt it into netherite scrap, then craft 4 scrap + 4 gold ingots into one netherite ingot.", "netherite"],
     "Obsidian": ["Pour water onto a lava source block, then mine it with a diamond (or netherite) pickaxe. It takes a while!", "obsidian block"],
     "String": ["Kill spiders, break cobwebs (a sword is fastest), or go fishing.", "strings|thread"],
-    "Leather": ["Kill cows, horses, llamas or mooshrooms. Or catch it while fishing.", "hide"],
+    "Leather": ["Kill cows, mooshrooms, horses, donkeys, mules, llamas or hoglins. You can also craft it from 4 rabbit hide (a 2x2 square), or catch it while fishing.", "hide"],
     "Feather": ["Kill chickens.", "feathers"],
     "Flint": ["Break gravel. It sometimes drops flint instead (10%).", "flints"],
     "Gunpowder": ["Kill creepers (from a distance!), ghasts or witches. Also found in chests.", "gun powder|sulfur"],
@@ -280,7 +281,7 @@
     "Wheat": ["Farm it! Hoe dirt near water, plant wheat seeds (from breaking grass) and harvest when it's golden.", "wheat crop"],
     "Blaze Rod": ["Kill blazes in Nether fortresses. Bring fire resistance or snowballs.", "blaze rods"],
     "Ender Pearl": ["Kill endermen (don't look them in the eyes, or wear a carved pumpkin). Cleric villagers also sell them.", "ender pearls|enderpearl|pearl"],
-    "Slimeball": ["Kill slimes (swamps at night, or slime chunks underground) or sneezing baby pandas.", "slime ball|slimeballs|slime"],
+    "Slimeball": ["Kill slimes: they spawn in swamps at night, and underground in slime chunks (below Y=40). Baby pandas also sometimes sneeze one out!", "slime ball|slimeballs|slime"],
     "Bone": ["Kill skeletons.", "bones"],
     "Spider Eye": ["Kill spiders or cave spiders, or witches.", "spider eyes"],
     "Ghast Tear": ["Kill ghasts in the Nether. Try to kill them over land so the tear doesn't fall in lava.", "ghast tears"],
@@ -389,14 +390,14 @@
     ["Vindicator", 24, "hostile", "Axe-swinging illager from mansions and raids.", "vindicators"],
     ["Pillager", 24, "hostile", "Crossbow illager from outposts and raids. Killing a captain gives Bad Omen.", "pillagers"],
     ["Ravager", 100, "hostile", "A huge beast that shows up in raids. Hits really hard.", "ravagers"],
-    ["Warden", 500, "hostile", "The scariest mob. It lives in the deep dark and is blind but hears every vibration. Sneak, don't trigger sculk shriekers, and run if it shows up. It hits for about 30 damage on Normal.", "wardens|the warden"],
+    ["Warden", 500, "hostile", "The scariest mob. It lives in the deep dark and is blind but hears every vibration. Sneak, don't trigger sculk shriekers, and run if it shows up. It hits for about 30 damage on Normal and even shoots a sonic boom through walls. If you really want to fight it: full netherite with Protection IV, a Sharpness V sword, strength and regeneration potions and lots of golden apples, or trap it and pillar up. It drops a sculk catalyst (and 5 XP).", "wardens|the warden"],
     ["Breeze", 30, "hostile", "Windy mob from trial chambers that jumps around and shoots wind charges. Drops breeze rods (used for the mace).", "breezes"],
     ["Ender Dragon", 200, "boss", "The final boss in the End. Destroy the end crystals on the obsidian pillars first (some are in cages, so shoot them with arrows or climb up), then hit the dragon when it lands on the portal. Bring a bow, a carved pumpkin, water and lots of food.", "dragon|enderdragon|the ender dragon|the dragon"],
     ["Wither", 300, "boss", "A three-headed boss you summon with soul sand and 3 wither skeleton skulls. It explodes when spawned, shoots skulls and gets armor at half health (arrows stop working then). Use Smite V, strength potions and golden apples. Drops a nether star.", "the wither|wither boss"],
     ["Villager", 20, "passive", "Trades items for emeralds. Their job depends on the workstation next to them (a lectern makes a librarian, for example). Protect them from zombies!", "villagers|testificate"],
     ["Wolf", 8, "neutral", "Tame it with bones and it becomes your loyal dog. Feed it meat to heal it and to breed dogs.", "wolves|dog|dogs|puppy"],
     ["Cat", 10, "passive", "Tame a stray cat with raw cod or raw salmon. Cats scare creepers and phantoms away and sometimes bring gifts.", "cats|kitty|kitten|ocelot"],
-    ["Horse", 30, "passive", "Tame it by getting on it again and again until hearts appear. Then put a saddle on it to ride. Feed golden carrots or golden apples to breed.", "horses|pony"],
+    ["Horse", "15 to 30", "passive", "Every horse has different health, speed and jump height. Tame it by getting on it again and again until hearts appear. Then put a saddle on it to ride. Feed golden carrots or golden apples to breed.", "horses|pony"],
     ["Parrot", 6, "passive", "Tame with seeds (never cookies!). It sits on your shoulder and dances to music.", "parrots"],
     ["Fox", 10, "passive", "Sleeps during the day and loves sweet berries. Breed two foxes and the baby trusts you.", "foxes"],
     ["Axolotl", 14, "passive", "Cute pink water buddy from lush caves. Catch it with a bucket of water, feed it tropical fish. It helps you fight underwater. Blue ones are super rare (1 in 1200)!", "axolotls|axolotol"],
@@ -485,25 +486,25 @@
 
   // ---------- potions ----------
   const potions = [
-    ["Healing", "Glistering Melon Slice", "Heals you instantly. Add glowstone for Healing II.", "health|instant health|heal"],
-    ["Regeneration", "Ghast Tear", "Heals you over time.", "regen"],
-    ["Strength", "Blaze Powder", "More melee damage.", "strenght"],
-    ["Swiftness", "Sugar", "Run faster.", "speed|swift"],
-    ["Fire Resistance", "Magma Cream", "Immune to fire and lava. Perfect for the Nether!", "fire res|fire resist"],
-    ["Night Vision", "Golden Carrot", "See in the dark. Add a fermented spider eye to make Invisibility.", "nightvision"],
-    ["Invisibility", "Golden Carrot, then Fermented Spider Eye", "Mobs can't see you (armor still shows).", "invisible|invis"],
-    ["Water Breathing", "Pufferfish", "Breathe underwater.", "water breath"],
-    ["Leaping", "Rabbit's Foot", "Jump higher.", "jump|jump boost"],
-    ["Slow Falling", "Phantom Membrane", "Fall slowly like a feather.", "slowfall"],
-    ["Poison", "Spider Eye", "Poisons whoever it hits (make it splash with gunpowder).", "poisen"],
-    ["Weakness", "none: add a Fermented Spider Eye to a Water Bottle (no nether wart)", "Less melee damage. Splash it on a zombie villager, then feed it a golden apple to cure it.", "weak"],
-    ["Harming", "Glistering Melon Slice (or Spider Eye), then Fermented Spider Eye", "Instant damage (heals undead mobs instead).", "damage|instant damage|harm"],
-    ["Slowness", "Sugar (or Rabbit's Foot), then Fermented Spider Eye", "Slows whoever it hits.", "slow"],
-    ["Turtle Master", "Turtle Shell", "Huge resistance but very slow.", "turtle"],
-    ["Wind Charging", "Breeze Rod", "When you die, you let out a wind burst (1.21).", ""],
-    ["Oozing", "Slime Block", "When you die, you spawn slimes (1.21).", ""],
-    ["Weaving", "Cobweb", "When you die, you leave cobwebs (1.21).", ""],
-    ["Infestation", "Stone", "Silverfish may spawn when you're hit (1.21).", ""],
+    ["Healing", "Glistering Melon Slice", "Heals you instantly. Add glowstone for Healing II.", "health|instant health|heal", "g"],
+    ["Regeneration", "Ghast Tear", "Heals you over time.", "regen", "rg"],
+    ["Strength", "Blaze Powder", "More melee damage.", "strenght", "rg"],
+    ["Swiftness", "Sugar", "Run faster.", "speed|swift", "rg"],
+    ["Fire Resistance", "Magma Cream", "Immune to fire and lava. Perfect for the Nether!", "fire res|fire resist", "r"],
+    ["Night Vision", "Golden Carrot", "See in the dark. Add a fermented spider eye to make Invisibility.", "nightvision", "r"],
+    ["Invisibility", "Golden Carrot, then Fermented Spider Eye", "Mobs can't see you (armor still shows).", "invisible|invis", "r"],
+    ["Water Breathing", "Pufferfish", "Breathe underwater.", "water breath", "r"],
+    ["Leaping", "Rabbit's Foot", "Jump higher.", "jump|jump boost", "rg"],
+    ["Slow Falling", "Phantom Membrane", "Fall slowly like a feather.", "slowfall", "r"],
+    ["Poison", "Spider Eye", "Poisons whoever it hits (make it splash with gunpowder).", "poisen", "rg"],
+    ["Weakness", "none: add a Fermented Spider Eye to a Water Bottle (no nether wart)", "Less melee damage. Splash it on a zombie villager, then feed it a golden apple to cure it.", "weak", "r"],
+    ["Harming", "Glistering Melon Slice (or Spider Eye), then Fermented Spider Eye", "Instant damage (heals undead mobs instead).", "damage|instant damage|harm", "g"],
+    ["Slowness", "Sugar (or Rabbit's Foot), then Fermented Spider Eye", "Slows whoever it hits.", "slow", "rg"],
+    ["Turtle Master", "Turtle Shell", "Huge resistance but very slow.", "turtle", "rg"],
+    ["Wind Charging", "Breeze Rod", "When you die, you let out a wind burst (1.21).", "", ""],
+    ["Oozing", "Slime Block", "When you die, you spawn slimes (1.21).", "", ""],
+    ["Weaving", "Cobweb", "When you die, you leave cobwebs (1.21).", "", ""],
+    ["Infestation", "Stone", "Silverfish may spawn when you're hit (1.21).", "", ""],
   ];
 
   // ---------- ores ----------
@@ -536,7 +537,9 @@
       a: "Villages spawn in plains, deserts, savannas, taigas and snowy plains. Explore those biomes, or with cheats on use /locate structure minecraft:village_plains. Villages have beds, food and villagers to trade with!" },
     { q: ["how to trade with villagers", "villager trading", "how do villagers work", "how to get a librarian", "villager jobs"],
       a: "Villager trading: right-click a villager with a job to see its trades (you pay with emeralds). Give a jobless villager a workstation to set its job: lectern = librarian (enchanted books!), composter = farmer, blast furnace = armorer, etc. Trade a few times and it levels up with better offers. Curing a zombie villager gives you huge discounts." },
-    { q: ["how to get mending", "where to find mending", "mending book"],
+    { q: ["is herobrine real", "herobrine", "who is herobrine"],
+      a: "Herobrine is a Minecraft legend! 👻 The story says he's a ghostly Steve with white eyes, but he was never actually in the game. Mojang even jokes about it in the patch notes: \"Removed Herobrine\". If your sister saw him, maybe it was a mod, a skin... or a really good prank! 😄" },
+    { q: ["how to get mending", "where to find mending", "mending book", "get mending from a villager", "mending from villager", "librarian mending", "mending villager"],
       a: "Mending: the easiest way is a librarian villager. Place a lectern next to a jobless villager and check its trades; if there's no Mending book, break and replace the lectern (before you trade) until it offers Mending. You can also fish for it or find it in chests." },
     { q: ["how to cure a zombie villager", "cure zombie villager", "zombie villager"],
       a: "To cure a zombie villager: throw a splash potion of Weakness on it, then feed it a golden apple. It shakes for a few minutes (keep it out of sunlight) and turns back into a villager, with big trade discounts for you." },

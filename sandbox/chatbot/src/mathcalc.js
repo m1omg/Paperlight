@@ -263,7 +263,29 @@
   // Try to read a math question. Returns null if it isn't one.
   function solve(text) {
     let s = text.toLowerCase().trim().replace(/\s*[?=]+\s*$/, "").replace(/([^\d)\s])\s*!+\s*$/, "$1").replace(/\s*=\s*\?*\s*$/, "");
-    s = s.replace(/^(hey |so |ok |okay |pip |please |can you |could you |would you |pls )+/g, "");
+    const wantFraction = /\b(as a fraction|in fraction form|as fractions?|in fractions?)\b/.test(s);
+    s = s.replace(/[,\s]*\b(as a fraction|in fraction form|as fractions?|in fractions?|as a decimal|in decimals?|exactly|precisely|roughly|approximately|please|pls)\b[?.!]*$/g, "").replace(/\$\s*(?=\d)/g, "").replace(/(\d)\s*(dollars|bucks|euros?|pounds sterling|usd|eur)\b/g, "$1");
+    // "what's a 20% tip on $45?", "15% off 80", "8% tax on 25"
+    let pm = /(\d+(?:\.\d+)?)\s*(?:%|percent)\s*(tip|tax|discount|off|interest|vat|service charge)?\s*(?:on|of|for|from|off)\s*(\d+(?:\.\d+)?)\b/.exec(s);
+    if (pm && (pm[2] || /\b(tip|tax|discount|off|sale|interest)\b/.test(s))) {
+      const kind = pm[2] || (/\btip\b/.test(s) ? "tip" : /\btax|vat\b/.test(s) ? "tax" : /\bdiscount|off|sale\b/.test(s) ? "discount" : "interest");
+      const p = Q.parse(pm[1]), x = Q.parse(pm[3]);
+      const part = p.mul(x).div(Q.parse("100"));
+      const total = /discount|off/.test(kind) ? x.sub(part) : x.add(part);
+      const fp = format(part, 2), ft = format(total, 2);
+      const word = /discount|off/.test(kind) ? "you pay" : "the total is";
+      return { expr: `${pm[1]}% of ${withCommas(x.toDecimal())}`, result: fp.text, exact: fp.exact, notes: [], value: part, extra: `, so ${word} ${ft.text}` };
+    }
+    // word problems: "if I have 3 apples and eat one, how many are left?"
+    const w = " " + wordsToNumbers(" " + s + " ").replace(/\s+/g, " ") + " ";
+    const wp = /\b(?:have|had|got|there (?:are|were)|bought|buy|start with|started with) (\d+(?:\.\d+)?) ([a-z]+)\b.*?\b(eat|ate|eats|give away|gave away|give|gave|lose|lost|loses|sell|sold|use|used|drop|dropped|throw away|threw away|take away|took away|spend|spent|break|broke|get|got|buy|bought|find|found|receive|received|win|won|add|added|pick|picked|catch|caught)(?: away)? (\d+(?:\.\d+)?)\b.*\bhow many\b/.exec(w);
+    if (wp) {
+      const a = Q.parse(wp[1]), b = Q.parse(wp[4]);
+      const minus = /^(eat|ate|eats|give|gave|lose|lost|loses|sell|sold|use|used|drop|dropped|throw|threw|take|took|spend|spent|break|broke)/.test(wp[3]);
+      const r = minus ? a.sub(b) : a.add(b);
+      if (r.sign() >= 0) return { expr: `${wp[1]} ${minus ? "−" : "+"} ${wp[4]}`, result: withCommas(r.toDecimal()), exact: true, notes: ["word"], value: r, thing: wp[2], left: minus };
+    }
+    s = s.replace(/^(hey |so |ok |okay |pip |please |can you |could you |would you |pls |and |also |then |now )+/g, "");
     s = s.replace(/^(what(?:'s| is| are| does| do)|whats|how much (?:is|are|does)|how much|calculate|compute|solve|work out|evaluate|tell me|what do you get (?:for|if you do)|do the math(?: for)?:?|quick math:?)\s+/, "");
     s = s.replace(/\s+(equal|equals|make|makes|come to|give|gives|is)$/, "").replace(/\s+please$/, "");
     s = s.replace(/^(is|equal to|of)\s+/, "");
@@ -276,6 +298,7 @@
     try {
       const { value, notes } = evaluate(expr);
       const f = format(value);
+      if (wantFraction && isQ(value)) return { expr: prettyExpr(expr), result: value.isInt() ? f.text : value.toString(), exact: true, fraction: null, notes, value, extra: value.isInt() ? "" : ` (≈ ${withCommas(value.toDecimal(6))})` };
       return { expr: prettyExpr(expr), result: f.text, exact: f.exact, fraction: f.fraction, notes, value };
     } catch (e) {
       if (e instanceof CalcError) return { expr: prettyExpr(expr), error: e.message };
@@ -286,6 +309,34 @@
     e = e.replace(/\bsqrt\s*/g, "√").replace(/\bcbrt\s*/g, "∛").replace(/(\d)\s+%/g, "$1%");
     return e.replace(/\s*\*\s*/g, " × ").replace(/\s*\/\s*/g, " ÷ ").replace(/\s*([+^])\s*/g, " $1 ").replace(/(\d|\))\s*-\s*/g, "$1 − ")
       .replace(/\s+/g, " ").replace(/\^ /g, "^").replace(/ \^/g, "^").trim();
+  }
+
+  // "which is bigger, 9.11 or 9.9?", "is 0.5 more than 0.45?"
+  function compare(text) {
+    const s = text.toLowerCase().replace(/[?!]+$/, "");
+    const NUM = "(-?\\d+(?:\\.\\d+)?)";
+    let r = new RegExp("\\b(?:which|what)(?: one)? is (bigger|larger|greater|higher|more|smaller|less|lower|lesser)[,:]?\\s*" + NUM + "\\s+or\\s+" + NUM + "\\b").exec(s) ||
+      new RegExp("^" + NUM + " or " + NUM + "[,:]? (?:which|what)(?: one)? is (bigger|larger|greater|higher|more|smaller|less|lower|lesser)\\b").exec(s);
+    let big, a, b;
+    if (r) {
+      if (/^-?\d/.test(r[1])) { a = r[1]; b = r[2]; big = !/smaller|less|lower|lesser/.test(r[3]); } else { a = r[2]; b = r[3]; big = !/smaller|less|lower|lesser/.test(r[1]); }
+    } else if ((r = new RegExp("\\bis " + NUM + " (bigger|larger|greater|higher|more|smaller|less|lower) than " + NUM + "\\b").exec(s))) {
+      const x = Q.parse(r[1]), y = Q.parse(r[3]);
+      const d = x.sub(y).sign();
+      const bigQ = !/smaller|less|lower/.test(r[2]);
+      const yes = d !== 0 && (bigQ ? d > 0 : d < 0);
+      return { text: d === 0 ? `They're equal: ${r[1]} = ${r[3]}.` : `${yes ? "Yes" : "No"}: ${r[1]} ${d > 0 ? ">" : "<"} ${r[3]}.` + (/\.\d/.test(r[1] + r[3]) ? ` (Compare them digit by digit: ${pad(r[1], r[3])}.)` : "") };
+    } else return null;
+    const x = Q.parse(a), y = Q.parse(b);
+    const d = x.sub(y).sign();
+    if (d === 0) return { text: `They're equal: ${a} = ${b}.` };
+    const winner = (d > 0) === big ? a : b, other = winner === a ? b : a;
+    return { text: `${winner} is ${big ? "bigger" : "smaller"} (${a} ${d > 0 ? ">" : "<"} ${b}).` + (/\.\d/.test(a + b) ? ` Tip: line up the decimals: ${pad(a, b)}.` : "") };
+  }
+  function pad(a, b) {
+    const da = (a.split(".")[1] || "").length, db = (b.split(".")[1] || "").length, n = Math.max(da, db);
+    const f = (x, k) => (k ? x : x + ".") + "0".repeat(n - k);
+    return `${f(a, da)} vs ${f(b, db)}`;
   }
 
   // ---------- units (factors are exact decimals) ----------
@@ -328,17 +379,25 @@
   const TNAME = { C: "°C", F: "°F", K: "K" };
 
   function convert(text) {
-    const s = text.toLowerCase().replace(/[?!.]+$/, "").replace(/degrees?\s+/g, "").trim();
+    let s = text.toLowerCase().replace(/[?!.]+$/, "").replace(/degrees?\s+/g, "").trim();
+    // 6 feet 2 inches / 5'11" -> inches
+    let hm = /(\d+(?:\.\d+)?)\s*(?:feet|foot|ft|')\s*(?:and\s*)?(\d+(?:\.\d+)?)\s*(?:inches|inch|in|"|'')(?=\s|$|,)/.exec(s);
+    let label = null;
+    if (hm) { const inches = Q.parse(hm[1]).mul(Q.parse("12")).add(Q.parse(hm[2])); label = `${hm[1]} ft ${hm[2]} in`; s = s.replace(hm[0], inches.toDecimal() + " inches"); }
     const unitAlt = Object.keys(UNITS).concat(Object.keys(TEMPS)).sort((a, b) => b.length - a.length)
       .map((u) => u.replace(/[/.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
     // "convert 5 km to miles", "5 km in miles", "how many feet in a mile", "what is 100f in celsius"
     let m = new RegExp("(-?\\d+(?:\\.\\d+)?|a|an|one)\\s*(" + unitAlt + ")\\s+(?:to|in|into|as|=|is how many|equals how many|in how many)\\s+(" + unitAlt + ")\\b").exec(s);
     let amount, from, to;
     if (m) { amount = /^(a|an|one)$/.test(m[1]) ? "1" : m[1]; from = m[2]; to = m[3]; }
-    else {
-      m = new RegExp("how many\\s+(" + unitAlt + ")\\s+(?:are |is )?(?:in|per|make up|to)\\s+(?:a |an |one )?(-?\\d+(?:\\.\\d+)?)?\\s*(" + unitAlt + ")\\b").exec(s);
-      if (!m) return null;
+    else if ((m = new RegExp("how many\\s+(" + unitAlt + ")\\s+(?:are |is )?(?:in|per|make up|to|is|are|equals?|equal to)\\s+(?:a |an |one )?(-?\\d+(?:\\.\\d+)?)?\\s*(" + unitAlt + ")\\b").exec(s))) {
       to = m[1]; amount = m[2] || "1"; from = m[3];
+    } else {
+      // "I weigh 82 kg, what is that in pounds?", "my recipe says 180C, what's that in F?"
+      const a = new RegExp("(?:^|[^\\w.])(-?\\d+(?:\\.\\d+)?)\\s*(" + unitAlt + ")\\b").exec(s);
+      const b = new RegExp("\\b(?:in|to|into|as)\\s+(?:a |an )?(" + unitAlt + ")\\s*$").exec(s);
+      if (!a || !b || a.index > b.index || !/\b(that|this|it|convert|what|how much|how many|is)\b/.test(s)) return null;
+      amount = a[1]; from = a[2]; to = b[1];
     }
     const v = Q.parse(amount);
     if (TEMPS[from] && TEMPS[to]) {
@@ -352,9 +411,15 @@
     const r = v.mul(a.f).div(b.f);
     const one = v.n === ONE && v.d === ONE;
     const f = format(r, 4);
-    return { text: `${withCommas(v.toDecimal())} ${one ? singular(a.name) : a.name} ${f.exact ? "=" : "≈"} ${f.text} ${b.name}`, value: r };
+    let extra = "";
+    // 187.96 cm in feet -> also "6 ft 2 in"
+    if (b.name === "feet" && !r.isInt()) {
+      const ft = r.n / r.d, inches = r.sub(new Q(ft)).mul(Q.parse("12"));
+      extra = ` (that's ${ft} ft ${format(inches, 1).text} in)`;
+    }
+    return { text: `${label || withCommas(v.toDecimal()) + " " + (one ? singular(a.name) : a.name)} ${f.exact ? "=" : "≈"} ${f.text} ${b.name}${extra}`, value: r };
   }
   function singular(n) { return n.replace(/(inche|foot|feet)s?$/, (x) => (x.startsWith("inch") ? "inch" : "foot")).replace(/ies$/, "y").replace(/s$/, ""); }
 
-  P.math = { Q, evaluate, solve, convert, format, toExpression, CalcError };
+  P.math = { Q, evaluate, solve, convert, compare, format, toExpression, CalcError };
 })(typeof window !== "undefined" ? (window.Pip = window.Pip || {}) : (global.Pip = global.Pip || {}));

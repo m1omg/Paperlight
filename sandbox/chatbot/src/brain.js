@@ -30,7 +30,7 @@
     [/^(she|he|they) (?:is|was|are|were|s) (?:only |just )?(\d{1,2})(?: years old| yo)?$/, ["Aww, only {2}! Little kids don't always know better. 😅", "{2}? That's so young! I'm sure it wasn't on purpose. 💙"]],
     [/^my (\w+) (?:is|was|are|were) (.{2,50})$/, ["Why do you say your {1} is {2}?", "Tell me more about your {1}!", "How do you feel about that?"]],
     [/^(?:because|cause|cuz) (.{3,60})$/, ["That makes sense.", "Is that the only reason?", "Oh, I see!"]],
-    [/^(?:do|can|will|would|should|could|are|is|have) you (.{3,60})\?*$/, ["Hmm, I'm not sure I can {1}! What about you?", "Good question! What do you think?"]],
+    [/^(?:do|can|will|would|should|could|are|is|have) you (?!explain|tell me|help|show me|teach me|say|give me|make me|recommend)(.{3,60})\?*$/, ["Hmm, I'm not sure I can {1}! What about you?", "Good question! What do you think?"]],
   ];
 
   const venting0 = (st, expect) => (expect && expect.kind === "vent") || st.ventTurns > 0;
@@ -88,6 +88,7 @@
       const mem = this.mem;
       mem.sessions = (mem.sessions || 0) + 1;
       const away = mem.lastSeen ? Date.now() - mem.lastSeen : null;
+      if (!away || away > 30 * 60e3) mem.sessionStart = Date.now();
       mem.lastSeen = Date.now();
       this.save();
       let text, expect = null;
@@ -129,10 +130,19 @@
         mem: this.mem, name: this.mem.name, bot: this.botName, m, state: this.state, partOfDay: PART_OF_DAY(),
         lastBot: lastBot && lastBot.text, lastUser: lastUser && lastUser.text, lastIntent: this.state.lastIntent,
         neuralSize: this.neural && this.neural.gptParams ? (this.neural.gptParams / 1e6).toFixed(1) + " million" : null,
+        adult: this._isAdult(),
         get followUp() { return MEM.followUp(self.mem); },
         skill: (k) => S.start(k, this.ctx(m)),
         stall: (idk) => self._stall(idk),
       };
+    }
+
+    // grown-ups get fewer Minecraft references and kid-style jokes
+    _isAdult() {
+      const mem = this.mem;
+      if (mem.age) return mem.age >= 18;
+      if (mem.job && mem.job !== "student") return true;
+      return this.state.history.some((h) => h.role === "user" && /\b(my (wife|husband|kids|boss|coworkers?|colleagues?|mortgage|commute|office|salary)|at work|after work|beer|wine|my job|software developer|taxes)\b/i.test(h.text));
     }
 
     _stall(idk) {
@@ -165,6 +175,9 @@
       for (let i = 0; i < 3; i++) {
         text = text.replace(/^\s*(?:anyway(?:s)?|so|well|ok so|okay so|btw|by the way|also|um+|uh+|hmm+|oh and|and|ok|okay|alright)\s*[,.!]?\s+(?=\S.{3,})/i, "")
           .replace(/^\s*(?:lol+|lmao+|haha+|hehe+|rofl|xd+|ha+)\s*[,.!]*\s+(?=\S+\s+\S+)/i, "");
+        // "nice. how do i put it on my sword?", "cool and fire resistance?", "bruh so how many books": the first word is a reaction
+        const rest = /^\s*(?:nice|cool|bruh|bro|dude|ok thx|ok thanks|thx|thanks|ty|yay|wow|omg|oh|ah|wait|welp|oops|yeah|ya|yep|yes|nah|no|nope|hmm|ugh|kk|k|sure|great|awesome|damn|dang|whoa|woah|same|true|fr|ikr|lmao|lol)\s*[,.!]*\s+((?:(?:and|so|but|then)\s+)?(?:what|how|where|who|why|when|which|can|could|do|does|did|is|are|will|would|should|and|tell|give|show|what's|whats|hw|wat|wut|y|u)\b.{2,})$/i.exec(text);
+        if (rest && (/\?\s*$/.test(rest[1]) || /^(?:(?:and|so|but|then)\s+)?(what|how|where|who|why|when|which|tell|give|show|hw|wat)\b/i.test(rest[1]))) text = rest[1].replace(/^(?:and|so|but|then)\s+(?=\S+\s)/i, (x) => (/^and\s/i.test(x) ? x : ""));
       }
       const m = N.analyze(text);
       const c = this.ctx(m);
@@ -197,7 +210,7 @@
 
       // 1) memory facts ("my name is...", "I have a dog", "my favorite color is...") and threads to follow up on
       const facts = out ? [] : MEM.extract(mem, m, expect);
-      if (!out) MEM.noteThread(mem, m);
+      if (!out) { MEM.noteThread(mem, m); MEM.noteDiary(mem, m); }
 
       // 2) whatever Pip was waiting for
       if (!out && expect) out = this._onExpect(expect, m, c, facts);
@@ -212,14 +225,29 @@
       if (!out && loud.length) out = this._ackFacts(loud, m, c);
       // 6) exact skills
       if (!out) out = this._skills(m, c, trace);
+      // "It's not tricky. 80 + 10%" / "It's great, no commute. Tell me a programming joke." -> the lead-in sentence hides the request
+      if (!out) {
+        const sents = m.clean.split(/(?<=[.!?])\s+/).map((x) => x.trim()).filter((x) => x.length > 1);
+        if (sents.length >= 2) {
+          for (const sx of sents.slice().reverse()) {
+            const sm = N.analyze(sx);
+            if (sm.empty) continue;
+            const r = this._skills(sm, this.ctx(sm), trace) || this._strongIntent(sm);
+            if (r) { out = r; break; }
+          }
+        }
+      }
       // 7) intents, feelings, opinions, neural chat, fallback: scored candidates
       if (!out) out = await this._open(m, c, trace, expect);
 
       if (typeof out === "string") out = { text: out };
+      const prevUser = [...st.history].reverse().find((h) => h.role === "user");
+      if (prevUser && prevUser.text.toLowerCase() === m.clean.toLowerCase() && m.tokens.length >= 2 && !st.game && !/^(safety|game|expect)/.test(out.source || ""))
+        out.text = pick(["You said that twice! 😄 ", "Haha, déjà vu! 😄 ", "I heard you the first time! 😄 "]) + out.text;
       if (st.care > 0 && P.safety && !/^safety/.test(out.source || "") && /^(intent:(ok|idk|nothing|bare_no|bare_yes|hmm|laugh|user_good|agree|disagree|why|really|greet|how_are_you|whats_up|wow|thanks|sorry|welcome|bored|stop_questions|change_topic|confused)|react|fallback|eliza|neural|ack|expect:howareyou|more:|skill:choose|unknown)/.test(out.source || ""))
         out = { text: P.safety.careReply(st.careKind, m, st), source: "safety:care", expect: { kind: "vent" } };
       if (st.care > 0) st.care--;
-      if (/\b(i (just |already )?asked|i said|that is not what i (asked|said|meant)|that's not what i (asked|said|meant)|not what i asked|i told you already|i already told you)\b/.test(m.plain) && !/^(oops|sorry|my bad|oh)/i.test(out.text) && !/^(neural|react|fallback|eliza)/.test(out.source || ""))
+      if (/\b(i (just |already |literally )?asked|like i said|i (just|already) said|that is not what i (asked|said|meant)|that's not what i (asked|said|meant)|not what i asked|i told you already|i already told you)\b/.test(m.plain) && !/^(oops|sorry|my bad|oh)/i.test(out.text) && !/^(neural|react|fallback|eliza)/.test(out.source || ""))
         out.text = pick(["Oops, sorry! 😅 ", "My bad! ", "Oh, sorry about that! "]) + out.text;
       out = this._extraSentences(m, out);
       out.text = this._restoreCase(out.text, m.clean);
@@ -228,10 +256,12 @@
       if (st.recent.includes(out.text) && out.alts && out.alts.length) out.text = this._post(pick(out.alts));
       if (out.expect) st.expect = out.expect;
       // multi-turn listening mode only for serious things (not for "my brother is annoying")
-      if (/^(safety|feelings:(sad|lonely|anxious)|event:(grief|bullied|breakup|lonely|selfesteem|failed)|support:|expect:howareyou|expect:followup-bad)/.test(out.source || "") && out.expect && out.expect.kind === "vent") st.ventTurns = Math.max(st.ventTurns || 0, 4);
+      if (/^(safety|feelings:(sad|lonely|anxious)|event:(grief|bullied|breakup|lonely|selfesteem|failed|moved|school)|support:|expect:howareyou|expect:followup-bad)/.test(out.source || "") && out.expect && out.expect.kind === "vent") st.ventTurns = Math.max(st.ventTurns || 0, 4);
       if (/^(feelings:happy|event:win|react:positive|support:better)/.test(out.source || "")) st.ventTurns = 0;
       if (out.intent) st.lastIntent = out.intent; else if (out.source && out.source.startsWith("intent:")) st.lastIntent = out.source.slice(7);
       else st.lastIntent = null;
+      st.lastSource = out.source || "";
+      this._noteTopic(out, m, facts);
       this._remember("user", m.clean);
       this._remember("bot", out.text);
       this.save();
@@ -239,10 +269,44 @@
       return out;
     }
 
+    // remember what we talked about, in a few words ("Minecraft beacons", "your spelling test", "jokes")
+    _noteTopic(out, m, facts) {
+      const src = out.source || "";
+      let label = null;
+      if (/^safety/.test(src)) return;
+      if (src === "skill:minecraft" && this.state.mc && this.state.mc.last) label = "Minecraft (" + this.state.mc.last.ref.name.toLowerCase().replace(/^the /, "") + ")";
+      else if (src === "skill:minecraft") label = "Minecraft";
+      else if (/^(intent:joke|more:joke|more:mcjoke|intent:cheer_up)/.test(src)) label = "jokes";
+      else if (/^game:|^intent:(rps|guess|trivia|riddle|wyr|game)/.test(src)) label = "games";
+      else if (/^skill:(math|units)/.test(src)) label = "some math";
+      else if (src === "skill:dictionary") label = "word meanings";
+      else if (/^(feelings|event|support|react:vent|expect:followup-bad)/.test(src)) label = "how you were feeling";
+      else if (/^(intent:bot_|intent:about_bot)/.test(src)) label = "me (being a chatbot 🤖)";
+      const ev = facts && facts.find((f) => f.type === "event");
+      const pet = facts && facts.find((f) => f.type === "pet" && f.name);
+      const like = facts && facts.find((f) => f.type === "like");
+      if (ev) label = "your " + ev.what; else if (pet) label = `your ${pet.kind} ${pet.name}`; else if (like && !label) label = like.value;
+      if (!label) return;
+      const t = (this.mem.topics = this.mem.topics || []);
+      // group Minecraft topics: "Minecraft (beacon, wither)"
+      const last = t[t.length - 1];
+      if (last && /^Minecraft/.test(last.label) && /^Minecraft \(/.test(label) && Date.now() - last.at < 3600e3) {
+        const items = (last.label.match(/\((.*)\)/) || [, ""])[1].split(", ").filter(Boolean);
+        const it = label.match(/\((.*)\)/)[1];
+        if (!items.includes(it)) items.push(it);
+        last.label = "Minecraft (" + items.slice(-3).join(", ") + ")"; last.at = Date.now();
+        return;
+      }
+      if (last && last.label === label) { last.at = Date.now(); return; }
+      t.push({ label, at: Date.now() });
+      if (t.length > 80) t.shift();
+    }
+
     // ---------- stages ----------
     _onExpect(ex, m, c, facts) {
       const t = m.norm;
-      const isYes = YES.test(t) && m.tokens.length <= 5, isNo = NO.test(t) && m.tokens.length <= 6;
+      const low = m.clean.toLowerCase();
+      const isYes = (YES.test(t) || YES.test(low)) && m.tokens.length <= 5, isNo = (NO.test(t) || NO.test(low)) && m.tokens.length <= 6;
       switch (ex.kind) {
         case "name": {
           const f = facts.find((x) => x.type === "name");
@@ -291,7 +355,7 @@
             return { text: pick([`${U.capitalizeFirst(v)}? That sounds fun! How did you get into it?`, `Ooh, ${v}! Nice. What do you like most about it?`]), source: "expect:hobby", expect: { kind: "open", topic: v } };
           }
           const list = U.listJoin(found.length ? found : named.map((f) => f.value));
-          let text = `${U.capitalizeFirst(list)}! ${pick(["Great combo!", "Love that!", "Nice!", "Ooh, fun!"])} `;
+          let text = `${U.capitalizeFirst(list)}! ${pick(found.length + named.length > 1 ? ["Great combo!", "Love that!", "Ooh, fun!"] : ["Love that!", "Nice!", "Ooh, fun!"])} `;
           let expect = { kind: "open", topic: found[0] || named[0].value };
           if (named.length) {
             const X = U.titleCase(named[0].value);
@@ -423,6 +487,21 @@
       return null;
     }
 
+    // a regex intent that is a clear request or question (not small talk), for one sentence of a longer message
+    _strongIntent(m) {
+      const chatty = /^(greet|greet_\w+|good_night|ok|bye|brb|back|laugh|thanks|welcome|sorry|bare_yes|bare_no|hmm|wow|agree|disagree|idk|nothing|why|really|user_good|swear|bored|how_are_you|whats_up|compliment_bot|insult_bot|misunderstood|like_bot|love_bot|minecraft_chat)$/;
+      for (const it of C.intents) {
+        if (!it.re || chatty.test(it.id)) continue;
+        if (it.re.test(m.norm) || it.re.test(m.plain)) {
+          let res = typeof it.say === "function" ? it.say(this.ctx(m)) : pick(it.say);
+          if (!res) return null;
+          if (typeof res === "string") res = { text: res };
+          return Object.assign({ source: "intent:" + it.id, intent: it.id }, res);
+        }
+      }
+      return null;
+    }
+
     _strongRequest(m) {
       const chatty = /^(greet|greet_\w+|good_night|ok|bye|brb|back|laugh|thanks|welcome|sorry|bare_yes|bare_no|hmm|wow|agree|disagree|idk|nothing|why|really|user_good|swear|bored|how_are_you|whats_up)$/;
       return C.intents.some((it) => it.re && !chatty.test(it.id) && (it.re.test(m.norm) || it.re.test(m.plain)));
@@ -453,7 +532,7 @@
 
     // "how are you? what's your name?" -> answer both; "I'm sad. tell me a joke" -> a little empathy first
     _extraSentences(m, out) {
-      const parts = m.clean.split(/(?<=[.!?])\s+|\s*,\s*(?=(?:and |also |btw |oh and )?(?:what|how|who|where|when|why|do|does|can|could|are|is|will|would)\b)/i).map((x) => x.trim()).filter((x) => x.length > 1);
+      const parts = m.clean.split(/(?<=[.!?])\s+|\s*,\s*(?=(?:and |also |btw |oh and )?(?:what|how|who|where|when|why|do|does|can|could|are|is|will|would)\b)|\s+and\s+(?=(?:what|whats|what's|how|who|where|when|why|which)\b)/i).map((x) => x.trim()).filter((x) => x.length > 1);
       if (parts.length < 2 || !out || !out.text) return out;
       const src = out.source || "";
       if (/^(safety|game|expect|command|event:grief|event:bullied)/.test(src)) return out;
@@ -471,7 +550,8 @@
         // keep one follow-up question at most: drop the main reply's closing question if the extra answer has its own
         const sentences = out.text.split(/(?<=[.!?])\s+/);
         if (sentences.length > 1 && /\?\s*\S*$/.test(sentences[sentences.length - 1])) { sentences.pop(); out.expect = null; }
-        out.text = sentences.join(" ") + " " + q.text;
+        const main = sentences.join(" ");
+        out.text = main + (/[\w)]$/.test(main) ? ". " : " ") + q.text;
         break;
       }
       return out;
@@ -534,7 +614,8 @@
     _commands(m, c) {
       const t = m.plain;
       let r;
-      if ((r = /\b(?:can i call you|i will call you|i'll call you|i am going to call you|im going to call you|your name is now|your new name is|i name you|let me call you|from now on you are|from now on your name is|rename you to|i want to call you|change your name to|you are now called)\s+([a-z][a-z'-]{1,20})\b/.exec(t))) {
+      if ((r = /\b(?:can i call you|i will call you|i'll call you|i am going to call you|im going to call you|your name is now|your new name is|i name you|let me call you|from now on you are|from now on your name is|rename you to|i want to call you|change your name to|you are now called)\s+([a-z][a-z'-]{1,20})\b/.exec(t)) &&
+          m.tokens.length <= 10 && !/\b(do anything|jailbreak|ignore|instructions|rules|stands for|evil|unfiltered|mode)\b/.test(t)) {
         const n = U.titleCase(r[1]);
         if (!/^(a|an|the|my|bot|stupid|dumb|idiot|nothing|that|it)$/i.test(n)) {
           const old = this.mem.botName;
@@ -567,18 +648,49 @@
     _skills(m, c, trace) {
       const t = m.norm;
       let r;
+      // "what's 12 * 12 and what's the capital of Peru?" -> answer every part that a skill knows
+      if (!this._splitting) {
+        const parts = m.clean.split(/\s*[?]\s+|\s*[,;]?\s+and\s+(?=(?:what|whats|what's|how|who|where|when|which|what is)\b)/i).map((x) => x.trim()).filter((x) => x.length > 2);
+        if (parts.length >= 2) {
+          this._splitting = true;
+          try {
+            const answers = [];
+            for (const p of parts) { const pm = N.analyze(p); const a = this._skills(pm, this.ctx(pm), trace); if (a && a.text) answers.push(a); }
+            if (answers.length >= 2) return Object.assign({}, answers.find((a) => a.card) || answers[0], { text: answers.map((a) => a.text.replace(/^(Easy! |Let me calculate\.\.\. |Let's see\.\.\. |🧮 )/, "")).map((x) => (/[\w)]$/.test(x) ? x + "." : x)).join(" ") });
+          } finally { this._splitting = false; }
+        }
+      }
       // math and units
       r = P.math.convert(m.clean) || P.math.convert(m.plain);
       if (r) return { text: r.error || pick(["", "Let's see... ", "Easy! "]) + r.text + (r.error ? "" : " 📏"), source: "skill:units" };
+      r = P.math.compare(m.clean);
+      if (r) return { text: r.text, source: "skill:math" };
+      // "no, that's wrong, it's 231" right after an exact answer: check again and stand by it
+      const lm = this.state.lastMath;
+      if (lm && this.state.turn - lm.turn <= 2 && /\b(wrong|incorrect|not right|not correct|mistake|nope|no it is|no its|it should be|actually it is|you are wrong|thats not|that is not)\b/.test(m.plain)) {
+        const num = /(-?\d[\d,]*(?:\.\d+)?)/.exec(m.clean);
+        const said = num ? num[1].replace(/,/g, "") : null;
+        if (said && said !== lm.result.replace(/,/g, "")) return { text: `I double-checked: ${lm.expr} = ${lm.result}. I'm sure about this one, because I do exact math, not guesses! 🧮 (${said} isn't right, but I like that you check!)`, source: "skill:math" };
+        if (said) return { text: `Yep, ${said} is what I got too: ${lm.expr} = ${lm.result}. ✅`, source: "skill:math" };
+        return { text: `Hmm, I checked again: ${lm.expr} = ${lm.result}. I'm pretty confident! 🧮 Which part looks wrong to you?`, source: "skill:math" };
+      }
       r = P.math.solve(m.clean) || P.math.solve(m.plain);
+      if (r && r.notes && r.notes.includes("word")) {
+        const n = +r.result.replace(/,/g, "");
+        return { text: `${r.left ? "You'd have" : "That makes"} ${r.result} ${n === 1 ? r.thing.replace(/s$/, "") : r.thing}${r.left ? " left" : ""}! (${r.expr} = ${r.result}) 🧮`, source: "skill:math" };
+      }
       if (r) {
         if (r.error) {
           const why = { "divide by zero": "You can't divide by zero! Even computers get nervous about that one. 😅", "not a real number": "That's not a real number (it would be imaginary!).", undefined: "That's undefined!", "too big": "Whoa, that number is too big for me! 🤯" }[r.error];
           if (why) return { text: `${r.expr}: ${why}`, source: "skill:math" };
           return null;
         }
-        let s = r.exact ? `${r.expr} = ${r.result}` : `${r.expr} ≈ ${r.result}`;
+        const cur = /\$/.test(m.clean) ? "$" : "";
+        const ex = cur ? r.expr.replace(/\bof (\d)/, "of $$$1") : r.expr;
+        let s = r.exact ? `${ex} = ${cur}${r.result}` : `${ex} ≈ ${cur}${r.result}`;
         if (r.fraction && !r.exact) s += ` (exactly ${r.fraction})`;
+        if (r.extra) s += r.extra.replace(/(total is|you pay) /, "$1 " + cur);
+        this.state.lastMath = { expr: r.expr, result: r.result, turn: this.state.turn };
         if (r.notes.includes("negpow")) s += ". Heads up: the power comes before the minus sign, so -2^2 means -(2^2). (-2)^2 would be positive.";
         if (r.notes.includes("pct")) s += " (the % is taken of the first number, like on a calculator)";
         return { text: pick(["", "", "Easy! ", "Let me calculate... ", "🧮 "]) + s + (/[.)]$/.test(s) ? "" : ""), source: "skill:math" };
@@ -590,6 +702,7 @@
         if (mm) { const cv = P.math.convert(`${mm[1].replace(/,/g, "")} ${mm[2].replace("°", "").toLowerCase()} to ${unitAsk[1]}`); if (cv && !cv.error) return { text: cv.text + " 📏", source: "skill:units" }; }
       }
       r = S.daysUntil(m.plain, this.mem); if (r) return { text: r, source: "skill:countdown" };
+      r = S.dateMath(m.plain); if (r) return { text: r, source: "skill:date" };
       r = S.wordTools(m); if (r) return { text: r, source: "skill:words" };
       r = S.capital(m.plain.replace(/[?!.]+$/, "")); if (r) return { text: r, source: "skill:capital" };
       // Minecraft
@@ -657,6 +770,56 @@
       return null;
     }
 
+    // "GUESS WHAT. jess is coming to visit next month!!!" -> "Jess is coming to visit next month?! 🎉"
+    _news(m) {
+      let r;
+      if ((r = /^([a-z]+) says (hi|hello|hey)\b/.exec(m.plain))) {
+        const name = U.titleCase(r[1]);
+        const pet = this.mem.pets.find((p) => p.name && p.name.toLowerCase() === r[1]);
+        return { text: `Hi ${name}! 👋${pet ? { cat: "🐱", dog: "🐶", hamster: "🐹", rabbit: "🐰", bird: "🐦" }[pet.kind] || "🐾" : ""} Tell ${name} I said hi back!`, source: "news:hi", score: 0.8 };
+      }
+      const excited = /\bguess what\b/.test(m.plain) || (m.clean.match(/!/g) || []).length >= 2 || /[A-Z]{4,}/.test(m.clean);
+      if (!excited || m.isQuestion || m.emotion.valence < -0.2) return null;
+      const body = m.plain.replace(/^(and |so |ok |omg |oh my god |yay |guess what |and guess what |pip |hey )+/, "").replace(/^guess what\s*/, "").replace(/[.!?]+$/, "").trim();
+      const cl = /^((?:i|we|my \w+|[a-z]+) (?:is|are|am|was|got|get|have|has|won|passed|made|finally|just|will|can|am going to|is going to|are going to|got to|get to|'m|'re|'s)\b.{3,80})$/.exec(body);
+      if (!cl) return /\bguess what\b/.test(m.plain) && body.length < 3 ? { text: "What?! Tell me! 👀", source: "news", score: 0.8 } : null;
+      let echo = reflect(cl[1]).replace(/\bI\b/g, "you").replace(/^you\b/, "You");
+      echo = U.capitalizeFirst(echo.replace(/^([a-z]+)\b/, (w) => (MEM.looksLikeName(w, m.clean, false) ? U.titleCase(w) : w)));
+      return { text: `${echo}?! 🎉 ${pick(["That's amazing news!", "No way, that's awesome!", "Yay, I'm so happy for you!"])} ${pick(["You must be so excited!", "Tell me everything!", "What are you going to do?"])}`, source: "news", score: 0.75, expect: { kind: "open", topic: "good news" } };
+    }
+
+    // "any tips for studying?", "should I apologize?", "how do I make friends?"
+    _advice(m) {
+      let t = m.plain;
+      if (m.tokens.length <= 4 && /\b(tips?|advice|ideas|suggestions|help)\b/.test(t)) t += " " + (this.state.history.slice().reverse().find((h) => h.role === "user") || { text: "" }).text.toLowerCase();
+      if (!/\b(tips?|advice|how (do|can|should|could) i|how to|what should i|what do i do|should i|any ideas|help me|how can i)\b/.test(t) && !/\?$/.test(m.clean)) return null;
+      for (const a of C.advice) {
+        if (a.re.test(t) && a.need.test(t)) return { text: S.deal(this.state, "advice:" + a.re.source.slice(0, 30), a.say), source: "advice", score: 0.86 };
+      }
+      return null;
+    }
+
+    // "I'm cooking a risotto tonight", "we're watching a movie", "im playing roblox rn"
+    _activity(m) {
+      const r = /^(?:i am|i'm|im|we are|we're|just) (cooking|making|baking|watching|playing|reading|building|drawing|painting|learning|writing|studying for|studying|practicing|practising|working on|listening to|eating|having|trying) (.{2,50}?)(?:\s+(?:tonight|today|right now|now|rn|atm|later|at the moment|this weekend|with my \w+))*[.!]*$/.exec(m.plain.replace(/\s+(lol|haha)$/, ""));
+      if (!r || m.isQuestion) return null;
+      const verb = r[1];
+      let x = reflect(r[2]).replace(/^(a|an|the|some) /, "");
+      if (/^(it|that|this|nothing|something|stuff)$/.test(x)) return null;
+      const X = U.capitalizeFirst(x);
+      const Q = {
+        cooking: [`${X}? Yum! 😋 Is it your own recipe?`, `Ooh, ${x}! That sounds delicious. What's your secret ingredient?`], making: [`Ooh, ${x}! 😊 How's it going so far?`, `${X}? Cool! Is it for something special?`],
+        baking: [`${X}? Yum! 🧁 Can I have a virtual bite? 😄`, `Ooh, baking ${x}! The kitchen must smell amazing.`], watching: [`Ooh, ${x}! 🍿 Is it good so far?`, `${X}! What's it about?`],
+        playing: [`${X}! 🎮 Are you winning? 😄`, `Ooh, ${x}! What do you like most about it?`], reading: [`Ooh, ${x}! 📚 Do you like it so far?`, `${X}! What's it about?`],
+        building: [`Cool! 🧱 What's the ${x} for?`, `Ooh, ${x}! I'd love to see it. How big is it?`], drawing: [`Ooh, I wish I could see it! 🎨 What colors are you using?`, `${X}! 🎨 That sounds awesome. Is it for fun or for school?`],
+        painting: [`Ooh, I wish I could see it! 🎨 What colors are you using?`], learning: [`Nice! How's ${x} going so far?`, `Ooh, learning ${x}! What made you want to learn it?`],
+        writing: [`Ooh, ${x}! ✍️ What's it about?`], studying: [`Good luck! 📚 How's it going?`, `You've got this! 💪 What's the hardest part?`], "studying for": [`Good luck with ${x}! 📚 How's the studying going?`],
+        practicing: [`Practice makes progress! 💪 How's ${x} going?`], practising: [`Practice makes progress! 💪 How's ${x} going?`], "working on": [`Ooh, ${x}! How's it going?`, `Nice! What's the next step for ${x}?`],
+        "listening to": [`Ooh, ${x}! 🎧 Is it on repeat?`, `${X}! 🎵 Good choice. What do you like about it?`], eating: [`${X}? Yum! 😋 Is it good?`, `Ooh, ${x}! Enjoy! 😋`],
+        having: [`${X}? Sounds good! 😋`, `Ooh, ${x}! Enjoy!`], trying: [`Ooh, ${x}! How's it going?`, `Nice! Good luck with ${x}! 💪`] };
+      return { text: pick(Q[verb] || [`Ooh, ${x}! How's it going?`]), source: "activity", score: 0.6, expect: { kind: "open", topic: x } };
+    }
+
     // big life moments deserve a careful, specific answer
     _events(m) {
       const t = m.plain;
@@ -685,6 +848,19 @@
           /\b(they|kids|people|everyone|some kids|classmates|the other kids)( at school| in my class)? (always |keep |all )?(make fun of|laugh at|pick on|tease|push|pushed|trip|tripped|exclude|ignore|ignored) me\b/.test(t)) {
         this._mood("sad");
         return { text: "I'm really sorry that's happening to you. 💙 Nobody deserves to be treated like that, and it's not your fault. Have you been able to tell a parent, teacher or another adult you trust? You don't have to handle it alone. Do you want to tell me what happened?", source: "event:bullied", score: 0.95, expect: { kind: "vent", emotion: "sad" } };
+      }
+      if ((r = /\bmy (best friend|friend|bff|bestie|best mate|closest friend|cousin|grandma|grandpa|neighbor|neighbour)(?: ([a-z]+))? (?:just |recently |finally )?(moved|is moving|moved away|left|is leaving|went to (?:another|a different) school|changed schools?|moved to)\b/.exec(t))) {
+        this._mood("lonely");
+        const known = this.mem.people[r[1]];
+        const who = r[2] && known && known.toLowerCase() === r[2] ? known : r[2] && MEM.looksLikeName(r[2], m.clean, false) ? U.titleCase(r[2]) : "your " + r[1];
+        return { text: pick([`Aw, that's really hard. 💙 Missing ${who === "your " + r[1] ? who : who + ""} is the worst, especially when you used to see each other all the time. Do you still get to talk or text?`, `Oh no, I'm sorry. 😔 Having ${who} far away must feel really lonely sometimes. How long ago did it happen?`]), source: "event:moved", score: 0.9, expect: { kind: "vent", emotion: "lonely" } };
+      }
+      if (/\b(we|i) (are moving|am moving|have to move|had to move|just moved|are going to move|will move|moved) (to|house|away|next|this|in)\b/.test(t) && !/\bmoved on\b/.test(t)) {
+        return { text: pick(["Moving is a big change! 📦 How do you feel about it: excited, nervous, or a bit of both?", "Whoa, a move! 🏠 That's a lot. Are you excited or kind of sad about it?"]), source: "event:moving", score: 0.85, expect: { kind: "open", topic: "moving" } };
+      }
+      if (/\b(apologi[sz]ed|said sorry|made up|we'?re (friends|good|okay|ok|cool) again|we are (friends|good|okay|ok|cool) again|we talked it out|we worked it out)\b/.test(t) && m.emotion.valence > -0.5) {
+        this._mood("happy");
+        return { text: pick(["Aw, that's so good to hear! 💙 I'm really glad you two made up. That takes guts.", "Yay! 😊 Making up after a fight is hard, and you did it. How do you feel now?"]), source: "event:madeup", score: 0.88, expect: { kind: "open", topic: "good news" } };
       }
       if (/\bi (do not|don'?t|dont) want to go to school\b|\bi (hate|dread) (going to )?school\b/.test(t)) {
         this._mood("sad");
@@ -807,6 +983,9 @@
       };
 
       const sup = this._support(m, venting0(this.state, expect)); if (sup) add(sup);
+      const adv = this._advice(m); if (adv) add(adv);
+      const nw = this._news(m); if (nw) add(nw);
+      const act = this._activity(m); if (act) add(act);
       const ev = this._events(m); if (ev) add(ev);
       const op = this._opinion(m, c); if (op) add(op);
       const it = this._intent(m, c); if (it) add(it);
@@ -826,12 +1005,19 @@
         add({ text, source: "unknown:whatis", score: 0.56, expect: { kind: "open", topic: thing } });
       }
 
+      // "how many bones are in the body?" / "when did WW2 end?": questions with one right answer. If no skill knew it,
+      // say so honestly; a retrieved or generated line would just make something up.
+      const lastSent = m.plain.split(/(?<=[.!?])\s+/).pop() || m.plain;
+      const factual = (m.isQuestion || /\?\s*$/.test(m.clean)) && /^(how (many|much|far|long|old|tall|big|deep|fast|heavy|hot|cold|high|wide)|what (year|time|day|date|percent)|when (did|was|is|were|will|does)|who (invented|discovered|wrote|painted|built|founded|won|was the first|is the (president|king|queen|prime minister|ceo)|was the|were the)|which (is|one is) (bigger|smaller|larger|faster|heavier|longer|older|taller|higher|better)|what is the (capital|population|distance|height|speed|temperature|size|weight|biggest|largest|smallest|tallest|longest|fastest|oldest|highest|name of)|where is (the )?[a-z]+|how do (you|u|i) (calculate|convert|spell|say)|what does [a-z]+ mean|what is [a-z]+ in)\b/.test(lastSent.replace(/^(so|ok|okay|and|but|hey|hmm|um|wait|also)\s+/, ""));
+      if (factual && !cands.some((x) => x.score >= 0.75)) add({ text: pick(["Hmm, I don't know that one! 🤔 I'm a small offline chatbot, so my knowledge has gaps. I'm great at math, unit conversions, word definitions and Minecraft, though!", "I'm not sure, and I don't have internet to look it up. 😅 If it's math or a unit conversion, write it out and I'll calculate it exactly!", "That's outside what I know, sorry! 🙈 I don't want to make something up. Ask me something else?"]), source: "unknown:fact", score: 0.62 });
+
       const top = cands.reduce((a, b) => (b.score > (a ? a.score : -1) ? b : a), null);
       const venting = (expect && expect.kind === "vent") || this.state.ventTurns > 0;
       const deepVent = this.state.ventTurns > 0;
       // Neural chat when nothing scripted is confident, or when the user is opening up about something.
       const sensitive = (P.safety && P.safety.sensitive(m)) || this.state.care > 0;
-      if (this.neural && this.neural.ready && !sensitive && (!top || top.score < 0.8 || (venting && top.source.startsWith("intent:ok")))) {
+      const askDef = /^(what (does|do) \w+( \w+)? mean|define|definition of|meaning of)\b/.test(m.plain);
+      if (this.neural && this.neural.ready && !sensitive && !factual && !askDef && (!top || top.score < 0.8 || (venting && top.source.startsWith("intent:ok")))) {
         try {
           const n = await this.neural.respond(this.state.history, m.clean, { name: this.mem.name, bot: this.botName, venting, deepVent, recent: this.state.recent, emotion: m.emotion.label });
           for (const x of n || []) add(x);
@@ -871,13 +1057,29 @@
     // short, safe reactions picked by the mood of the message (the neural replies have to beat these)
     _react(m, deep) {
       const v = m.emotion.valence;
-      const shallow = !deep && this.state.lastExpect && this.state.lastExpect.kind === "vent";
-      if (m.isQuestion) return { text: pick(["Hmm, good question! What do you think? 🤔", "Ooh, I'm not sure! What's your take?", "That's a tricky one! What made you think of it?"]), source: "react:question", score: 0.47 };
-      if (deep) return { text: pick(["I hear you. 💙 That sounds really hard.", "That makes sense. How are you feeling about it right now?", "Thank you for telling me. I'm right here. 💙", "That's a lot to deal with. You're not alone in it. 🫂", "I'm listening. Do you want to tell me more?"]), source: "react:vent", score: 0.5, expect: { kind: "vent" } };
-      if (v < -0.3 || shallow) return { text: pick(["Oh no, that sounds rough. 😟 What happened?", "That sounds hard. I'm here if you want to talk about it. 💙", "I'm sorry. 💙 How are you feeling about it?", "Ugh, that's no fun. Do you want to tell me more?"]), source: "react:negative", score: 0.48, expect: { kind: "vent" } };
-      if (m.tokens.includes("haha")) return { text: pick(["Haha! 😂 That sounds hilarious!", "Hahaha, I wish I could have seen that! 😄", "LOL! 😂 What happened next?"]), source: "react:funny", score: 0.47 };
-      if (v > 0.3) return { text: pick(["That's awesome! 😄 Tell me more!", "Nice! How did that feel?", "Ooh, that sounds fun! 😊", "Love that! What happened next?"]), source: "react:positive", score: 0.46 };
-      return { text: pick(["Interesting! Tell me more? 😊", "Oh really? What happened?", "Mhm! How do you feel about that?", "Ooh, go on! 👂"]), source: "react:neutral", score: 0.45 };
+      const st = this.state;
+      const shallow = !deep && st.lastExpect && st.lastExpect.kind === "vent";
+      const long = m.tokens.length >= 12;
+      const lastBot = ([...st.history].reverse().find((h) => h.role === "bot") || {}).text || "";
+      // Pip just asked "what happened?": the answer deserves validation, not the same question again
+      const explained = long || /\b(what happened|tell me more|go on|talk about it|want to tell me|how are you feeling about it|how do you feel)\b/i.test(lastBot);
+      const past = /\b(went|did|was|were|had|got|saw|made|played|visited|watched|happened|yesterday|last night|today)\b/.test(m.plain);
+      const fresh = (key, list) => S.deal(st, "react:" + key, list);
+      if (m.isQuestion) {
+        return { text: fresh("q", ["Hmm, I'm honestly not sure! 🤔 I'm a small offline AI, so I don't know everything.", "Ooh, that's a tough one for a little AI like me. What do you think?", "I don't know that one! 😅 What's your guess?", "Good question... I really don't know! Tell me what you think?"]), source: "react:question", score: 0.47 };
+      }
+      if (deep) return { text: fresh("vent", ["I hear you. 💙 That sounds really hard.", "That makes sense. Anyone would feel that way. 💙", "Thank you for telling me. I'm right here. 💙", "That's a lot to deal with. You're not alone in it. 🫂", "I'm listening. 💙", "That really isn't fair. I'm sorry you're going through it.", "It's okay to feel like this. 💙 I'm glad you're talking about it.", "Oof. That's heavy. How are you holding up right now?"]), source: "react:vent", score: 0.5, expect: { kind: "vent" } };
+      if (v < -0.3 || shallow) {
+        if (explained) return { text: fresh("negx", ["That sounds really hard. 💙 I'm glad you told me.", "Ugh, I'm sorry. That's a lot to deal with.", "That makes total sense. Anyone would feel that way. 💙", "Oof. I'd feel the same way. I'm here for you.", "I'm sorry. That really isn't fair. 💙"]), source: "react:negative", score: 0.48, expect: { kind: "vent" } };
+        return { text: fresh("neg", ["Oh no, that sounds rough. 😟 What happened?", "That sounds hard. I'm here if you want to talk about it. 💙", "Ugh, I'm sorry. 💙 Do you want to tell me about it?", "Aw, that's no fun. What's going on?"]), source: "react:negative", score: 0.48, expect: { kind: "vent" } };
+      }
+      // real laughter about something that happened (not just a "lol" at the end)
+      if ((/\b(haha+|hahaha+|lmao+|rofl)\b|😂|🤣/.test(m.clean) || /^(lol|lmao)\b/.test(m.plain)) && v >= 0 && !/\b(no|not|nothing|never|wrong|mean|why)\b/.test(m.plain) && m.tokens.length >= 5)
+        return { text: fresh("fun", ["Haha! 😂 That sounds hilarious!", "Hahaha, I wish I could have seen that! 😄", "LOL, that's amazing! 😂"]), source: "react:funny", score: 0.47 };
+      if (v > 0.3) return { text: fresh("pos", ["That's awesome! 😄", "Ooh, that sounds fun! 😊", "Love that! 😄", "Nice! That's really cool. 😊", "Yay! That makes me happy to hear. 😄"]), source: "react:positive", score: 0.46 };
+      if (long) return { text: fresh("long", ["That's really interesting! Thanks for telling me. 😊", "Oh cool, I didn't know that! 😊", "Huh, that's so interesting!", "I like hearing about this stuff! 😊", "That's pretty cool, honestly."]), source: "react:neutral", score: 0.45 };
+      if (past && !explained) return { text: fresh("past", ["Oh really? How did it go?", "Ooh, and then?", "Nice! How was it?"]), source: "react:neutral", score: 0.45 };
+      return { text: fresh("neu", ["Interesting! Tell me more? 😊", "Ooh, cool! 😊", "Mhm! 😊", "Oh, nice!", "Ooh, go on! 👂"]), source: "react:neutral", score: 0.45 };
     }
 
     _fallback(m, venting) {
@@ -896,12 +1098,24 @@
           "March April June July August September October November December Christmas Halloween Easter Thanksgiving English Spanish French " +
           "German Japanese Chinese Italian Korean Russian Portuguese Europe Asia Africa America Australia Antarctica").split(" ")) add(w);
         try { for (const [country] of (P.skills.capitalsList || [])) add(country); } catch (e) { /* none */ }
+        for (const w of ["us", "may", "march", "august", "turkey", "china", "chad", "guinea", "georgia", "jersey", "japan", "polish", "nice", "reading", "mobile", "sun"]) this._pn.delete(w);
       }
       return this._pn;
     }
     _restoreCase(s, raw) {
       const pn = this._properNouns();
-      for (const w of (raw || "").match(/\b[A-Z][a-z]{2,}\b/g) || []) if (!/^(I|The|A|An|My|What|How|Why|When|Where|Who|Do|Does|Did|Is|Are|Can|Hi|Hey|Hello|Yes|No|Ok|Okay|Thanks|Please|And|But|So|It|That|This|You|We|They)$/.test(w)) pn.set(w.toLowerCase(), w);
+      // names the user capitalized in the middle of a sentence ("my friend Jess"); a capital at the start of a
+      // sentence ("Will anyone...", "Not sure") or on a common word is just typing, not a name
+      const COMMON = /^(not|will|now|fine|wow|your|you|really|very|just|like|good|bad|great|yes|no|okay|ok|please|thanks|thank|sorry|maybe|never|always|well|oh|omg|lol|haha|all|any|every|today|tomorrow|yesterday|what|how|why|when|where|who|and|but|the|this|that|it|is|are|was|were|do|does|did|can|could|would|should|have|has|had|so|too|also|then|than|there|here|nice|cool|awesome|love|hate|sure|right|wrong|true|false|more|most|less|much|many|some|one|two|three|first|last|next|new|old|big|small|best|worst|hello|hi|hey|bye)$/i;
+      const re = /(^|[.!?]\s+|\s)([A-Z][a-z]{2,})\b/g;
+      let mm;
+      while ((mm = re.exec(raw || ""))) {
+        const w = mm[2], low = w.toLowerCase();
+        const start = mm[1] === "" || /[.!?]/.test(mm[1]);
+        if (COMMON.test(low) || (P.nlp.STOP && P.nlp.STOP.has(low))) continue;
+        if (start && P.nlp.knownWord(low)) continue;
+        pn.set(low, w);
+      }
       return s.replace(/\b[a-z][a-z']+\b(?!:)/g, (w) => (pn.has(w) ? pn.get(w) : w));
     }
     _post(text) {

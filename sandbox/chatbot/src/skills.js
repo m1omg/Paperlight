@@ -31,6 +31,7 @@
     switch (kind) {
       case "joke": return { text: deal(st, "joke", C.jokes), intent: "joke" };
       case "mcjoke": return { text: deal(st, "mcjoke", C.mcJokes), intent: "mcjoke" };
+      case "joke_plain": return { text: deal(st, "joke_plain", C.jokes.filter((j) => !C.mcJokes.includes(j))), intent: "joke" };
       case "fact": return { text: pick(["Here's one: ", "Fun fact: ", "Did you know? ", ""]) + deal(st, "fact", C.facts) };
       case "riddle": {
         const r = deal(st, "riddle", C.riddles);
@@ -68,7 +69,9 @@
 
   function askQuestion(c) {
     const mem = c.mem;
-    const open = C.questions.filter(([, slot]) => {
+    const mcOk = !mem.noMinecraft && !c.adult;
+    const open = C.questions.filter(([q, slot]) => {
+      if (!mcOk && /minecraft/i.test(q)) return false;
       if (!slot) return true;
       if (slot.startsWith("favorite:")) return !mem.favorites[slot.split(":")[1]];
       if (slot === "pets") return !mem.pets.length;
@@ -206,8 +209,49 @@
     }
     if (!target) return null;
     const days = Math.round((target - today) / 864e5);
-    const label = what === "my birthday" ? "your birthday" : U.titleCase(what.replace(/s$/, "").replace("new year", "New Year's Day"));
+    const label = what === "my birthday" ? "your birthday" : U.titleCase(what.replace(/^(new year|valentine)s$/, "$1").replace("new year", "New Year's Day"));
     return days === 0 ? `It's ${label} today! 🎉` : `${days} day${days === 1 ? "" : "s"} until ${label}! ${days < 7 ? "So soon! 🎉" : "📅"}`;
+  }
+  // "what day of the week is christmas?", "what date is it in 100 days?", "what day was it yesterday?", "what day is march 3?"
+  const MONTH_IDX = { jan: 0, january: 0, feb: 1, february: 1, mar: 2, march: 2, apr: 3, april: 3, may: 4, jun: 5, june: 5, jul: 6, july: 6, aug: 7, august: 7, sep: 8, sept: 8, september: 8, oct: 9, october: 9, nov: 10, november: 10, dec: 11, december: 11 };
+  function dateMath(t) {
+    if (!/\b(day|date|days|weeks|christmas|halloween|new years?|valentines?|tomorrow|yesterday)\b/.test(t) || !/\b(what|which|when|how many)\b/.test(t)) return null;
+    const now = new Date(), today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const fmt = (d) => `${DAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+    let r;
+    const hol = /\b(christmas|halloween|new years?(?: day)?|valentines? day|valentine's day|april fools)\b/.exec(t);
+    if (hol && /\bwhat day\b|\bwhich day\b|\bday of the week\b|\bfall on\b|\bwhat weekday\b/.test(t)) {
+      const key = hol[1].replace(/ day$/, "").replace(/^new years?$/, "new year").replace(/^valentines?$|^valentine's$/, "valentine");
+      const [mo, da] = HOLIDAYS[key] || HOLIDAYS[hol[1]] || [11, 25];
+      let y = now.getFullYear();
+      if (/\bnext year\b/.test(t)) y++;
+      else if (!/\bthis year\b/.test(t) && new Date(y, mo, da) < today) y++;
+      const d = new Date(y, mo, da);
+      return `${U.titleCase(hol[1].replace(/^new years?$/, "New Year's Day"))} ${d < today ? "was" : "is"} on a ${DAYS[d.getDay()]} in ${y} (${MONTHS[mo]} ${da}). 📅`;
+    }
+    if ((r = /\b(?:in|after) (\d+|a|one|two|three|four|five|six|seven|ten) (days?|weeks?)(?: from (?:now|today))?\b|\b(\d+) (days?|weeks?) from (?:now|today)\b/.exec(t))) {
+      const nn = r[1] || r[3], unit = r[2] || r[4];
+      const n = { a: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, ten: 10 }[nn] || +nn;
+      const d = new Date(today); d.setDate(d.getDate() + n * (/week/.test(unit) ? 7 : 1));
+      return `${n} ${unit.replace(/s$/, "")}${n === 1 ? "" : "s"} from today is ${fmt(d)}. 📅`;
+    }
+    if ((r = /\b(\d+|a|one|two|three) (days?|weeks?) ago\b/.exec(t))) {
+      const n = { a: 1, one: 1, two: 2, three: 3 }[r[1]] || +r[1];
+      const d = new Date(today); d.setDate(d.getDate() - n * (/week/.test(r[2]) ? 7 : 1));
+      return `${n} ${r[2].replace(/s$/, "")}${n === 1 ? "" : "s"} ago was ${fmt(d)}. 📅`;
+    }
+    if (/\btomorrow\b/.test(t) && /\b(what|which) (day|date)\b|\bdate tomorrow\b|\btomorrow'?s date\b/.test(t)) { const d = new Date(today); d.setDate(d.getDate() + 1); return `Tomorrow is ${fmt(d)}. 📅`; }
+    if (/\byesterday\b/.test(t) && /\b(what|which) (day|date)\b/.test(t)) { const d = new Date(today); d.setDate(d.getDate() - 1); return `Yesterday was ${fmt(d)}. 📅`; }
+    if ((r = /\b(?:what|which) (?:day|day of the week|weekday) (?:is|was|will be|does)? ?(?:it on )?(?:the )?(\d{1,2})(?:st|nd|rd|th)? (?:of )?([a-z]+)(?: (\d{4}))?\b/.exec(t)) || (r = /\b(?:what|which) (?:day|day of the week|weekday) (?:is|was|will be) ([a-z]+) (\d{1,2})(?:st|nd|rd|th)?(?:,? (\d{4}))?\b/.exec(t))) {
+      let mo, da;
+      if (/^\d/.test(r[1])) { da = +r[1]; mo = MONTH_IDX[r[2]]; } else { mo = MONTH_IDX[r[1]]; da = +r[2]; }
+      if (mo === undefined || !(da >= 1 && da <= 31)) return null;
+      const y = r[3] ? +r[3] : now.getFullYear();
+      const d = new Date(y, mo, da);
+      if (d.getMonth() !== mo) return `Hmm, ${MONTHS[mo]} doesn't have ${da} days! 🤔`;
+      return `${MONTHS[mo]} ${da}, ${y} ${d < today ? "was" : "is"} a ${DAYS[d.getDay()]}. 📅`;
+    }
+    return null;
   }
   function parseBirthday(s) {
     const t = s.toLowerCase();
@@ -333,11 +377,75 @@
     [["how many stars are in the sky", "how many stars are there"], "The Milky Way alone has about 100-400 billion stars, and there are probably over 2 trillion galaxies. On a dark night you can see about 5,000 stars with your eyes. ✨"],
     [["what is the closest star", "nearest star"], "The closest star is the Sun! After that it's Proxima Centauri, about 4.24 light-years away."],
     [["who is the richest person", "richest person in the world"], "That changes all the time with the stock market, so I can't say for sure. I don't have internet access to check! 💰"],
+    [["when did world war 2 end", "when did ww2 end", "when did world war ii end", "when did the second world war end"], "World War II ended in 1945: in Europe on May 8 (V-E Day), and in the Pacific on September 2, when Japan formally surrendered."],
+    [["when did world war 2 start", "when did ww2 start", "when did world war ii begin", "when did the second world war start"], "World War II started on September 1, 1939, when Germany invaded Poland."],
+    [["when did world war 1 end", "when did ww1 end", "when did world war i end", "when did the first world war end"], "World War I ended with the armistice on November 11, 1918. (The Treaty of Versailles was signed in 1919.)"],
+    [["when did world war 1 start", "when did ww1 start", "when did world war i begin"], "World War I started in July 1914."],
+    [["when did the titanic sink", "what year did the titanic sink"], "The Titanic sank on April 15, 1912, after hitting an iceberg on its very first voyage. 🚢"],
+    [["who was the first president of the united states", "first president of america", "first us president"], "George Washington was the first President of the United States (1789-1797). 🇺🇸"],
+    [["when was the declaration of independence signed", "when did america become independent", "when was america founded"], "The Declaration of Independence was adopted on July 4, 1776. 🇺🇸"],
+    [["who discovered america", "did columbus discover america"], "Indigenous peoples had lived in the Americas for over 15,000 years. Norse explorers led by Leif Erikson reached North America around the year 1000, and Christopher Columbus arrived in 1492."],
+    [["who invented the airplane", "who invented the plane", "first airplane flight"], "The Wright brothers, Orville and Wilbur, made the first powered airplane flight in 1903. ✈️"],
+    [["who invented the car", "first car"], "Karl Benz built the first practical gasoline-powered car in 1885-1886. 🚗"],
+    [["who discovered penicillin"], "Alexander Fleming discovered penicillin in 1928, and it became the first widely used antibiotic. 💊"],
+    [["who invented the printing press"], "Johannes Gutenberg invented the movable-type printing press around 1440. 📖"],
+    [["who discovered electricity", "who invented electricity"], "Nobody invented electricity, it's part of nature! Benjamin Franklin showed lightning is electrical in 1752, and scientists like Volta, Faraday and Edison figured out how to use it. ⚡"],
+    [["who wrote harry potter"], "J.K. Rowling wrote the Harry Potter books. The first one came out in 1997. ⚡🧙"],
+    [["who made minecraft", "who created minecraft", "who invented minecraft"], "Markus \"Notch\" Persson created Minecraft. The first version came out in 2009, and today Mojang Studios (owned by Microsoft) makes it. ⛏️"],
+    [["when did minecraft come out", "when was minecraft made", "when was minecraft released"], "The first public version of Minecraft came out in May 2009, and the full release (1.0) was in November 2011. ⛏️"],
+    [["what is the best selling video game", "most popular video game", "best selling game of all time"], "Minecraft is the best-selling video game of all time, with over 300 million copies sold! (Not that I'm biased. 😄)"],
+    [["what is e mc2", "what does e mc2 mean"], "E = mc² is Einstein's famous equation: energy equals mass times the speed of light squared. It means a tiny bit of mass holds a HUGE amount of energy. ⚛️"],
+    [["how many hearts does an octopus have"], "Three hearts! And blue blood. 🐙"],
+    [["how many chambers does the heart have", "how many chambers in the heart"], "Four: two atria on top and two ventricles below. ❤️"],
+    [["how many legs does an insect have", "how many legs do insects have"], "Insects have 6 legs. (Spiders have 8, so they're not insects!) 🐜"],
+    [["what is the largest organ", "biggest organ in the body"], "Your skin! It's the largest organ of the human body."],
+    [["how much of the body is water", "how much water is in the human body"], "About 60% of an adult's body is water. 💧"],
+    [["what is the smallest bone", "smallest bone in the body"], "The stapes, in your middle ear. It's only about 3 mm long!"],
+    [["how many senses do humans have", "what are the five senses"], "The classic five are sight, hearing, smell, taste and touch. Scientists also count others, like balance and knowing where your body parts are!"],
+    [["how long do cats live"], "Cats usually live about 12 to 18 years, and indoor cats often live longer. 🐱"],
+    [["how long do dogs live"], "Dogs usually live about 10 to 13 years. Small breeds often live longer than big ones. 🐶"],
+    [["what is the fastest land animal", "fastest land animal"], "The cheetah! It can sprint at around 100-120 km/h (60-75 mph) for short bursts. 🐆"],
+    [["what is the tallest animal", "tallest animal"], "The giraffe, up to about 5.5 m (18 ft) tall! 🦒"],
+    [["what is the biggest dinosaur", "largest dinosaur"], "Probably a giant sauropod like Argentinosaurus or Patagotitan, around 35 m long! 🦕"],
+    [["what is the biggest bird", "largest bird"], "The ostrich is the biggest bird. It can't fly, but it runs up to about 70 km/h!"],
+    [["what is the biggest cat", "largest cat"], "The tiger is the biggest wild cat. 🐅"],
+    [["how hot is the sun", "temperature of the sun"], "The Sun's surface is about 5,500°C, and its core is about 15 million °C! ☀️"],
+    [["what is the coldest place on earth", "coldest place in the world"], "Antarctica. The lowest natural temperature ever measured was about -89°C, at Vostok Station. 🥶"],
+    [["what is the deepest part of the ocean", "deepest point in the ocean"], "The Challenger Deep in the Mariana Trench, about 10,900 m (35,800 ft) deep. 🌊"],
+    [["what is the largest continent", "biggest continent"], "Asia is the largest continent, both by area and by population. 🌏"],
+    [["can you see the great wall of china from space"], "That's a myth! The Great Wall is very long but thin, so astronauts can't really see it with bare eyes from orbit."],
+    [["how many states are in the usa", "how many states are there in america"], "The United States has 50 states. 🇺🇸"],
+    [["what country has the most people", "most populated country"], "India has the most people (it passed China in 2023), with over 1.4 billion. 🌏"],
+    [["how many seconds are in a day", "how many seconds in a day"], "86,400 seconds (24 × 60 × 60). ⏱️"],
+    [["how many seconds are in an hour", "how many seconds in an hour"], "3,600 seconds. ⏱️"],
+    [["how many minutes are in a day", "how many minutes in a day"], "1,440 minutes (24 × 60)."],
+    [["how many weeks are in a year", "how many weeks in a year"], "52 weeks, plus 1 day (or 2 in a leap year). 📅"],
+    [["what is h2o"], "H₂O is water: two hydrogen atoms and one oxygen atom. 💧"],
+    [["what is co2", "what is carbon dioxide"], "CO₂ is carbon dioxide: the gas we breathe out and plants use for photosynthesis."],
+    [["what is the chemical symbol for gold", "symbol for gold"], "Au, from the Latin word aurum. 🥇"],
+    [["what is the chemical symbol for iron", "symbol for iron"], "Fe, from the Latin word ferrum."],
+    [["what is the chemical symbol for silver", "symbol for silver"], "Ag, from the Latin word argentum."],
+    [["how many elements are there", "how many elements are on the periodic table"], "There are 118 known elements on the periodic table. 🧪"],
+    [["what is the hardest material", "hardest natural substance"], "Diamond is the hardest natural material. 💎"],
+    [["what is a mole in chemistry", "what is a mole chemistry", "explain a mole in chemistry"], "In chemistry a mole is a counting unit for tiny things: 1 mole = about 6.022 × 10²³ particles (Avogadro's number). It's like \"a dozen\", just way bigger, so chemists can count atoms by weighing stuff. 🧪"],
+    [["what are the states of matter", "three states of matter"], "Solid, liquid and gas, plus plasma (like in stars and lightning)!"],
+    [["what is an atom"], "An atom is a tiny building block of everything: a nucleus of protons and neutrons, with electrons zooming around it. ⚛️"],
+    [["how does a rainbow form", "how are rainbows made", "why do rainbows happen"], "Sunlight bends and bounces inside raindrops, which splits it into colors: red, orange, yellow, green, blue, indigo and violet. 🌈"],
+    [["why do leaves change color", "why do leaves turn orange"], "In autumn, trees stop making green chlorophyll, so the yellow and orange colors that were hiding show up, and some trees make red pigments too. 🍂"],
+    [["why do we dream", "why do people dream"], "Scientists aren't completely sure! Most dreams happen in REM sleep, and they may help your brain sort memories and feelings. 💭"],
+    [["how many players are on a soccer team", "how many players on a football team"], "Soccer has 11 players per team on the field, including the goalkeeper. ⚽ (American football also has 11 on the field.)"],
+    [["how many players are on a basketball team"], "5 players per team on the court. 🏀"],
+    [["how long is a marathon"], "A marathon is 42.195 km (26.2 miles). 🏃"],
+    [["how often are the olympics", "when are the olympics"], "The Olympics happen every 4 years, and the Summer and Winter Games alternate, so there's one every 2 years. 🏅"],
     [["who is the president", "who is the president of the united states", "who is the prime minister"], "Leaders change with elections, and I can't go online to check the latest, so I'd better not guess! 🗳️"],
   ];
-  let faqIndex = null;
+  let faqIndex = null, this_ = false;
   function faq(m) {
     if (!faqIndex) { faqIndex = new P.nlp.TfIdf(); FAQ.forEach(([qs], i) => qs.forEach((q) => faqIndex.add(q, i))); }
+    // "can you explain what a mole is in chemistry? simply pls" -> "what is a mole in chemistry"
+    const simple = m.plain.split(/(?<=[.!?])\s+/)[0].replace(/^(can|could|would|will) (you|u) (please )?(explain|tell me|say|teach me)( to me)?\s+/, "").replace(/^(explain|tell me|teach me|do you know)\s+/, "")
+      .replace(/^(what|who|how) (a|an|the)? ?([a-z ]+?) (is|are|was|were)\b/, "$1 $4 $2 $3").replace(/\s+/g, " ").trim();
+    if (simple !== m.plain && !this_) { this_ = true; try { const r2 = faq(P.nlp.analyze(simple)); if (r2) return r2; } finally { this_ = false; } }
     const hit = faqIndex.query(m.stems, 1)[0];
     if (!hit || hit.score < 0.72) return null;
     // the key content words of the matched question should all be present
@@ -424,5 +532,5 @@
     return pick([`I'd go with ${ch}! 😄`, `Hmm... ${ch}! Final answer.`, `${U.capitalizeFirst(ch)}, definitely.`, `My pick: ${ch}! But what do you think?`]);
   }
 
-  P.skills = { capitalsList: CAP, define, lookup, start, gameTurn, askQuestion, daysUntil, capital, faq, wordTools, choose, deal, timeText, dateText };
+  P.skills = { capitalsList: CAP, define, lookup, start, gameTurn, askQuestion, daysUntil, dateMath, capital, faq, wordTools, choose, deal, timeText, dateText };
 })(typeof window !== "undefined" ? (window.Pip = window.Pip || {}) : (global.Pip = global.Pip || {}));
