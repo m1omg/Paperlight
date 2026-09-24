@@ -770,6 +770,8 @@
       }
       r = S.daysUntil(m.plain, this.mem); if (r) return { text: r, source: "skill:countdown" };
       r = S.dateMath(m.plain); if (r) return { text: r, source: "skill:date" };
+      r = S.timeMath(m.clean.toLowerCase()); if (r) return { text: r, source: "skill:time" };
+      r = S.currency(m.plain.replace(/[?!.]+$/, "")); if (r) return { text: r, source: "skill:currency" };
       r = S.wordTools(m); if (r) return { text: r, source: "skill:words" };
       r = S.capital(m.plain.replace(/[?!.]+$/, "")); if (r) return { text: r, source: "skill:capital" };
       // Minecraft

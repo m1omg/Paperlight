@@ -297,6 +297,82 @@
     }
     return null;
   }
+  // ---------- times: durations, world clocks, currencies ----------
+  function parseTime(h, mnt, ap) {
+    let H = +h; const M = +(mnt || 0);
+    if (ap) { ap = ap.replace(/\./g, ""); if (/^p/.test(ap) && H < 12) H += 12; if (/^a/.test(ap) && H === 12) H = 0; }
+    return H * 60 + M;
+  }
+  const TZ = { // standard UTC offset in hours, and which daylight-saving rule applies
+    london: [0, "eu"], lisbon: [0, "eu"], dublin: [0, "eu"], edinburgh: [0, "eu"], portugal: [0, "eu"], uk: [0, "eu"], england: [0, "eu"], ireland: [0, "eu"],
+    paris: [1, "eu"], berlin: [1, "eu"], madrid: [1, "eu"], rome: [1, "eu"], amsterdam: [1, "eu"], brussels: [1, "eu"], vienna: [1, "eu"], warsaw: [1, "eu"], prague: [1, "eu"],
+    stockholm: [1, "eu"], oslo: [1, "eu"], copenhagen: [1, "eu"], zurich: [1, "eu"], budapest: [1, "eu"], france: [1, "eu"], germany: [1, "eu"], spain: [1, "eu"], italy: [1, "eu"], poland: [1, "eu"],
+    athens: [2, "eu"], helsinki: [2, "eu"], kyiv: [2, "eu"], kiev: [2, "eu"], bucharest: [2, "eu"], cairo: [2, ""], "cape town": [2, ""], johannesburg: [2, ""], greece: [2, "eu"],
+    istanbul: [3, ""], moscow: [3, ""], nairobi: [3, ""], dubai: [4, ""], "abu dhabi": [4, ""], karachi: [5, ""], delhi: [5.5, ""], "new delhi": [5.5, ""], mumbai: [5.5, ""], india: [5.5, ""],
+    bangkok: [7, ""], jakarta: [7, ""], beijing: [8, ""], shanghai: [8, ""], "hong kong": [8, ""], singapore: [8, ""], manila: [8, ""], perth: [8, ""], china: [8, ""],
+    tokyo: [9, ""], seoul: [9, ""], japan: [9, ""], sydney: [10, "au"], melbourne: [10, "au"], brisbane: [10, ""], auckland: [12, "nz"],
+    "new york": [-5, "us"], boston: [-5, "us"], toronto: [-5, "us"], miami: [-5, "us"], washington: [-5, "us"], chicago: [-6, "us"], dallas: [-6, "us"], houston: [-6, "us"], "mexico city": [-6, ""],
+    denver: [-7, "us"], phoenix: [-7, ""], "los angeles": [-8, "us"], "san francisco": [-8, "us"], seattle: [-8, "us"], vancouver: [-8, "us"], "las vegas": [-8, "us"], honolulu: [-10, ""], anchorage: [-9, "us"],
+    "sao paulo": [-3, ""], "são paulo": [-3, ""], "rio de janeiro": [-3, ""], "buenos aires": [-3, ""], lima: [-5, ""], bogota: [-5, ""] };
+  function nthSunday(y, mo, n) { const d = new Date(Date.UTC(y, mo, 1)); const first = (7 - d.getUTCDay()) % 7 + 1; return Date.UTC(y, mo, first + 7 * (n - 1)); }
+  function lastSunday(y, mo) { const d = new Date(Date.UTC(y, mo + 1, 0)); return Date.UTC(y, mo, d.getUTCDate() - d.getUTCDay()); }
+  function offsetNow(city, when) {
+    const [std, rule] = TZ[city];
+    const t = when || Date.now(), y = new Date(t).getUTCFullYear();
+    let dst = false;
+    if (rule === "eu") dst = t >= lastSunday(y, 2) + 3600e3 && t < lastSunday(y, 9) + 3600e3;
+    else if (rule === "us") dst = t >= nthSunday(y, 2, 2) + (2 - std) * 3600e3 && t < nthSunday(y, 10, 1) + (1 - std) * 3600e3;
+    else if (rule === "au" || rule === "nz") dst = !(t >= nthSunday(y, 3, 1) - std * 3600e3 && t < nthSunday(y, 9, 1) - std * 3600e3);
+    return std + (dst ? 1 : 0);
+  }
+  const fmtClock = (mins) => { mins = ((mins % 1440) + 1440) % 1440; let h = Math.floor(mins / 60); const m = Math.round(mins % 60); const ap = h >= 12 ? "PM" : "AM"; h = h % 12 || 12; return `${h}:${String(m).padStart(2, "0")} ${ap}`; };
+  function timeMath(t) {
+    let r;
+    const TIME = "(\\d{1,2})(?::(\\d{2}))?\\s*(a\\.?m\\.?|p\\.?m\\.?)?";
+    // "leaves at 10:45am and lands at 1:20pm, how long is the flight?"
+    if ((r = new RegExp("\\b(?:at |from )?" + TIME + "\\b.*?\\b(?:at |to |until |till |and )" + TIME + "\\b").exec(t)) && /\b(how long|how many (hours|minutes)|duration|flight time|difference|between)\b/.test(t) && (r[2] || r[3] || r[5] || r[6])) {
+      let a = parseTime(r[1], r[2], r[3]), b = parseTime(r[4], r[5], r[6]);
+      let d = b - a; if (d <= 0) d += 1440;
+      const h = Math.floor(d / 60), mm = d % 60;
+      return `That's ${h ? h + " hour" + (h === 1 ? "" : "s") : ""}${h && mm ? " and " : ""}${mm ? mm + " minute" + (mm === 1 ? "" : "s") : ""}${h || mm ? "" : "no time at all"}. ⏱️` + (/\b(flight|fly|flying|land|lands)\b/.test(t) ? " (If the flight crosses time zones, the clock difference isn't the same as the flying time!)" : "");
+    }
+    // "what time will it be in 3 hours"
+    if ((r = /\bwhat time (will it be|is it) in (\d+(?:\.\d+)?) (hours?|minutes?|mins?)\b/.exec(t))) {
+      const add = +r[2] * (/^h/.test(r[3]) ? 60 : 1); const now = new Date();
+      return `In ${r[2]} ${r[3]} it will be about ${fmtClock(now.getHours() * 60 + now.getMinutes() + add)} (by your device's clock). ⏰`;
+    }
+    const cities = Object.keys(TZ).sort((a, b) => b.length - a.length).filter((c) => new RegExp("\\b" + c + "\\b").test(t));
+    if (!cities.length) return null;
+    // "is Lisbon in the same time zone as London?"
+    if (cities.length >= 2 && /\b(same time ?zone|time difference|what time is it in|what time will it be in|when it'?s|when it is|ahead|behind|hours? (ahead|behind|difference))\b/.test(t)) {
+      const [c1, c2] = cities.slice(0, 2).sort((a, b) => t.indexOf(a) - t.indexOf(b));
+      const d = offsetNow(c1) - offsetNow(c2), C1 = U.titleCase(c1), C2 = U.titleCase(c2);
+      const tm = new RegExp("(?:when it'?s|when it is|at) " + TIME + " in " + c2).exec(t) || new RegExp("(?:when it'?s|when it is|at) " + TIME).exec(t);
+      if (tm && (tm[2] || tm[3])) return `When it's ${fmtClock(parseTime(tm[1], tm[2], tm[3]))} in ${C2}, it's ${fmtClock(parseTime(tm[1], tm[2], tm[3]) + d * 60)} in ${C1}.` + (d === 0 ? " They're in the same time zone! 🕒" : "");
+      if (d === 0) return `Yes! ${C1} and ${C2} are on the same time right now. 🕒`;
+      return `${C1} is ${Math.abs(d)} hour${Math.abs(d) === 1 ? "" : "s"} ${d > 0 ? "ahead of" : "behind"} ${C2} right now. 🕒`;
+    }
+    // "what time is it in Tokyo?"
+    if (/\bwhat time is it in\b|\bthe time in\b|\btime (is it )?(now )?in\b/.test(t)) {
+      const c = cities[0], now = new Date();
+      const utcMin = now.getUTCHours() * 60 + now.getUTCMinutes();
+      return `It's about ${fmtClock(utcMin + offsetNow(c) * 60)} in ${U.titleCase(c)} right now. 🕒`;
+    }
+    return null;
+  }
+  const CURRENCY = { "united states": "US dollar ($)", usa: "US dollar ($)", america: "US dollar ($)", "united kingdom": "pound sterling (£)", uk: "pound sterling (£)", england: "pound sterling (£)", britain: "pound sterling (£)", scotland: "pound sterling (£)",
+    portugal: "euro (€)", spain: "euro (€)", france: "euro (€)", germany: "euro (€)", italy: "euro (€)", ireland: "euro (€)", netherlands: "euro (€)", belgium: "euro (€)", austria: "euro (€)", greece: "euro (€)", finland: "euro (€)", croatia: "euro (€)",
+    poland: "złoty (zł)", czechia: "Czech koruna", "czech republic": "Czech koruna", hungary: "forint", sweden: "Swedish krona", norway: "Norwegian krone", denmark: "Danish krone", switzerland: "Swiss franc", iceland: "Icelandic króna",
+    turkey: "Turkish lira", russia: "ruble", ukraine: "hryvnia", japan: "yen (¥)", china: "yuan / renminbi (¥)", india: "Indian rupee (₹)", "south korea": "won (₩)", korea: "won (₩)", thailand: "baht", vietnam: "đồng", indonesia: "rupiah",
+    philippines: "Philippine peso", australia: "Australian dollar", "new zealand": "New Zealand dollar", canada: "Canadian dollar", mexico: "Mexican peso", brazil: "Brazilian real", argentina: "Argentine peso", chile: "Chilean peso",
+    egypt: "Egyptian pound", "south africa": "rand", nigeria: "naira", kenya: "Kenyan shilling", morocco: "dirham", "united arab emirates": "UAE dirham", uae: "UAE dirham", dubai: "UAE dirham", israel: "shekel", "saudi arabia": "riyal", singapore: "Singapore dollar" };
+  function currency(t) {
+    const r = /\b(?:what(?:'s| is)? (?:the )?currency (?:of|in|do they use in)|what (?:currency|money) (?:does|do they use in|is used in|do (?:you|they) use in)|currency (?:of|in))\s+(?:the )?([a-z .]+?)(?: use)?\s*\??$/.exec(t);
+    if (!r) return null;
+    const c = r[1].trim();
+    const hit = CURRENCY[c];
+    return hit ? `${U.titleCase(c.replace(/^(usa|uk|uae)$/, (x) => x.toUpperCase()))} uses the ${hit}. 💶` : null;
+  }
   function parseBirthday(s) {
     const t = s.toLowerCase();
     const mi = MONTHS.findIndex((mo) => t.includes(mo.toLowerCase()) || t.includes(mo.toLowerCase().slice(0, 3) + " "));
@@ -580,5 +656,5 @@
     return pick([`I'd go with ${ch}! 😄`, `Hmm... ${ch}! Final answer.`, `${U.capitalizeFirst(ch)}, definitely.`, `My pick: ${ch}! But what do you think?`]);
   }
 
-  P.skills = { capitalsList: CAP, define, lookup, start, gameTurn, askQuestion, daysUntil, dateMath, capital, faq, wordTools, choose, deal, timeText, dateText };
+  P.skills = { capitalsList: CAP, define, lookup, start, gameTurn, askQuestion, daysUntil, dateMath, timeMath, currency, capital, faq, wordTools, choose, deal, timeText, dateText };
 })(typeof window !== "undefined" ? (window.Pip = window.Pip || {}) : (global.Pip = global.Pip || {}));

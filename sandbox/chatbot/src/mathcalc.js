@@ -368,6 +368,8 @@
   // volume (litres)
   unit("vol", "0.001", "milliliters|milliliter|millilitres|millilitre|ml"); unit("vol", "1", "liters|liter|litres|litre|l");
   unit("vol", "3.785411784", "gallons|gallon|gal"); unit("vol", "0.946352946", "quarts|quart|qt"); unit("vol", "0.473176473", "pints|pint|pt");
+  unit("vol", "0.56826125", "imperial pints|imperial pint|uk pints|uk pint|british pints|british pint"); unit("vol", "4.54609", "imperial gallons|imperial gallon|uk gallons|uk gallon");
+  unit("vol", "0.25", "metric cups|metric cup"); unit("vol", "0.0284130625", "uk fluid ounces|uk fluid ounce|imperial fluid ounces");
   unit("vol", "0.2365882365", "cups|cup"); unit("vol", "0.0295735295625", "fluid ounces|fluid ounce|fl oz");
   unit("vol", "0.01478676478125", "tablespoons|tablespoon|tbsp"); unit("vol", "0.00492892159375", "teaspoons|teaspoon|tsp");
   // time (seconds)
@@ -392,8 +394,50 @@
   function fromC(v, u) { return u === "C" ? v : u === "F" ? v.mul(new Q(B(9), B(5))).add(Q.parse("32")) : v.add(Q.parse("273.15")); }
   const TNAME = { C: "°C", F: "°F", K: "K" };
 
+  // oven gas marks (UK)
+  const GAS = [[1, 140, 275], [2, 150, 300], [3, 170, 325], [4, 180, 350], [5, 190, 375], [6, 200, 400], [7, 220, 425], [8, 230, 450], [9, 240, 475]];
+  function gasMark(s) {
+    let r;
+    if ((r = /\bgas mark (\d)\b/.exec(s)) && !/\bgas mark\s*\??\s*$/.test(s)) {
+      const g = GAS.find((x) => x[0] === +r[1]);
+      if (g) return { text: `Gas mark ${g[0]} is about ${g[1]}°C (${g[2]}°F), or about ${g[1] - 20}°C in a fan oven.` };
+    }
+    if ((r = /(-?\d+(?:\.\d+)?)\s*°?\s*(c|celsius|centigrade|f|fahrenheit)\b/.exec(s)) && /\bgas( mark)?\b/.test(s)) {
+      const v = +r[1], isF = /^f/.test(r[2]);
+      const best = GAS.reduce((a, g) => (Math.abs(g[isF ? 2 : 1] - v) < Math.abs(a[isF ? 2 : 1] - v) ? g : a));
+      if (Math.abs(best[isF ? 2 : 1] - v) > 25) return { text: `${v}°${isF ? "F" : "C"} is outside the usual gas marks (1 to 9, about 140-240°C / 275-475°F).` };
+      return { text: `${v}°${isF ? "F" : "C"} is about gas mark ${best[0]} (${best[1]}°C / ${best[2]}°F).` };
+    }
+    return null;
+  }
+  // grams per US cup for common baking ingredients (they vary with how you scoop!)
+  const DENSITY = { "all purpose flour": 125, "plain flour": 125, flour: 125, "bread flour": 130, "self raising flour": 125, "self rising flour": 125, "whole wheat flour": 120,
+    "granulated sugar": 200, "caster sugar": 200, sugar: 200, "brown sugar": 220, "icing sugar": 120, "powdered sugar": 120, butter: 227, "cocoa powder": 85, cocoa: 85,
+    "rolled oats": 90, oats: 90, rice: 185, honey: 340, milk: 240, water: 237, "chocolate chips": 170, "grated cheese": 100, cheese: 100, "ground almonds": 96, "almond flour": 96, salt: 288, yogurt: 245, cream: 240, oil: 218 };
+  function cupsToGrams(s) {
+    const ing = Object.keys(DENSITY).sort((a, b) => b.length - a.length).find((k) => new RegExp("\\b" + k + "\\b").test(s));
+    if (!ing) return null;
+    let r = /(\d+(?:\.\d+)?)\s*(cups?|tablespoons?|tbsp|teaspoons?|tsp)\b.*\b(grams?|g)\b/.exec(s);
+    if (r) {
+      const per = /^cup/.test(r[2]) ? 1 : /^(tablespoon|tbsp)/.test(r[2]) ? 1 / 16 : 1 / 48;
+      const g = Math.round(+r[1] * per * DENSITY[ing]);
+      return { text: `${r[1]} ${r[2]} of ${ing} is about ${g} g. (It depends a bit on how you fill the cup, so weigh it if you can!)` };
+    }
+    r = /(\d+(?:\.\d+)?)\s*(grams?|g)\b.*\b(cups?)\b/.exec(s);
+    if (r) {
+      const c = +r[1] / DENSITY[ing];
+      return { text: `${r[1]} g of ${ing} is about ${Math.round(c * 100) / 100} cups. (Scooping changes it a little, so a scale is best.)` };
+    }
+    return null;
+  }
   function convert(text) {
     let s = text.toLowerCase().replace(/[?!.]+$/, "").replace(/degrees?\s+/g, "").trim();
+    // "2 and a quarter cups", "2 1/4 cups", "one and a half"
+    s = s.replace(/\b(\d+) and (a|one) (half|quarter|third)\b/g, (x, n, a, f) => String(+n + { half: 0.5, quarter: 0.25, third: 0.3333 }[f]))
+      .replace(/\b(\d+) (\d)\/(\d)\b/g, (x, n, a, b) => String(+n + +a / +b)).replace(/\b(a|one) half\b/g, "0.5").replace(/\ba quarter\b/g, "0.25")
+      .replace(/(\d+(?:\.\d+)?)\s*(?:degrees?\s*)?°\s*/g, "$1 ");
+    const gm = gasMark(s); if (gm) return gm;
+    if (/\b(cups?|tablespoons?|tbsp|teaspoons?|tsp)\b/.test(s) && /\b(grams?|g)\b/.test(s)) { const cg = cupsToGrams(s); if (cg) return cg; }
     // 6 feet 2 inches / 5'11" -> inches
     let hm = /(\d+(?:\.\d+)?)\s*(?:feet|foot|ft|')\s*(?:and\s*)?(\d+(?:\.\d+)?)\s*(?:inches|inch|in|"|'')(?=\s|$|,)/.exec(s);
     let label = null;
@@ -415,6 +459,7 @@
     }
     const v = Q.parse(amount);
     if (TEMPS[from] && TEMPS[to]) {
+      if (toC(v, TEMPS[from]).sub(Q.parse("-273.15")).sign() < 0) return { error: `${withCommas(v.toDecimal())}${TNAME[TEMPS[from]]} is colder than absolute zero (-273.15°C), the coldest possible temperature! 🥶` };
       const r = fromC(toC(v, TEMPS[from]), TEMPS[to]);
       const f = format(r, 4);
       return { text: `${withCommas(v.toDecimal())}${TNAME[TEMPS[from]]} ${f.exact ? "=" : "≈"} ${f.text}${TNAME[TEMPS[to]]}`, value: r };
@@ -431,7 +476,9 @@
       const ft = r.n / r.d, inches = r.sub(new Q(ft)).mul(Q.parse("12"));
       extra = ` (that's ${ft} ft ${format(inches, 1).text} in)`;
     }
-    return { text: `${label || withCommas(v.toDecimal()) + " " + (one ? singular(a.name) : a.name)} ${f.exact ? "=" : "≈"} ${f.text} ${b.name}${extra}`, value: r };
+    let ft = f.text, eq = f.exact ? "=" : "≈", exactNote = "";
+    if (f.exact && /\.\d{5,}/.test(ft)) { exactNote = ` (exactly ${f.text})`; ft = withCommas(String(Math.round(r.toNumber() * 100) / 100)); eq = "≈"; }
+    return { text: `${label || withCommas(v.toDecimal()) + " " + (one ? singular(a.name) : a.name)} ${eq} ${ft} ${r.n === r.d ? singular(b.name) : b.name}${exactNote}${extra}`, value: r };
   }
   function singular(n) { return n.replace(/(inche|foot|feet)s?$/, (x) => (x.startsWith("inch") ? "inch" : "foot")).replace(/ies$/, "y").replace(/s$/, ""); }
 
