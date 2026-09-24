@@ -467,6 +467,8 @@
     constructor(data) {
       this.data = data;
       this.ready = false;
+      // how candidate replies are scored (see respond); tuned on test/sample_chat.txt
+      this.weights = { base: 0.36, sim: 0.55, simRef: 0.55, kw: 0.32, ll: 0.05, llRef: -3.2, pmi: 0, gpt: -0.01 };
     }
     async init() {
       const d = this.data;
@@ -498,8 +500,9 @@
       if (you) s = s.replace(new RegExp("\\b" + esc(you) + "\\b", "g"), "<|you|>");
       return s;
     }
-    contextEmbedding(history, userText, names) {
-      const lastBot = [...history].reverse().find((h) => h.role === "bot");
+    contextEmbedding(history, userText, names, withBot) {
+      // by default only the user's message: feeding Pip's own previous line back in can make retrieval echo itself
+      const lastBot = withBot ? [...history].reverse().find((h) => h.role === "bot") : null;
       const ctx = (lastBot ? "<|b|>" + this._fmt(lastBot.text, "bot", names) + " " : "") + "<|a|>" + this._fmt(userText, "user", names);
       return this.enc.ctx(this.tok.encode(ctx).slice(-this.enc.cfg.maxlen));
     }
@@ -595,7 +598,7 @@
       const t = text.trim();
       if (t.length < 2 || t.split(/\s+/).length > 40) return false;
       if (PERSONA.test(t) || BAD.test(t)) return false;
-      if (/<\|(a|b|end)\|>/.test(t)) return false;
+      if (/<\|(a|b|end)\|>/.test(t) || /[\/\\|_~^*#{}\[\]]/.test(t.replace(/<\|you\|>/g, ""))) return false;
       const low = t.toLowerCase().replace(/[^a-z ]/g, "");
       if (low === userText.toLowerCase().replace(/[^a-z ]/g, "")) return false;          // parroting
       if (recent && recent.some((r) => r.toLowerCase().replace(/[^a-z ]/g, "") === low)) return false;
@@ -607,11 +610,14 @@
       const names = { user: opts.name || "", bot: opts.bot || "Pip" };
       const out = [];
       if (!this.enc) return out;
-      const q = this.contextEmbedding(history, userText, names);
+      const lastBotText = ([...history].reverse().find((h) => h.role === "bot") || {}).text || "";
+      // include Pip's previous line only when it asked something (then the user's message is an answer)
+      const q = this.contextEmbedding(history, userText, names, /\?\s*\S*$/.test(lastBotText) && userText.split(/\s+/).length <= 6);
       const yieldFn = opts.yieldFn || (() => new Promise((r) => setTimeout(r, 0)));
       const ctxAll = history.slice(-2).map((h) => h.text).join(" ") + " " + userText;
       const ctxWords = this._contentWords(ctxAll);
-      const ctx3rd = /\b(he|she|him|her|his|hers|mom|mum|dad|mother|father|brother|sister|friend|teacher|boss|girlfriend|boyfriend|wife|husband|cat|dog|coach|grandma|grandpa|son|daughter|baby)\b/i.test(ctxAll);
+      const userSide = history.filter((h) => h.role === "user").slice(-1).map((h) => h.text).join(" ") + " " + userText;
+      const ctx3rd = /\b(he|she|him|her|his|hers|mom|mum|dad|mother|father|brother|sister|friend|teacher|boss|girlfriend|boyfriend|wife|husband|cat|dog|coach|grandma|grandpa|son|daughter|baby|uncle|aunt|cousin|neighbou?r)\b/i.test(userSide);
       const userAsked = /\?\s*$/.test(userText) || /^(do|does|did|are|is|was|were|can|could|will|would|should|have|has)\b/i.test(userText.trim());
       const cands = [];
       // 1) retrieval from the bank of human-written replies
@@ -644,10 +650,13 @@
       }
       if (!cands.length) return out;
       // 3) PipGPT judges every candidate: how likely is it as the next line of this conversation?
+      //    Optionally minus how likely it is after a bland context, which penalizes replies that fit anything.
+      const W = this.weights;
       if (this.gpt) {
         const conts = cands.map((c) => this.tok.encode(" " + this._fmt(c.text, "bot", names).trim()).slice(0, 40));
         const ll = await this.gpt.scoreContinuations(prompt, conts, sp["<|a|>"], yieldFn);
-        cands.forEach((c, i) => { c.ll = ll[i]; });
+        const llg = W.pmi ? await this.gpt.scoreContinuations(this.tok.encode("<|a|> ok<|b|>"), conts, sp["<|a|>"], yieldFn) : null;
+        cands.forEach((c, i) => { c.ll = ll[i]; if (llg) c.pmi = ll[i] - llg[i]; });
       }
       for (const c of cands) {
         const words = this._contentWords(c.text);
@@ -659,9 +668,10 @@
         if (!ctx3rd && /\b(he|she|him|her|his|hers)\b/i.test(c.text)) c.lex -= 0.08;
         // "Yes, I love it." as a reply to something that wasn't a question
         if (!userAsked && /^(yes|yeah|yep|no|nope|nah|sure|of course)\b/i.test(c.text)) c.lex -= 0.05;
-        c.score = calib(c.sim) + c.lex + 0.12 * (c.kw || 0) + (c.ll !== undefined ? 0.035 * U.clamp(c.ll + 3.2, -2.5, 2) : 0) +
-          (opts.venting && c.src === "empathetic" ? 0.03 : 0) + (c.source === "neural:gpt" ? -0.01 : 0);
-        out.push({ text: c.text, score: Math.min(c.score, 0.84), source: c.source === "neural:keyword" ? "neural:retrieval" : c.source, sim: c.sim, ll: c.ll, lex: c.lex, kw: c.kw });
+        c.score = W.base + W.sim * (c.sim - W.simRef) + W.kw * (c.kw || 0) + c.lex +
+          (c.ll !== undefined ? W.ll * U.clamp(c.ll - W.llRef, -2.5, 2) : 0) + (c.pmi !== undefined ? W.pmi * U.clamp(c.pmi, -2, 3) : 0) +
+          (opts.venting && c.src === "empathetic" ? 0.03 : 0) + (c.source === "neural:gpt" ? W.gpt : 0);
+        out.push({ text: c.text, score: Math.min(c.score, 0.84), source: c.source === "neural:keyword" ? "neural:retrieval" : c.source, sim: c.sim, ll: c.ll, lex: c.lex, kw: c.kw, pmi: c.pmi });
       }
       out.sort((a, b) => b.score - a.score);
       return out.slice(0, 8);      return out;

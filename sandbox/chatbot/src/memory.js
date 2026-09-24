@@ -57,10 +57,18 @@
       .replace(/\s+(and|but|because|since|so|when|which|who|if)\b.*$/, "").replace(/[^a-z0-9' &+-]/gi, " ").replace(/\s+/g, " ").trim();
   }
   function properCase(s) { return s.replace(/\b[a-z]/g, (c) => c.toUpperCase()); }
+  // keyboard mashes ("asdfghjkl") and consonant soup are not names
+  function plausibleName(low) {
+    if (!/[aeiouy]/.test(low)) return false;
+    if (/[bcdfghjklmnpqrstvwxz]{4,}/.test(low)) return false;
+    if (/(asdf|sdfg|dfgh|fghj|ghjk|hjkl|qwer|wert|erty|rtyu|tyui|yuio|uiop|zxcv|xcvb|cvbn|vbnm)/.test(low)) return false;
+    if (/(.)\1\1/.test(low)) return false;
+    return true;
+  }
   function looksLikeName(w, rawText, expecting) {
     if (!w || w.length < 2 || w.length > 20 || /\d/.test(w)) return false;
     const low = w.toLowerCase();
-    if (NOT_NAME.has(low) || P.nlp.STOP.has(low)) return false;
+    if (NOT_NAME.has(low) || P.nlp.STOP.has(low) || !plausibleName(low)) return false;
     if (expecting) return true;
     // the user capitalized it, or it's not a common English word
     const cap = new RegExp("\\b" + w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() + "\\b").test(rawText);
@@ -126,7 +134,8 @@
       !/^(hi|hey|hello|yo|ok|okay|lol|haha|thanks|thank you|bye|what|why|how|nothing|idk|dunno|no|yes|yeah|nope|sure|cool|nice|hmm|wow|same|good|great|oh|ah|um|uh|i do not|i don't|not really|never mind|nvm|stop|help)\b/.test(m.plain)) {
       const val = cleanValue(m.plain.replace(/^(i think |probably |hmm |um |uh |well |my favorite is |i like |i love |its |it is |i would say |definitely |maybe )+/, "")).replace(/^(the|a|an) /, "");
       const colorOk = expect.slot !== "color" || /\b(red|orange|yellow|green|blue|purple|violet|pink|black|white|gr[ae]y|brown|teal|cyan|turquoise|magenta|gold|golden|silver|beige|maroon|navy|lime|indigo|lavender|crimson|aqua|mint|peach|rainbow|lilac|coral|scarlet|emerald|sky|dark|light|pastel)\b/.test(val);
-      if (val && colorOk && !/^(no|nothing|none|idk|i do not know|not sure|dunno|i dont know|what|why|you|yours|same|everything|all of them)$/.test(val)) facts.push({ type: "favorite", slot: expect.slot, value: val });
+      const sentence = /\b(is|are|was|were|am|have|has|had|does|did|will|would|can|should|could|must|got|get|went|go)\b/.test(val) || /^(my|i|we|you|it|this|that|he|she|they|there)\b/.test(val);
+      if (val && colorOk && !sentence && val.split(" ").length <= 4 && !/^(no|nothing|none|idk|i do not know|not sure|dunno|i dont know|what|why|you|yours|same|everything|all of them)$/.test(val)) facts.push({ type: "favorite", slot: expect.slot, value: val });
     }
 
     // likes / dislikes (not "I like you", which is about Pip)
@@ -243,7 +252,7 @@
     const ask = /\b(what|whats|what is|do you know|do you remember|remember|tell me|who|where|when|how old|which)\b/.test(t);
     if (!ask && !/\?/.test(m.clean)) return null;
 
-    if (/\b(what is|whats|do you (?:know|remember)|tell me|say|guess) my name\b|\bwho am i\b|\bdo you know who i am\b|\bremember me\b/.test(t)) {
+    if (/\b(what is|whats|do you (?:know|remember)|tell me|say|guess) my name\b|\bwho am i\b|\bdo you know who i am\b|\bremember me\b|\bdo you (still )?(know|remember) me\b|\byou (know|remember) me\b/.test(t)) {
       if (mem.name) return { text: U.pick([`You're ${mem.name}! How could I forget? 😊`, `Your name is ${mem.name}.`, `${mem.name}, of course!`]) };
       return { text: "You haven't told me your name yet! What should I call you?", expect: { kind: "name" } };
     }
@@ -286,6 +295,9 @@
       const s = summary(mem);
       if (!s.length) return { text: "Not much yet! Tell me about yourself: what's your name, and what do you like to do?" };
       return { text: `Here's what I remember: ${U.listJoin(s.slice(0, 9))}. ${U.pick(["Did I get it right?", "I pay attention! 😊", "Anything I should add?"])}` };
+    }
+    if (/\b(what|where|when|who|how|which) (did|do|was|were|am|have|had) i (have|eat|do|go|see|say|buy|get|watch|play|wear|meet|call)\b/.test(t) && !/\bwhat did i (just )?say\b/.test(t)) {
+      return { text: U.pick(["Hmm, I don't know! You haven't told me. 😄 What was it?", "You'd have to tell me! I only know what you share with me. What was it?"]) };
     }
     if ((r = /\bdo you remember (?:that |when |what |how |my |about )?(.{2,40})$/.exec(m.plain.replace(/[?!.]/g, "")))) {
       const q = r[1].replace(/\bmy\b/g, "").trim();

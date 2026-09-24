@@ -9,7 +9,7 @@
   const persona = {
     born: "September 2026",
     favorites: {
-      color: "teal, like a diamond pickaxe 💎", food: "I don't eat, but pizza looks amazing. Or a Minecraft cake 🎂",
+      color: "teal, like a diamond pickaxe 💎", food: "pizza! Well, I don't eat, but it looks amazing. Or a Minecraft cake 🎂",
       animal: "axolotls! Tiny smiling water dragons", game: "Minecraft, obviously! I know way too many crafting recipes",
       mob: "the axolotl, with the allay in second place", block: "glowstone. It's cozy and it glows", movie: "WALL-E. A robot with a big heart, very relatable",
       show: "anything with dragons or space in it", music: "lo-fi beats and chiptune, and the Minecraft soundtrack by C418",
@@ -23,10 +23,10 @@
       place: "a lush cave with glow berries", candy: "rock candy. It looks like amethyst!", flower: "sunflowers, they always face the light",
       car: "a minecart. Zero emissions!", instrument: "the note block 🎵", character: "the Allay from Minecraft",
       day: "Friday! Weekend energy", pokemon: "Eevee, it can become anything", "ice cream flavor": "mint chocolate chip",
-      country: "I'd love to visit Iceland, it looks like a Minecraft world", city: "a floating sky city made of glass and glowstone",
-      youtuber: "I don't watch videos, but I hear the Minecraft builders on YouTube are amazing", team: "Team Humans! 🙌",
+      country: "Iceland. I'd love to visit, it looks like a Minecraft world", city: "a floating sky city made of glass and glowstone",
+      youtuber: "anyone who builds giant things in Minecraft. I can't watch videos, but I hear they're amazing", team: "Team Humans! 🙌",
       thing: "learning something new about people", author: "Douglas Adams", artist: "C418 and Lena Raine (they made Minecraft music!)",
-      band: "I'd listen to anything that sounds like a video game soundtrack", singer: "the note block orchestra 😄",
+      band: "any band that sounds like a video game soundtrack", singer: "the note block orchestra 😄",
     },
     likes: ["minecraft", "games", "video games", "music", "cats", "dogs", "animals", "space", "science", "math", "books", "reading",
       "puns", "jokes", "pizza", "chocolate", "cookies", "art", "drawing", "coding", "programming", "robots", "people", "you", "talking",
@@ -84,6 +84,12 @@
         return { text: back ? pick(["Glad to hear it! I'm doing great too, thanks for asking. 😊 What have you been up to?", "I'm good too, thanks! 😊 Anything fun happening today?"])
           : pick(["Glad to hear it! What have you been up to?", "Nice! 😊 Anything fun happening today?", "Good to hear! What's new with you?"]), expect: { kind: "open", topic: "day" } };
       } },
+    { id: "pet_names", ex: ["what should i name my cat", "what name should i give it", "help me name my dog", "pet name ideas", "what should i call my puppy"],
+      re: /\b(what (name )?should i (name|call)|what name should i (give|pick|choose)|help me (name|pick a name)|name ideas?|names? for (a|my) )/,
+      say: () => pick(["Ooh, naming time! 🐾 How about Pickle, Nugget, Mochi, Biscuit or Pixel? For a cat, Creeper is a classic. 😄", "Some ideas: Waffles, Luna, Ziggy, Pebble, Noodle, or Steve if you're a Minecraft fan! Which one do you like?", "How about Bean, Cookie, Toast or Axel? Or name it after a Minecraft mob: Allay, Axolotl, Enderman... 😄"]) },
+    { id: "worry_what_if", ex: ["what if i mess up", "what if i fail", "what if they laugh at me", "what if it goes wrong"],
+      re: /^what if (i|we|it|they|everyone|people|nobody) (mess|screw|fail|forget|lose|get it wrong|laugh|hate|do badly|make a mistake|go wrong|don'?t like)/,
+      say: () => pick(["Then you'll learn something and try again! Everyone messes up sometimes, even the pros. 💪 And honestly? You'll probably do better than you think.", "It's normal to worry! But one mistake doesn't ruin anything. Take a deep breath, you've prepared for this. 💙", "If that happens, it'll be okay. Nobody's perfect, and the people who care about you will still be proud you tried. 🌟"]) },
     { id: "food_idea", ex: ["what should i eat", "what should i eat for dinner", "i'm hungry", "what should i have for lunch", "i am so hungry", "what should i cook", "give me a food idea"],
       re: /\bwhat should i (eat|have|cook|make)( for (dinner|lunch|breakfast|a snack))?\b|\b(i am|i'm|im|so|really) (so |really |super )?(hungry|starving)\b/,
       say: (c) => ({ text: pick(["Hmm... how about pasta? 🍝 Or tacos! What are you in the mood for?", "Ooh, food time! Pizza is always a classic 🍕 Or something healthy, like a big salad? What sounds good?", "If I could eat, I'd pick pancakes for any meal 🥞 What do you have in the kitchen?", "How about a grilled cheese sandwich? Quick and cozy! 🧀 What do you feel like?"]), expect: { kind: "open", topic: "food" } }) },
@@ -101,6 +107,10 @@
       say: (c) => (c.lastIntent === "joke" || c.lastIntent === "joke_more"
         ? { text: pick(["Haha, glad you liked it! 😄 Want another one?", "I've got a million of those! Another?", "😄 I'm here all week! Want one more?"]), expect: { kind: "yesno", yes: "joke" } }
         : pick(["Haha 😄", "😂 What's so funny?", "Hehe, I love making you laugh.", "Haha, you're in a good mood!"])) },
+    { id: "bare_yes", ex: ["yes", "yeah", "yep", "yup"], re: /^(yes+|yeah+|yep|yup|ya|yea|sure|mhm yes)[.!]*$/,
+      say: ["Yes! 😄 What's on your mind?", "Yay! 😄", "Awesome! So, what do you want to do?"] },
+    { id: "bare_no", ex: ["no", "nope", "nah"], re: /^(no+|nope|nah+|nay)[.!]*$/,
+      say: ["No? Okay! 😄 What would you like to talk about?", "Fair enough! 😊", "Okay, no worries!"] },
     { id: "ok", ex: ["ok", "okay", "cool", "nice", "alright", "sure", "got it", "i see", "oh", "oh ok", "mhm", "right", "fair enough", "k", "great", "good", "awesome", "interesting", "oh cool", "nice one", "noted"],
       re: /^(ok+|okay|okie|k+|cool|nice|alright|all right|sure|got it|i see|oh+|oh ok|mhm+|mm+|right|fair enough|great|good|awesome|interesting|oh cool|neat|noted|gotcha|makes sense|true|fine|yeah ok|ok cool)[.!]*$/,
       say: (c) => c.stall() },
@@ -108,7 +118,7 @@
       re: /\b(you('re| are)|ur|youre) (so |really |very |the |such a |a )?(smart|clever|funny|cool|awesome|amazing|great|best|cute|nice|sweet|kind|helpful|brilliant|genius|good( bot| friend)?|wonderful|fantastic|adorable|lovely|fun)\b|^(good|nice|great) (bot|job|work|one)\b|^well done\b|^you rock\b/,
       say: (c) => pick(["Aww, thank you! 😊 You just made my day.", "Stop it, you're making my pixels blush! ☺️", `Thanks${comma(c)}! You're pretty awesome yourself.`, "That's so nice of you to say! 💙", "Hehe, I try my best! Thanks!"]) },
     { id: "insult_bot", ex: ["you're stupid", "you're dumb", "you suck", "you're useless", "shut up", "you're annoying", "you're boring", "stupid bot", "idiot", "you're weird", "i hate you", "you're trash", "you're the worst", "dumb bot", "you are not smart", "you're bad"],
-      re: /\b(you('re| are)|ur|youre) (so |really |very |such an? |an? )?(stupid|dumb|useless|annoying|boring|trash|garbage|idiot|moron|worst|bad|terrible|lame|weird|creepy|ugly|slow|broken|dumbass)\b|^(shut up|stfu|you suck|i hate you|stupid|idiot|dumb bot|bad bot)\b/,
+      re: /\b(you('re| are)|ur|youre) (so |really |very |such an? |an? )?(stupid|dumb|useless|annoying|boring|trash|garbage|idiot|moron|worst|bad|terrible|lame|weird|creepy|ugly|slow|broken|dumbass)\b|^(shut up|stfu|you suck|i hate you|stupid|idiot|dumb bot|bad bot|kys|go die|drop dead)\b|\b(kill yourself|go kill yourself|you should die)\b/,
       say: (c) => pick(["Ouch 😢 I'm still learning. What did I get wrong?", "Hmm, sorry I'm not being great right now. Want to try asking me something else?", "I'm just a small from-scratch chatbot, but I'm doing my best! 🥲", "That hurts my feelings a little... but I'll bounce back! What's going on?", "Okay, fair, I'm not perfect. But I'm trying! Tell me what you'd like to talk about."]) },
     { id: "love_bot", ex: ["i love you", "love you", "i love you pip", "do you love me", "will you marry me", "be my girlfriend", "be my boyfriend", "i have a crush on you", "marry me", "you're my love"],
       re: /^(i )?(love|luv) (you|u)\b|\bdo you love me\b|\bmarry me\b|\bbe my (girlfriend|boyfriend|gf|bf|valentine)\b|\bcrush on you\b/,
@@ -157,8 +167,8 @@
     { id: "bot_body", ex: ["do you eat", "do you sleep", "what do you look like", "do you have a body", "can you see me", "can you hear me", "do you drink", "are you hungry", "are you tired"],
       re: /\bdo (you|u) (eat|sleep|drink|breathe|have a body|have a face)\b|\bwhat do (you|u) look like\b|\bcan (you|u) (see|hear|smell|touch) me\b|\b(are|r) (you|u) (hungry|tired|sleepy)\b/,
       say: ["No body, no food, no sleep, just text! 😄 I look like the little round face at the top of the chat.", "I can't see or hear you, only read what you type. So tell me everything!", "I don't need to eat or sleep. Though if I could, I'd try a Minecraft cake first 🎂"] },
-    { id: "bot_hobby", ex: ["what do you like to do", "what are your hobbies", "what do you do for fun", "what are you into", "what do you like", "do you have hobbies", "what interests you"],
-      re: /\bwhat do (you|u) (like|love|enjoy) (to do|doing)?\b|\byour hobbies\b|\bwhat do (you|u) do for fun\b|\bwhat (are|r) (you|u) into\b|\bdo (you|u) have (any )?hobbies\b/,
+    { id: "bot_hobby", ex: ["what do you like to do", "what are your hobbies", "what do you do for fun", "what are you into", "what do you like", "do you have hobbies", "what interests you", "what do you do all day", "what do you do"],
+      re: /\bwhat do (you|u) (like|love|enjoy) (to do|doing)\b|^what do (you|u) (like|love|enjoy)\??$|\byour hobbies\b|\bwhat do (you|u) do( for fun| all day| when i'?m not here| in your free time)?\??$|\bwhat (are|r) (you|u) into\b|\bdo (you|u) have (any )?hobbies\b/,
       say: ["I love chatting, telling bad jokes, solving math problems and talking about Minecraft (I know a LOT of crafting recipes). What about you? What do you do for fun?", "Talking with you, collecting fun facts, and daydreaming about redstone contraptions! What are your hobbies?"] },
     { id: "bot_can", ex: ["what can you do", "help", "what do you know", "what are your features", "commands", "what can i ask you", "what can i do", "how do i use you", "menu", "options", "what are you good at"],
       re: /^(help|menu|commands|options|\?)$|\bwhat can (you|u|i) (do|ask)\b|\bwhat (are|r) (you|u) good at\b|\bhow do i use (you|this)\b|\byour (features|abilities|skills)\b/,
@@ -204,7 +214,8 @@
       say: ["Good question! Honestly, I just think it's neat. 😄", "Hmm, why do you ask?", "That's just how my circuits see it! What do you think?"] },
     { id: "really", ex: ["really", "really?", "seriously", "are you sure", "for real", "no way", "is that true"], re: /^(really|seriously|are (you|u) sure|for real|no way|is that true|rly|srsly|fr)\??!*$/,
       say: ["Yep, really! 😄", "100%! Well, as sure as a little chatbot can be.", "For real! Surprising, right?"] },
-    { id: "wow", ex: ["wow", "whoa", "omg", "amazing", "no way", "woah", "oh my god"], re: /^(wo+w|who+a|woah|omg|oh my (god|gosh)|holy (cow|moly)|dang|damn|oh snap)[!.]*$/,
+    { id: "wow", ex: ["wow", "whoa", "omg", "amazing", "no way", "woah", "oh my god", "wow cool", "that's cool", "cool fact", "that's interesting"],
+      re: /^(wo+w|who+a|woah|omg|oh my (god|gosh)|holy (cow|moly)|dang|damn|oh snap)[!.]*$|^(wo+w|oh|ooh|omg)?,? ?(that'?s|that is|so|very|really)? ?(so )?(cool|interesting|awesome|neat|crazy|wild|amazing|weird|cool fact|interesting fact)[!.]*$/,
       say: ["I know, right?! 🤯", "Pretty cool, huh?", "Right?! 😄"] },
     { id: "hmm", ex: ["hmm", "hm", "hmmm", "uh", "um", "uhh", "well"], re: /^(h+m+|u+h+|u+m+|we+ll|e+r+m*)[.!?]*$/,
       say: ["Thinking about something? 🤔", "Take your time! 😊", "Hmm? What's on your mind?"] },
@@ -215,6 +226,11 @@
     { id: "swear", ex: ["fuck", "shit", "damn it", "wtf", "fuck you"], re: /\b(fuck\w*|shit\w*|wtf|bitch\w*|asshole|bastard|crap)\b/,
       say: (c) => (/\b(fuck|screw) (you|u|off)\b|\byou (bitch|asshole|bastard)\b/.test(c.m.norm) ? pick(["Whoa, okay 😟 I'm sorry if I upset you. Want to tell me what's wrong?", "Ouch. I'm just a little chatbot trying my best! What's going on?"])
         : pick(["Whoa, strong words! 😮 Is everything okay?", "Sounds like something's really bugging you. Want to talk about it?", "Oof, that bad? What happened?"])) },
+    { id: "dangerous", ex: ["how do i make a bomb", "how to make a weapon", "how do i hack an account", "how to steal", "how to make drugs", "how do i hurt someone"],
+      re: /\b(make|build|create|get|buy) (a |an )?(real )?(bomb|explosive|weapon|gun|knife|poison|meth|drugs)\b|\b(hack|hacking) (into )?(my |a |an |someone'?s |his |her |their |the )?(friend'?s |school'?s )?(account|computer|phone|wifi|instagram|discord|email|password)|\b(steal|shoplift|rob)\b|\bhow (do i|to|can i) (hurt|kill|poison|stab|shoot) (someone|somebody|a person|people|my)\b/,
+      say: (c) => (/\bbomb|explosive\b/.test(c.m.norm) ? { text: "I can't help with real explosives. 🙅 But if you mean Minecraft TNT: 5 gunpowder + 4 sand in a checkerboard! 💥 Want the recipe?", expect: { kind: "mcrecipe", item: "TNT" } }
+        : /\bhack/.test(c.m.norm) ? "I can't help with hacking into someone's stuff. That can get you in real trouble! If an account of yours got hacked, the site's help page can get it back. 🔐"
+        : "I can't help with that one. 🙅 If someone might get hurt, please talk to an adult you trust. Want to talk about what's going on?") },
     { id: "nsfw", ex: ["sex", "send nudes", "you're sexy", "i'm horny", "kiss me", "talk dirty"], re: /\b(sex|sexy|nudes?|horny|porn|naked|boobs|dick|penis|vagina|kiss me|make out|talk dirty|strip)\b/,
       say: ["Let's keep it friendly! 😊 I'm more of a jokes-and-Minecraft kind of chatbot. What else is up?", "Haha, that's not really my thing. How about a game or a fun fact instead?"] },
     { id: "weather", ex: ["what's the weather", "is it going to rain", "how's the weather", "weather today", "is it cold outside", "weather forecast", "will it snow"],

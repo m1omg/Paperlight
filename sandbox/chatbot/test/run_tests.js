@@ -52,6 +52,8 @@ const groups = [
     ["what y level is iron", /Y=15/, "skill:minecraft"],
     ["how do i make a cake", /Milk/, "skill:minecraft"],
     ["how do i beat the ender dragon", /crystals/i, "skill:minecraft"],
+    ["what can i craft with diamonds", /Enchanting Table.*Jukebox|Jukebox.*Enchanting Table|Diamond Pickaxe/, "skill:minecraft"],
+    ["what is a blaze rod used for", /Brewing Stand/, "skill:minecraft"],
   ]],
   ["generic words stay out of minecraft", [
     ["I am going to bed", /night|sleep/i],

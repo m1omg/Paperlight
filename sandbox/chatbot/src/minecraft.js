@@ -252,6 +252,22 @@
       }
     }
 
+    // "what can I craft with diamonds / iron / sticks?"
+    const uses = /\bwhat (?:can|could|should) (?:i|you|we) (?:make|craft|build|do|create) (?:with|from|using|out of) (?:a |an |some |my |the )?([a-z ]{2,30}?)\??$/.exec(text) ||
+      /\bwhat (?:is|are) (?:a |an |the )?([a-z ]{2,30}?) (?:used for|good for|for)\??$/.exec(text) || /\buses (?:of|for) (?:a |an |the )?([a-z ]{2,30}?)\??$/.exec(text);
+    if (uses) {
+      const q = uses[1].trim().split(" ").map(sing).join(" ");
+      const hits = D.items.filter((it) => {
+        const ings = it.grid ? Object.values(it.key) : it.shapeless || it.smithing || [];
+        return ings.some((nm) => { const n = normPhrase(nm).split(" ").map(sing).join(" "); return n === q || n.startsWith(q + " ") || n.endsWith(" " + q) || n.includes(" " + q + " ") || (q.length > 4 && U.levenshtein(n, q, 1) <= 1); });
+      }).map((it) => it.name);
+      if (hits.length && (mcWords || recentMC || hits.length >= 2)) {
+        const shown = hits.slice(0, 14);
+        const list = hits.length > shown.length ? shown.join(", ") + ` and ${hits.length - shown.length} more` : U.listJoin(shown);
+        return done(state, { text: `With ${uses[1].trim()} you can craft: ${list}. Ask me for any recipe!`, kind: "uses" }, null);
+      }
+    }
+
     // full armor set question
     const setQ = /\b(full set|full armor|whole set|all the armor|full suit)\b/.test(text) || (/\bset of\b/.test(text) && /\barmor\b/.test(text));
     if (setQ) {

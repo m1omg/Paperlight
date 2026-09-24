@@ -19,11 +19,13 @@
   const ELIZA = [
     [/^i (?:want|wanna|would like|would love|hope) to (.{3,60})$/, ["Why do you want to {1}?", "That sounds like a great goal! What would be the first step?", "Ooh! What made you want to {1}?"]],
     [/^i (?:want|wanna|would like|would love) ((?:a |an |some |the |more )?.{3,60})$/, ["Why do you want {1}?", "What would you do with {1}?", "Ooh, {1}! What made you want that?"]],
-    [/^i need (?:to )?(.{3,60})$/, ["Why do you need {1}?", "Would {1} really help you?", "What would happen if you did?"]],
+    [/^i need (.{3,60})$/, ["Why do you need {1}?", "Ooh, how come?", "What's the plan for that?"]],
+    [/^i(?: am| m)? (?:thinking about|thinking of|planning to|planning on|going to|want to|wanna|might) (?:get|getting|adopt|adopting|buy|buying) ((?:a |an |some |the |new )?.{2,40})$/, ["Ooh, {1}! That's exciting! What made you want that?", "{1}? That sounds awesome! Tell me more!", "Nice! Have you picked one out yet?"]],
     [/^i (?:think|believe|guess) (?:that )?(.{3,60})$/, ["What makes you think {1}?", "Do you really think so?", "Interesting! Why do you think that?"]],
     [/^i (?:can not|cannot|can't) (.{3,60})$/, ["What makes you think you can't {1}?", "Have you tried? Sometimes it just takes practice!", "Maybe you can, just not yet! 💪"]],
     [/^i (?:do not|don't) (.{3,60})$/, ["Why don't you {1}?", "Do you wish you did?", "Fair enough! Why not?"]],
     [/^i (?:just |recently )?(?:finished|made|built|drew|wrote|won|learned|started|beat|completed) (.{3,60})$/, ["Nice! Tell me more about it!", "Ooh, how did that go?", "That's cool! How do you feel about it?"]],
+    [/^i (?:played|watched|went to|visited|saw|read|tried|ate|had|made|built|drew|baked|cooked|got to|spent the day) (.{2,50})$/, ["Nice! How was it?", "Ooh, that sounds fun! How did it go?", "Cool! Tell me more about it!"]],
     [/^my (\w+) (?:is|was|are|were) (.{2,50})$/, ["Why do you say your {1} is {2}?", "Tell me more about your {1}!", "How do you feel about that?"]],
     [/^(?:because|cause|cuz) (.{3,60})$/, ["That makes sense.", "Is that the only reason?", "Oh, I see!"]],
     [/^(?:do|can|will|would|should|could|are|is|have) you (.{3,60})\?*$/, ["Hmm, I'm not sure I can {1}! What about you?", "Good question! What do you think?"]],
@@ -141,7 +143,14 @@
       st.shortStreak = m.tokens.length <= 2 ? st.shortStreak + 1 : 0;
 
       let out = null;
-      if (m.empty) out = { text: pick(["You can type anything! 😊", "Hm? Say something! I'm listening.", "👀"]), source: "empty" };
+      const emo = N.basicClean(text).replace(/[\s\u200d\ufe0f]/g, "");
+      if (m.empty && /\p{Extended_Pictographic}/u.test(emo)) {
+        const sad = /[😢😭😞😔☹🙁😟😿💔😩😫]/u.test(emo), love = /[❤💙💕💖💗😍🥰😘]/u.test(emo), laugh = /[😂🤣😆😹]/u.test(emo), up = /[👍👌🙌✨🎉]/u.test(emo);
+        out = { text: sad ? "Aw, what's wrong? 💙" : love ? "💙 Right back at you!" : laugh ? "😂 What's so funny?" : up ? "👍 Nice!" : pick(["😄", "Hehe 😊", "😊 What's up?"]), source: "emoji", expect: sad ? { kind: "vent", emotion: "sad" } : null };
+      } else if (m.empty) out = { text: pick(["You can type anything! 😊", "Hm? Say something! I'm listening.", "👀"]), source: "empty" };
+      else if (m.tokens.length === 1 && m.tokens[0].length >= 5 && !N.knownWord(m.tokens[0]) && !MEM.looksLikeName(m.tokens[0], m.clean, true) && !(expect && expect.kind === "name") && !st.game)
+        out = { text: pick(["Hmm? I think your keyboard sneezed. 😄", "Did a cat just walk across your keyboard? 🐱⌨️", "That looks like a secret code! 🕵️ What does it mean?"]), source: "gibberish" };
+      else if (/^\s*-?\d+(\.\d+)?\s*$/.test(text) && !(expect && /age|game/.test(expect.kind)) && !st.game) out = { text: `${text.trim()}? 🔢 Is that a special number?`, source: "number" };
 
       // 0) safety first
       if (!out && C.safety.crisis.test(m.plain)) out = { text: C.safety.reply, source: "safety", expect: { kind: "vent", emotion: "sad" } };
@@ -164,6 +173,7 @@
       if (!out) out = await this._open(m, c, trace, expect);
 
       if (typeof out === "string") out = { text: out };
+      out.text = this._restoreCase(out.text, m.clean);
       if (greetBack && !/^(hi|hey|hello|good (morning|afternoon|evening)|oh hi|welcome)\b/i.test(out.text)) out.text = greetBack + out.text;
       out.text = this._post(out.text);
       if (st.recent.includes(out.text) && out.alts && out.alts.length) out.text = this._post(pick(out.alts));
@@ -466,6 +476,16 @@
         if (fav) return { text: `My favorite ${slot} is ${fav}! ${theirs ? `And yours is ${theirs}, right? 😊` : "What's yours?"}`, source: "opinion:favorite", expect: theirs ? null : { kind: "favorite", slot }, score: 0.9 };
         return { text: `Hmm, I don't think I have a favorite ${slot} yet! What's yours? Maybe you can help me choose. 😊`, source: "opinion:favorite", expect: { kind: "favorite", slot }, score: 0.85 };
       }
+      if ((r = /\bwhat (?:kind of |kinds of |type of |types of |sort of )?(music|songs?|games?|video games|movies?|films?|books?|food|foods|sports?|animals?|shows?|tv shows|anime|colors?) do (?:you|u) (?:like|love|enjoy|listen to|play|watch|read|eat)\b/.exec(t))) {
+        const slot = MEM.SLOTS[r[1].replace(/s$/, "")] || MEM.SLOTS[r[1]] || r[1];
+        const fav = C.persona.favorites[slot] || C.persona.favorites[slot.replace("video ", "")];
+        if (fav) return { text: `I really like ${fav.replace(/^(\w)/, (x) => x.toLowerCase())}! What about you?`, source: "opinion:favorite", expect: { kind: "favorite", slot }, score: 0.88 };
+      }
+      if ((r = /\bdo (?:you|u) believe in ([a-z][a-z ']{1,30})$/.exec(t))) {
+        const x = r[1];
+        const special = { ghosts: "Ghosts? Well, I'm made of code and live inside a screen, so maybe I'm a tiny bit of a ghost myself 👻 Do you believe in them?", aliens: "Aliens? The universe is SO big, I think there's probably life out there somewhere! 👽 Do you?", magic: "I believe in the magic of a well-placed redstone circuit! ✨ Do you?", love: "Definitely! 💕 Do you?", yourself: "I'm trying to! And I believe in you. 💪", god: "That's a big question, and people believe lots of different things. What do you believe?", santa: "Santa? My lips are sealed! 🎅 Do you?" };
+        return { text: special[x] || `Hmm, ${x}? I'm not sure! I'd love to hear what you think. Do you believe in ${x}?`, source: "opinion:believe", score: 0.85, expect: { kind: "open", topic: x } };
+      }
       if ((r = /\bdo (?:you|u) (like|love|enjoy|hate|play|watch|listen to|eat) ([a-z0-9][a-z0-9 '-]{1,40})$/.exec(t)) || (r = /\bwhat do you think (?:about|of) ([a-z0-9][a-z0-9 '-]{1,40})$/.exec(t)) && (r = [r[0], "like", r[1]])) {
         const thing = r[2].replace(/^(the|a|an) /, "").trim();
         if (/^(me|it|that|this|them|him|her|you|yourself)$/.test(thing)) return null;
@@ -509,7 +529,12 @@
 
     async _open(m, c, trace, expect) {
       const cands = [];
-      const add = (x) => { if (x && x.text) { cands.push(x); trace.push({ source: x.source, score: +(x.score || 0).toFixed(3), text: x.text }); } };
+      const add = (x) => {
+        if (!x || !x.text) return;
+        cands.push(x);
+        const extra = x.sim !== undefined ? ` (sim ${x.sim.toFixed(2)}${x.kw ? " kw " + x.kw.toFixed(2) : ""}${x.ll !== undefined ? " ll " + x.ll.toFixed(2) : ""}${x.lex ? " lex " + x.lex.toFixed(2) : ""})` : "";
+        trace.push({ source: x.source, score: +(x.score || 0).toFixed(3), text: x.text, detail: extra });
+      };
 
       const ev = this._events(m); if (ev) add(ev);
       const op = this._opinion(m, c); if (op) add(op);
@@ -541,10 +566,11 @@
         const r = re.exec(m.plain.replace(/[.!]+$/, ""));
         if (r) {
           const parts = r.slice(1).map((x) => reflect(x || "").replace(/[?.!]+$/, ""));
-          add({ text: U.fill(pick(outs).replace(/\{(\d)\}/g, "{a$1}"), { a1: parts[0], a2: parts[1] }), source: "eliza", score: 0.42 });
+          add({ text: U.fill(pick(outs).replace(/\{(\d)\}/g, "{a$1}"), { a1: parts[0], a2: parts[1] }), source: "eliza", score: 0.55 });
           break;
         }
       }
+      if (!cands.some((x) => x.score >= 0.55)) add(this._react(m, venting));
       if (!cands.length || cands.every((x) => x.score < 0.3)) add(this._fallback(m, venting));
 
       // choose: best score, penalize repeats
@@ -564,6 +590,15 @@
       return pickd;
     }
 
+    // short, safe reactions picked by the mood of the message (the neural replies have to beat these)
+    _react(m, venting) {
+      const v = m.emotion.valence;
+      if (m.isQuestion) return { text: pick(["Hmm, good question! What do you think? 🤔", "Ooh, I'm not sure! What's your take?", "That's a tricky one! What made you think of it?"]), source: "react:question", score: 0.5 };
+      if (venting || v < -0.3) return { text: pick(["Oh no, that sounds rough. 😟 What happened?", "That sounds hard. I'm here if you want to talk about it. 💙", "I'm sorry. 💙 How are you feeling about it?", "Ugh, that's no fun. Do you want to tell me more?"]), source: "react:negative", score: 0.52, expect: { kind: "vent" } };
+      if (v > 0.3) return { text: pick(["That's awesome! 😄 Tell me more!", "Nice! How did that feel?", "Ooh, that sounds fun! 😊", "Love that! What happened next?"]), source: "react:positive", score: 0.5 };
+      return { text: pick(["Interesting! Tell me more? 😊", "Oh really? What happened?", "Mhm! How do you feel about that?", "Ooh, go on! 👂"]), source: "react:neutral", score: 0.48 };
+    }
+
     _fallback(m, venting) {
       if (venting) return { text: pick(["That sounds really hard. I'm here for you. 💙", "I hear you. Do you want to tell me more?", "Thank you for telling me. How are you feeling right now?", "That must be tough. You don't have to go through it alone. 🫂"]), source: "fallback:vent", score: 0.3, expect: { kind: "vent" } };
       if (m.isQuestion) return { text: pick(["Hmm, that's a tough one! I'm not sure. What do you think? 🤔", "Good question! I don't know the answer to that one. I'm best at chatting, Minecraft and math!", "I'm not smart enough to answer that yet 😅 Ask me about Minecraft, do some math with me, or tell me about your day!", "I wish I knew! I'm a small chatbot without internet. What's your guess?"]), source: "fallback:question", score: 0.25 };
@@ -571,6 +606,23 @@
     }
 
     // ---------- output polish ----------
+    _properNouns() {
+      if (!this._pn) {
+        this._pn = new Map();
+        const add = (w) => this._pn.set(w.toLowerCase(), w);
+        for (const w of ("Minecraft Fortnite Roblox YouTube TikTok Instagram Discord Netflix Nintendo Switch PlayStation Xbox Pokemon Mario Zelda " +
+          "Lego Disney Pixar Marvel Google Apple iPhone Android Monday Tuesday Wednesday Thursday Friday Saturday Sunday January February " +
+          "March April June July August September October November December Christmas Halloween Easter Thanksgiving English Spanish French " +
+          "German Japanese Chinese Italian Korean Russian Portuguese Europe Asia Africa America Australia Antarctica").split(" ")) add(w);
+        try { for (const [country] of (P.skills.capitalsList || [])) add(country); } catch (e) { /* none */ }
+      }
+      return this._pn;
+    }
+    _restoreCase(s, raw) {
+      const pn = this._properNouns();
+      for (const w of (raw || "").match(/\b[A-Z][a-z]{2,}\b/g) || []) if (!/^(I|The|A|An|My|What|How|Why|When|Where|Who|Do|Does|Did|Is|Are|Can|Hi|Hey|Hello|Yes|No|Ok|Okay|Thanks|Please|And|But|So|It|That|This|You|We|They)$/.test(w)) pn.set(w.toLowerCase(), w);
+      return s.replace(/\b[a-z][a-z']+\b/g, (w) => (pn.has(w) ? pn.get(w) : w));
+    }
     _post(text) {
       if (!text) return text;
       const name = this.mem.name;

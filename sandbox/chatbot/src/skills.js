@@ -254,6 +254,11 @@
 
   // ---------- general knowledge (question variants -> answer) ----------
   const FAQ = [
+    [["is the earth flat", "is the world flat", "is the earth round"], "Nope, the Earth is round! (Technically a slightly squished sphere.) We know from photos taken from space, ships disappearing hull-first over the horizon, and the round shadow Earth casts on the Moon during an eclipse. 🌍"],
+    [["is the moon made of cheese"], "Sadly no! 🧀 The Moon is made of rock and dust. Astronauts brought back 382 kg of it, and not a single cracker's worth of cheese."],
+    [["did we land on the moon", "was the moon landing fake", "is the moon landing real"], "Yes, it was real! 12 astronauts walked on the Moon between 1969 and 1972, and they left reflectors there that scientists still bounce lasers off today. 🌙"],
+    [["are dinosaurs real", "did dinosaurs exist"], "Yes! Dinosaurs lived for about 165 million years and went extinct about 66 million years ago (birds are their living relatives!). 🦖"],
+    [["is the sun a star"], "Yes! The Sun is a star, a medium-sized yellow one. It only looks special because it's so close to us. ☀️"],
     [["how far is the moon", "distance to the moon", "how far away is the moon"], "The Moon is about 384,400 km (238,900 miles) from Earth on average. 🌙"],
     [["how far is the sun", "distance to the sun", "how far away is the sun"], "The Sun is about 150 million km (93 million miles) away. Its light takes about 8 minutes 20 seconds to reach us! ☀️"],
     [["how many planets are there", "how many planets in the solar system", "list the planets", "what are the planets"], "There are 8 planets: Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus and Neptune. (Pluto became a dwarf planet in 2006.) 🪐"],
@@ -373,5 +378,5 @@
     return pick([`I'd go with ${ch}! 😄`, `Hmm... ${ch}! Final answer.`, `${U.capitalizeFirst(ch)}, definitely.`, `My pick: ${ch}! But what do you think?`]);
   }
 
-  P.skills = { start, gameTurn, askQuestion, daysUntil, capital, faq, wordTools, choose, deal, timeText, dateText };
+  P.skills = { capitalsList: CAP, start, gameTurn, askQuestion, daysUntil, capital, faq, wordTools, choose, deal, timeText, dateText };
 })(typeof window !== "undefined" ? (window.Pip = window.Pip || {}) : (global.Pip = global.Pip || {}));
