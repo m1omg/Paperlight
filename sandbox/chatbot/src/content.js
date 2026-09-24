@@ -5,6 +5,7 @@
   "use strict";
   const U = P.util;
   const pick = U.pick;
+  const S = () => P.skills, C = () => P.content; // loaded after this file
 
   const persona = {
     born: "September 2026",
@@ -251,6 +252,9 @@
       say: ["I can't go online, everything I know lives inside me. But ask me anyway and I'll try my best!"] },
     { id: "joke", ex: ["tell me a joke", "make me laugh", "say something funny", "joke please", "another joke", "know any jokes", "tell me a pun", "do you know any jokes", "one more joke", "i want a joke", "jokes"], re: /\b(tell|know|got|have|say|hear) (me )?(a |any |another |some |one more |more )?(good |funny |dad |bad |minecraft |math |science )?(jokes?|puns?)\b|\bmake me laugh\b|\bsay something funny\b|^(jokes?|another( one)?|one more)[.!?]*$/,
       say: (c) => c.skill("joke") },
+    { id: "cheer_up", ex: ["cheer me up", "make me smile", "make me happy", "i need cheering up", "say something to make me feel better"],
+      re: /\bcheer me up\b|\bcheering up\b|\bmake me (smile|happy|feel better)\b|\bto (make me )?feel better\b/,
+      say: (c) => pick([`Here's something to make you smile: ${S().deal(c.state, "joke", C().jokes)}`, `Okay! First, you're awesome. 💙 Second: ${S().deal(c.state, "joke", C().jokes)}`, `Cheer-up mission activated! 🚀 ${S().deal(c.state, "fact", C().facts)} Also, I'm really glad you're here.`]) },
     { id: "fact", ex: ["tell me a fact", "fun fact", "tell me something interesting", "did you know", "teach me something", "random fact", "another fact", "tell me something cool", "facts"], re: /\b(fun |random |cool |interesting |another |a )?facts?\b(?! about me)|\b(tell|teach) me something( new| interesting| cool)?\b/,
       say: (c) => c.skill("fact") },
     { id: "riddle", ex: ["tell me a riddle", "give me a riddle", "riddle me this", "riddle", "do you know any riddles"], re: /\briddles?\b/, say: (c) => c.skill("riddle") },

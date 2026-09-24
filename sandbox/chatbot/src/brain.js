@@ -33,6 +33,8 @@
     [/^(?:do|can|will|would|should|could|are|is|have) you (.{3,60})\?*$/, ["Hmm, I'm not sure I can {1}! What about you?", "Good question! What do you think?"]],
   ];
 
+  const venting0 = (st, expect) => (expect && expect.kind === "vent") || st.ventTurns > 0;
+
   class Brain {
     constructor(opts) {
       opts = opts || {};
@@ -143,6 +145,7 @@
       st.lastExpect = expect;
       st.expect = null;
       if (st.quiet > 0) st.quiet--;
+      if (st.ventTurns > 0) st.ventTurns--;
       st.shortStreak = m.tokens.length <= 2 ? st.shortStreak + 1 : 0;
 
       let out = null;
@@ -183,6 +186,9 @@
       out.text = this._post(out.text);
       if (st.recent.includes(out.text) && out.alts && out.alts.length) out.text = this._post(pick(out.alts));
       if (out.expect) st.expect = out.expect;
+      // multi-turn listening mode only for serious things (not for "my brother is annoying")
+      if (/^(safety|feelings:(sad|lonely|anxious)|event:(grief|bullied|breakup|lonely|selfesteem|failed)|support:|expect:howareyou)/.test(out.source || "") && out.expect && out.expect.kind === "vent") st.ventTurns = Math.max(st.ventTurns || 0, 4);
+      if (/^(feelings:happy|event:win|react:positive|support:better)/.test(out.source || "")) st.ventTurns = 0;
       if (out.intent) st.lastIntent = out.intent; else if (out.source && out.source.startsWith("intent:")) st.lastIntent = out.source.slice(7);
       else st.lastIntent = null;
       this._remember("user", m.clean);
@@ -465,6 +471,40 @@
       return pick(R[label] || R.sad);
     }
 
+    // things people say while opening up about something hard
+    _support(m, venting) {
+      const t = m.plain;
+      let r;
+      if (/\b(it'?s|it is|its|this is|everything is|that'?s|that is) (all |kind of |kinda |probably |totally )?my fault\b|\b(i|it) (feel|think|feels) (like )?(it'?s|it is|its) my fault\b|\bi (always )?(ruin|mess up|break) everything\b|\bi blame myself\b/.test(t)) {
+        return { text: pick(["It's not your fault. 💙 When grown-ups fight or things go wrong, it's about their problems, not about you. You didn't cause this.", "Hey, listen: it is NOT your fault. 💙 It's really common to feel that way, but you're not responsible for other people's choices."]), source: "support:selfblame", score: 0.92, expect: { kind: "vent" } };
+      }
+      if (/^i (just |really )?(want|wish|need) (it|this|them|everything|all of this|the fighting|the yelling) (to )?(would )?(stop|end|go away|be over|get better)\b/.test(t) || /^i (just )?want (it|this) to (stop|end)\b/.test(t)) {
+        return { text: "That makes total sense. 💙 You deserve to feel safe and calm. Is there an adult you trust you could talk to about it?", source: "support:stop", score: 0.9, expect: { kind: "vent" } };
+      }
+      if (/\bi (have|got|have got) (a lot of|so much|tons of|too much|lots of|a ton of|a bunch of|loads of) (homework|work|chores|tests|exams|studying|stuff to do|assignments|projects)\b/.test(t)) {
+        return { text: pick(["Ugh, that's a lot! 📚 What subject is it? Sometimes it helps to start with the easiest bit.", "Oof, that sounds like a lot. 😵 Want to try doing it in small chunks with little breaks? What's first?"]), source: "support:workload", score: 0.8 };
+      }
+      if ((r = /\bi (?:talked|spoke|told|opened up) (?:to |with )?(?:my |a |the )?([a-z]+(?: [a-z]+)?)(?: about (?:it|this|that))?$/.exec(t)) && !/^(you|it|them|someone about)$/.test(r[1])) {
+        return { text: pick([`I'm really glad you talked to your ${r[1].replace(/^(my|a|the) /, "")}. 💙 What did they say?`, `That was brave. 💙 How did talking to your ${r[1].replace(/^(my|a|the) /, "")} go?`]).replace("your you", "you"), source: "support:talked", score: venting ? 0.88 : 0.7, expect: { kind: "vent" } };
+      }
+      if (venting && (r = /^(?:she|he|they|my \w+) (?:said|says|told me) (?:that )?(?:i )?(?:could|can|should|would) (.{3,60})$/.exec(t))) {
+        return { text: pick(["That sounds like it could really help. 💙 How do you feel about it?", "That's kind of them. Do you think it'll help?"]), source: "support:offer", score: 0.86, expect: { kind: "vent" } };
+      }
+      if (/\b(i (do not|don't|dont) know what to do|i (do not|don't|dont) know anymore|what (should|do) i do)\b/.test(t) && venting) {
+        return { text: "That's a really hard spot to be in. 💙 You don't have to figure it all out right now. What feels like the hardest part?", source: "support:lost", score: 0.88, expect: { kind: "vent" } };
+      }
+      if (/\bi (feel|am|m|'m|am feeling|'m feeling) (a (little |bit |lot )?|so much |much |kind of |kinda )?(better|calmer|a bit better|less (sad|stressed|worried)|okay now|ok now|fine now)\b|\b(that|it|you) (really )?helped\b|\bthat (made|makes) me feel better\b/.test(t)) {
+        return { text: pick(["I'm so glad you feel a bit better. 💙 I'm always here if you want to talk.", "Yay, that makes me really happy. 😊 Thanks for trusting me with it.", "That's great to hear. 💙 Be gentle with yourself today, okay?"]), source: "support:better", score: 0.9 };
+      }
+      if (venting && /^(that|it|this) (might|may|could|would|will) help\b/.test(t)) {
+        return { text: pick(["I think so too. 💙 Little steps like that can make a big difference.", "I hope so! 💙 Let me know how it goes, okay?"]), source: "support:hope", score: 0.86 };
+      }
+      if (venting && /^(i guess|maybe|i don'?t know|idk|probably|yeah|yes|no|not really|kind of|kinda)\b/.test(t) && m.tokens.length <= 8) {
+        return { text: pick(["That's okay. 💙 Take your time.", "It's okay to not be sure. I'm here either way.", "I hear you. 💙"]), source: "support:soft", score: 0.6 };
+      }
+      return null;
+    }
+
     // big life moments deserve a careful, specific answer
     _events(m) {
       const t = m.plain;
@@ -607,6 +647,7 @@
         trace.push({ source: x.source, score: +(x.score || 0).toFixed(3), text: x.text, detail: extra });
       };
 
+      const sup = this._support(m, venting0(this.state, expect)); if (sup) add(sup);
       const ev = this._events(m); if (ev) add(ev);
       const op = this._opinion(m, c); if (op) add(op);
       const it = this._intent(m, c); if (it) add(it);
@@ -627,11 +668,12 @@
       }
 
       const top = cands.reduce((a, b) => (b.score > (a ? a.score : -1) ? b : a), null);
-      const venting = expect && expect.kind === "vent";
+      const venting = (expect && expect.kind === "vent") || this.state.ventTurns > 0;
+      const deepVent = this.state.ventTurns > 0;
       // Neural chat when nothing scripted is confident, or when the user is opening up about something.
       if (this.neural && this.neural.ready && (!top || top.score < 0.8 || (venting && top.source.startsWith("intent:ok")))) {
         try {
-          const n = await this.neural.respond(this.state.history, m.clean, { name: this.mem.name, bot: this.botName, venting, recent: this.state.recent, emotion: m.emotion.label });
+          const n = await this.neural.respond(this.state.history, m.clean, { name: this.mem.name, bot: this.botName, venting, deepVent, recent: this.state.recent, emotion: m.emotion.label });
           for (const x of n || []) add(x);
         } catch (e) { trace.push({ source: "neural:error", score: 0, text: String(e && e.message || e) }); }
       }
@@ -645,18 +687,19 @@
           break;
         }
       }
-      if (!cands.some((x) => x.score >= 0.52)) add(this._react(m, venting));
+      if (!cands.some((x) => x.score >= 0.52) || deepVent) add(this._react(m, deepVent));
       if (!cands.length || cands.every((x) => x.score < 0.3)) add(this._fallback(m, venting));
 
       // choose: best score, penalize repeats
-      for (const x of cands) if (this.state.recent.includes(this._post(x.text))) x.score -= 0.25;
+      const recentNorm = this.state.recent.slice(-30).map((r) => r.toLowerCase());
+      for (const x of cands) { const t = this._post(x.text).toLowerCase(); if (t.length > 8 && recentNorm.some((r) => r.includes(t) || t.includes(r))) x.score -= 0.3; }
       cands.sort((a, b) => b.score - a.score);
       let pickd = cands[0];
       // among near-ties from the neural models, add a little variety
       const close = cands.filter((x) => x.score > pickd.score - 0.03 && x.source.startsWith("neural"));
       if (close.length > 1 && pickd.source.startsWith("neural")) pickd = pick(close);
       // Replika-style: after a neutral acknowledgement, sometimes ask something back
-      if (pickd.source.startsWith("neural") && !/\?\s*\S*$/.test(pickd.text) && !this.state.quiet && U.chance(0.18) && this.state.turn > 3) {
+      if (pickd.source.startsWith("neural") && !venting && !/\?\s*\S*$/.test(pickd.text) && !this.state.quiet && U.chance(0.18) && this.state.turn > 3) {
         const q = S.askQuestion(this.ctx(m));
         const qt = q.text.replace(/^(Okay, here's one: |Ooh, let me think\.\.\. |Question for you: )/, "");
         pickd = Object.assign({}, pickd, { text: pickd.text + " By the way, " + qt.charAt(0).toLowerCase() + qt.slice(1), expect: q.expect });
@@ -666,10 +709,12 @@
     }
 
     // short, safe reactions picked by the mood of the message (the neural replies have to beat these)
-    _react(m, venting) {
+    _react(m, deep) {
       const v = m.emotion.valence;
+      const shallow = !deep && this.state.lastExpect && this.state.lastExpect.kind === "vent";
       if (m.isQuestion) return { text: pick(["Hmm, good question! What do you think? 🤔", "Ooh, I'm not sure! What's your take?", "That's a tricky one! What made you think of it?"]), source: "react:question", score: 0.47 };
-      if (venting || v < -0.3) return { text: pick(["Oh no, that sounds rough. 😟 What happened?", "That sounds hard. I'm here if you want to talk about it. 💙", "I'm sorry. 💙 How are you feeling about it?", "Ugh, that's no fun. Do you want to tell me more?"]), source: "react:negative", score: 0.48, expect: { kind: "vent" } };
+      if (deep) return { text: pick(["I hear you. 💙 That sounds really hard.", "That makes sense. How are you feeling about it right now?", "Thank you for telling me. I'm right here. 💙", "That's a lot to deal with. You're not alone in it. 🫂", "I'm listening. Do you want to tell me more?"]), source: "react:vent", score: 0.5, expect: { kind: "vent" } };
+      if (v < -0.3 || shallow) return { text: pick(["Oh no, that sounds rough. 😟 What happened?", "That sounds hard. I'm here if you want to talk about it. 💙", "I'm sorry. 💙 How are you feeling about it?", "Ugh, that's no fun. Do you want to tell me more?"]), source: "react:negative", score: 0.48, expect: { kind: "vent" } };
       if (m.tokens.includes("haha")) return { text: pick(["Haha! 😂 That sounds hilarious!", "Hahaha, I wish I could have seen that! 😄", "LOL! 😂 What happened next?"]), source: "react:funny", score: 0.47 };
       if (v > 0.3) return { text: pick(["That's awesome! 😄 Tell me more!", "Nice! How did that feel?", "Ooh, that sounds fun! 😊", "Love that! What happened next?"]), source: "react:positive", score: 0.46 };
       return { text: pick(["Interesting! Tell me more? 😊", "Oh really? What happened?", "Mhm! How do you feel about that?", "Ooh, go on! 👂"]), source: "react:neutral", score: 0.45 };

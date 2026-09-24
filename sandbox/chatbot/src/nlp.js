@@ -67,7 +67,7 @@
   addEmo("happy", "happy glad great good awesome amazing fantastic wonderful excited thrilled joy joyful cheerful " +
     "nice cool delighted pumped stoked proud grateful thankful blessed relieved excellent fabulous brilliant " +
     "super lovely perfect best fun ecstatic elated content satisfied yay yippee hooray woohoo lit epic " +
-    "incredible terrific splendid", 1);
+    "incredible terrific splendid better calmer calm safe okayish hopeful", 1);
   addEmo("sick", "sick ill fever flu covid headache migraine nauseous vomiting puking cough coughing sore injured " +
     "hospital", 1.1);
   addEmo("love", "love loving crush adore", 0.6);

@@ -469,7 +469,7 @@
       this.ready = false;
       // how candidate replies are scored (see respond); tuned on test/sample_chat.txt
       // pmi = log P(reply | conversation) - lambda * log P(reply | "ok"): rewards replies that fit THIS conversation
-      this.weights = { base: 0.36, sim: 0.55, simRef: 0.55, kw: 0.36, ll: 0, llRef: -3.2, pmi: 0.05, lambda: 0.6, pmiRef: -1.0, gpt: -0.01 };
+      this.weights = { base: 0.36, sim: 0.45, simRef: 0.55, kw: 0.40, ll: 0, llRef: -3.2, pmi: 0.05, lambda: 0.6, pmiRef: -1.0, gpt: -0.01 };
     }
     async init() {
       const d = this.data;
@@ -591,7 +591,8 @@
           "world year month moment minut hour morn night even afternoon weekend happen stuff yeah haha lol omg god gosh ugh aww hmm " +
           "oh ah hey hi hello bye good-bye poor dear awe awesome amazing exciting terrible worry doing going feeling getting having being " +
           "thinking trying talking playing working looking coming making saying seeing hoping happening comfort support listen listening " +
-          "deserve advice share sharing telling asking wondering lately recently anyway anymore though").split(" "));
+          "deserve advice share sharing telling asking wondering lately recently anyway anymore though might may would could should " +
+          "maybe much many always never really lot").split(" "));
       }
       return !this._generic.has(w) && !this._generic.has(w.replace(/e$/, ""));
     }
@@ -617,6 +618,9 @@
       const yieldFn = opts.yieldFn || (() => new Promise((r) => setTimeout(r, 0)));
       const ctxAll = history.slice(-2).map((h) => h.text).join(" ") + " " + userText;
       const ctxWords = this._contentWords(ctxAll);
+      // keyword matches from messages with few specific words ("that might help") are weak evidence
+      const qSpecific = this._terms(userText).filter((w) => this._specific(w)).length;
+      const kwScale = Math.min(1, (qSpecific + 0.5) / 2);
       const userSide = history.filter((h) => h.role === "user").slice(-1).map((h) => h.text).join(" ") + " " + userText;
       const ctx3rd = /\b(he|she|him|her|his|hers|mom|mum|dad|mother|father|brother|sister|friend|teacher|boss|girlfriend|boyfriend|wife|husband|cat|dog|coach|grandma|grandpa|son|daughter|baby|uncle|aunt|cousin|neighbou?r)\b/i.test(userSide);
       const ctxFem = /\b(she|her|hers|sister|mom|mum|mother|grandma|grandmother|aunt|girlfriend|wife|daughter|girl|niece|lady|woman)\b/i.test(userSide);
@@ -626,12 +630,14 @@
       const cands = [];
       // 1) retrieval from the bank of human-written replies
       if (this.bankText) {
-        const hits = this.retrieve(q, 40).filter((h) => this.ok(h.text, userText, opts.recent)).slice(0, 12);
+        // someone is opening up about something hard: only lines from the empathetic-listener dataset
+        const srcOk = (h) => !opts.deepVent || h.src === "empathetic";
+        const hits = this.retrieve(q, opts.deepVent ? 120 : 40).filter((h) => srcOk(h) && this.ok(h.text, userText, opts.recent)).slice(0, 12);
         for (const h of hits) cands.push({ text: h.text, sim: h.sim, src: h.src, source: "neural:retrieval", kw: 0 });
         // replies to past messages that share keywords with this one
         const seenText = new Set(hits.map((h) => h.text));
         for (const h of this.keywordSearch(userText, 30)) {
-          if (seenText.has(h.text) || !this.ok(h.text, userText, opts.recent)) continue;
+          if (seenText.has(h.text) || !srcOk(h) || !this.ok(h.text, userText, opts.recent)) continue;
           seenText.add(h.text);
           cands.push({ text: h.text, sim: this.respSim(q, h.text), src: h.src, source: "neural:keyword", kw: h.kw });
           if (cands.length >= 22) break;
@@ -679,10 +685,17 @@
         if (userVal <= -0.5 && cv >= 0.5) c.lex -= 0.14;
         else if (userVal >= 0.3 && cv <= -0.5) c.lex -= 0.14;
         else if (userVal > -0.3 && cv <= -0.8 && !opts.venting) c.lex -= 0.06;
+        if (userVal >= 0.3 && /^(oh no|sorry|i'?m sorry|that'?s (terrible|awful|horrible|sad)|what happened)/i.test(c.text)) c.lex -= 0.12;
+        if (opts.venting && /\b(go for it|you should|why (don'?t|haven'?t) you|congrat\w*|awesome|lucky|have fun|lol|haha)\b/i.test(c.text)) c.lex -= 0.1;
+        if (opts.venting && cv >= 0.5) c.lex -= 0.1;   // no "so proud of him!" right after a complaint
+        // while someone is opening up, only the empathetic listener lines get the benefit of the doubt
+        if (opts.venting && c.src !== "empathetic") c.lex -= 0.06;
+        // and in a serious conversation a reply has to sound like listening
+        if (opts.deepVent && !/\b(sorry|hear|sounds?|must (be|have)|understand|hard|tough|awful|terrible|horrible|sad|scary|scared|upset|feel|feeling|hope|here for you|with you|alone|hug|poor|that's rough|i bet|can imagine|makes sense)\b/i.test(c.text)) c.lex -= 0.12;
         // "Yes, I love it." as a reply to something that wasn't a question
         if (!userAsked && /^(yes|yeah|yep|no|nope|nah|sure|of course)\b/i.test(c.text)) c.lex -= 0.05;
         // keyword matches only count fully when they cover most of what the user said
-        const kwEff = (c.kw || 0) >= 0.45 ? c.kw : (c.kw || 0) * 0.4;
+        const kwEff = ((c.kw || 0) >= 0.45 ? c.kw : (c.kw || 0) * 0.4) * kwScale;
         c.score = W.base + W.sim * (c.sim - W.simRef) + W.kw * kwEff + c.lex +
           (c.ll !== undefined ? W.ll * U.clamp(c.ll - W.llRef, -2.5, 2) : 0) + (c.pmi !== undefined ? W.pmi * U.clamp(c.pmi - W.pmiRef, -2.5, 2.5) : 0) +
           (opts.venting && c.src === "empathetic" ? 0.03 : 0) + (c.source === "neural:gpt" ? W.gpt : 0);
