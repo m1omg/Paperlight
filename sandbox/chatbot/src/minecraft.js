@@ -275,6 +275,7 @@
     if (/\b(your|yours|urs) (favou?rite|fav|fave)\b|\bwhat(?: is| s|s)? (yours|urs)\b|\bdo (you|u) (like|love|hate|enjoy)\b|\b(what do|do) you think (of|about)\b/.test(text)) return null;
     if (/\bi (already |do )?know (what|how|where|who|that)\b/.test(text) && !/\b(but|so) (what|how|where|why|can|do|does|is)\b/.test(text)) return null;
 
+    if (/\bwhat (is|does|are) (hp|health points|hearts)( mean| in minecraft)?\b|\bwhat does hp stand for\b/.test(text)) { const g = D.guides.find((x) => x.q.includes("what is hp")); if (g) return done(state, { text: g.a, kind: "guide" }, null); }
     let mentions = findMentions(toks);
     if (!mentions.length && mc.last && mc.last.kind === "mob" && turn - mc.turn <= 3 && /\b(a|the|an|get|pink|blue|red|white|black|brown|baby|golden|purple|orange|green|yellow|gray|grey)\s+(one|ones)\b/.test(text)) {
       const mob = mc.last.ref.name.toLowerCase();

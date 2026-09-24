@@ -373,6 +373,7 @@
           return { text: `Almost! 😊 ${missing.length ? `You missed "${missing.slice(0, 3).join(" ")}". ` : ""}${extra.length ? `And "${extra.slice(0, 3).join(" ")}" isn't in it. ` : ""}The line is: "${L}" Try again?`, source: "skill:line", expect: { kind: "linecheck", tries: (ex.tries || 0) + 1 } };
         }
         case "needs": {
+          if (m.tokens.length > 7 && !/\b(ideas?|advice|tips?|listen|distract\w*|joke)\b/.test(t)) break;
           const hist = this.state.history.filter((h) => h.role === "user").slice(-7, -1).map((h) => h.text.toLowerCase()).reverse().join(" ");
           if (/\b(ideas?|advice|tips?|help|what to do|suggestions?|both)\b/.test(t)) return this._adviceFor(hist) || { text: "Okay! Tell me in one or two sentences what's going on, and I'll give you my best ideas. 💡", source: "expect:needs", expect: { kind: "vent" } };
           if (/\b(listen|vent|talk|someone|just listen)\b/.test(t)) return { text: "Okay. I'll just listen, no advice unless you ask. 💙 Tell me whatever's on your mind.", source: "expect:needs", expect: { kind: "vent" } };
@@ -417,6 +418,7 @@
           // "What do you like to do for fun?" -> "mostly drawing. and watching anime, i'm kind of obsessed with frieren rn"
           if (this._strongRequest(m) || (m.isQuestion && !/\b(you|u|yours)\??$/.test(t))) break;
           if (/\b(what|whats|who|why|how|where|when)\b/.test(t) && !/\b(what about|how about) (you|u)\b/.test(t)) break;
+          if (m.tokens.length > 18 || (P.safety && P.safety.sensitive(m)) || /\b(died|passed away|funeral|divorc\w*)\b/.test(t)) break;
           if (this.mem.name && m.plain.replace(/[^a-z ]/g, "").trim() === this.mem.name.toLowerCase()) return { text: `That's your name, ${this.mem.name}! 😄 I meant: what do you like to do for fun?`, source: "expect:hobby", expect: { kind: "hobby" } };
           if (/^(hmm |well |and |so )?(what about you|how about you|and you|wbu|hbu|you|u)\??$/.test(t)) return { text: "Me? I love chatting, bad puns, math puzzles and Minecraft! 😄 But I asked first: what do you like to do?", source: "expect:hobby", expect: { kind: "hobby" } };
           const found = [];
@@ -701,7 +703,7 @@
     _routeSentences(m, trace) {
       const sents = m.clean.split(/(?<=[.!?])\s+|:\s+(?=(?:what|who|how|why|where|when|which|is|are|do|does|can|could)\b)|\s*(?:\p{Extended_Pictographic}|\u{1F3FB}|\u{1F3FC}|\u{1F3FD}|\u{1F3FE}|\u{1F3FF})[\u200d\ufe0f\p{Extended_Pictographic}\u{1F3FB}-\u{1F3FF}♀♂]*\s*/u).map((x) => x.trim()).filter((x) => /[a-z0-9]/i.test(x) && x.length > 1);
       const isQ = (x, sm) => sm.isQuestion || /\?\s*$/.test(x) || /^(could|can|would|will) (you|u) (please )?(tell|explain|help|show|give)|^(do|does) (you|u) know\b|^tell me\b|\b(can'?t work out|wonder) (why|what|how)\b/i.test(x);
-      const analyzed = sents.map((x) => ({ x, sm: N.analyze(x) })).filter((o) => !o.sm.empty);
+      const analyzed = sents.map((x) => x.replace(/^(?:anyway|anyways|so|well|ok|okay|and|also|now|then|but|right|alright|oh|hmm|um)[,.!]?\s+(?=\S+\s+\S)/i, "")).map((x) => ({ x, sm: N.analyze(x) })).filter((o) => !o.sm.empty);
       for (const pass of analyzed.length > 1 ? [true, false] : []) {
         for (let k = analyzed.length - 1; k >= 0; k--) {
           const { x, sm } = analyzed[k];
@@ -794,7 +796,7 @@
       if (parts.length < 2 || !out || !out.text) return out;
       const src = out.source || "";
       let extras = 0;
-      if (/^(safety|game|expect|command|event:grief|event:bullied)/.test(src)) return out;
+      if (/^(safety|game|expect|command|event:grief|event:bullied|skill:time|skill:recipe|memory:name)/.test(src)) return out;
       for (const part of parts) {
         const pm = N.analyze(part);
         // a feeling mentioned next to a request
@@ -856,7 +858,7 @@
       switch (f.type) {
         case "name": {
           if (f.prev && f.prev === f.value) {
-            const hi = /^(good (morning|afternoon|evening)|hi|hello|hey)\b/.exec(m.plain);
+            const hi = /^(good (morning|afternoon|evening)|hi|hello|hey)\b/.exec(m.plain) || (this.state.greetedNow ? ["Hello again"] : null);
             const tell = /\b(catch|remember|know|forget|forgot|told you|i said|i did|already)\b/.test(m.plain) || /\?/.test(m.clean);
             return { text: hi ? `${U.capitalizeFirst(hi[0])}, ${f.value}! Of course I remember you. 😊` : tell ? pick([`Yes! You're ${f.value}. 😊 I've got it saved.`, `I know, ${f.value}! 😊 I won't forget.`]) : pick([`I know, ${f.value}! 😊`, `Yep, ${f.value}! I remember. 😊`]), source: "memory:name" };
           }
@@ -1020,6 +1022,7 @@
       r = S.dateMath(m.plain); if (r) return { text: r, source: "skill:date" };
       r = S.timeMath(m.clean.toLowerCase()); if (r) return { text: r, source: "skill:time" };
       r = S.currency(m.plain.replace(/[?!.]+$/, "")); if (r) return { text: r, source: "skill:currency" };
+      if (/\b(there|that country)\b/.test(m.plain) && /\bcurrency|money\b/.test(m.plain)) { /* handled above once a country was named */ }
       r = S.petFood(m.plain); if (r) return { text: r, source: "skill:petfood" };
       r = S.wordTools(m); if (r) return { text: r, source: "skill:words" };
       r = S.capital(m.plain.replace(/[?!.]+$/, "")); if (r) return { text: r, source: "skill:capital" };
@@ -1105,6 +1108,7 @@
       if (st.turn - (st.topicTurns[tp.name] || -99) <= 2) return null; // don't loop on the same topic
       st.topicTurns[tp.name] = st.turn;
       if (/^i (really |also |just )?(play|like|love|do|watch|listen to)\b|\bmy favorite\b/.test(m.plain) && !/^(them|that game|that sport|that music|food|videos)$/.test(tp.name)) MEM.apply(this.mem, { type: "like", value: tp.name });
+      if (tp.name === "them") { const names = (m.plain.match(new RegExp(tp.k.source, "g")) || []).map((x) => U.titleCase(x)); if (names.length && !/\b(hate|don'?t like|dont like|can'?t stand)\b/.test(m.plain)) MEM.apply(this.mem, { type: "music", value: U.listJoin([...new Set(names)]) }); }
       const q = S.deal(st, "topicq:" + tp.name, tp.q);
       return { text: `${S.deal(st, "topicsay:" + tp.name, tp.say)} ${q}`, source: "topic:" + tp.name, score: 0.6, expect: /favorite (rapper|singer|artist|band|song)|listening to/.test(q) ? { kind: "music", topic: tp.name } : { kind: "open", topic: tp.name } };
     }
@@ -1225,11 +1229,22 @@
       if ((r = new RegExp("\\bmy (" + PETS + "|" + FAM + ")(?: \\w+)? (?:just |recently |finally )?(?:died|passed away|passed|is dead|was put down|got put down|was put to sleep|got hit by a car|has died|is gone)\\b").exec(t)) ||
           (r = new RegExp("\\b(?:i )?(?:lost|am losing) my (" + PETS + "|" + FAM + ")\\b").exec(t)) ||
           ((r = new RegExp("\\bmy (late )?(" + PETS + "|" + FAM + ")\\b").exec(t)) && /\b(he|she|they)( just| recently| sadly)? (passed away|died|passed on|is no longer with us)\b|\b(passed away|died) (\w+ )?(years?|months?|weeks?|days?) ago\b|\bmy late (husband|wife|mom|mum|dad|father|mother|grandma|grandpa)\b/.test(t) && (r = [r[0], r[2]]))) {
-        const who = r[1];
+        const who = r[1] === "late" ? r[2] : r[1];
         const isPet = new RegExp("^(" + PETS + ")$").test(who);
         this._mood("sad");
+        const lost = (this.mem.lost = this.mem.lost || []);
+        const again = lost.includes(who);
+        if (!again) lost.push(who);
+        const detail = /\b(garden|roses?|flowers?|planted)\b/.test(t) ? " It sounds like the garden holds a lot of memories of them. 🌹" : /\b(miss|missing)\b/.test(t) ? " Missing someone you love never fully goes away, and that's because the love doesn't either." : "";
+        if (again) return { text: this._post(S.deal(this.state, "grief-again", [`I'm so sorry. 💙${detail} Would you like to tell me about them? What were they like?`, `I remember. 💙${detail} It's okay to miss them, on the good days and the hard ones.`, `Thank you for telling me more. 💙${detail} I'm here, and I'm listening.`])), source: "event:grief", score: 0.95, expect: { kind: "vent", emotion: "sad" } };
         return { text: isPet ? pick([`Oh no... I'm so sorry about your ${who}. 💙 Losing a pet is like losing a family member. Do you want to tell me about them?`, `I'm really sorry. 😢 Your ${who} was lucky to have someone who loved them so much. What was their name?`])
-          : pick([`I'm so, so sorry about your ${who}. 💙 That's one of the hardest things anyone can go through. I'm here if you want to talk about them.`, `Oh no... I'm really sorry for your loss. 🫂 How are you holding up?`]), source: "event:grief", score: 0.95, expect: { kind: "vent", emotion: "sad" } };
+          : pick([`I'm so, so sorry about your ${who}. 💙 That's one of the hardest things anyone can go through.${detail} I'm here if you want to talk about ${/^(dad|father|grandpa|grandfather|papa|brother|husband|son|uncle)$/.test(who) ? "him" : /^(mom|mum|mother|grandma|grandmother|nana|granny|sister|wife|daughter|aunt)$/.test(who) ? "her" : "them"}.`, `Oh no... I'm really sorry for your loss. 🫂${detail} How are you holding up?`]), source: "event:grief", score: 0.95, expect: { kind: "vent", emotion: "sad" } };
+      }
+      // "Harold planted a climbing rose by the back door the year we married...": a memory of someone they lost
+      const lostNames = (this.mem.lost || []).map((rel) => this.mem.people[rel]).filter(Boolean).map((n) => n.toLowerCase());
+      if ((this.mem.lost || []).length && m.emotion.valence > -0.5 && !m.isQuestion && (lostNames.some((n) => new RegExp("\\b" + n + "\\b").test(t)) || new RegExp("\\bmy (late )?(" + this.mem.lost.join("|") + ")\\b").test(t)) && /\b(used to|always|every|remember|loved|planted|made|gave|taught|would|when we|the year)\b/.test(t)) {
+        const rose = /\b(rose|roses|flower|flowers|garden|tree)\b/.test(t) ? " Something that keeps blooming every year is like a little hello from him. 🌹" : "";
+        return { text: S.deal(this.state, "memory-warm", [`That's a beautiful memory. 💙${rose}`, `What a lovely thing to remember. 💙${rose} Thank you for sharing it with me.`, `I can tell how much you loved each other. 💙${rose}`]), source: "event:memory", score: 0.9, expect: { kind: "vent", emotion: "sad" } };
       }
       if ((r = new RegExp("\\bmy (?:little |big |baby |younger |older )?(" + FAM + "|" + PETS + ")(?: [a-z]+)? (?:just |accidentally |always |keeps? |again )*(?:broke|ruined|destroyed|wrecked|ate|chewed|lost|stole|took|takes|taking|deleted|knocked over|smashed|ripped|spilled \\w+ on) my ([a-z ]{2,30})").exec(t))) {
         this._mood("angry");
@@ -1497,6 +1512,9 @@
         if (explained) return { text: fresh("negx", ["That sounds really hard. 💙 I'm glad you told me.", "Ugh, I'm sorry. That's a lot to deal with.", "That makes total sense. Anyone would feel that way. 💙", "Oof. I'd feel the same way. I'm here for you.", "I'm sorry. That really isn't fair. 💙"]), source: "react:negative", score: 0.48, expect: { kind: "vent" } };
         return { text: fresh("neg", ["Oh no, that sounds rough. 😟 What happened?", "That sounds hard. I'm here if you want to talk about it. 💙", "Ugh, I'm sorry. 💙 Do you want to tell me about it?", "Aw, that's no fun. What's going on?"]), source: "react:negative", score: 0.48, expect: { kind: "vent" } };
       }
+      // more details right after good news ("i hit a three at the buzzer before half. whole gym went crazy")
+      if (/^(event:win|news|expect:followup)/.test(st.lastSource || "") && v >= 0 && !m.isQuestion && !/\b(but|sad|bad|lost|hurt)\b/.test(m.plain))
+        return { text: fresh("hype", ["That's so clutch! 🔥", "Legendary! 🙌 I bet everyone was cheering!", "Wow, what a moment! 🤩 You must have been so proud.", "No way! That's awesome! 🎉"]), source: "react:positive", score: 0.47 };
       // real laughter about something that happened (not just a "lol" at the end)
       if ((/\b(haha+|hahaha+|lmao+|rofl)\b|😂|🤣/.test(m.clean) || /^(lol|lmao)\b/.test(m.plain)) && v >= 0 && !/\b(no|not|nothing|never|wrong|mean|why)\b/.test(m.plain) && m.tokens.length >= 5)
         return { text: fresh("fun", ["Haha! 😂 That sounds hilarious!", "Hahaha, I wish I could have seen that! 😄", "LOL, that's amazing! 😂"]), source: "react:funny", score: 0.47 };

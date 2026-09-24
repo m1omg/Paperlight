@@ -234,7 +234,7 @@
     // people in their life
     if ((r = new RegExp("\\bmy (" + PEOPLE + ")(?:'s| s)? (?:name is|is named|is called|named|called) ([a-z]+)").exec(t))) {
       if (looksLikeName(r[2], raw, true)) facts.push({ type: "person", rel: r[1], name: properCase(r[2]) });
-    } else if ((r = new RegExp("\\bmy (" + PEOPLE + ") ([a-z]+)(?= (?:is|was|and|moved|lives|lived|said|says|told|went|goes|got|gets|has|had|likes|loves|hates|just|always|never|keeps|kept|texted|texts|called|calls|came|comes|left|broke|made|makes|helped|helps|does|did|can|could|will|would|thinks|wants|needs|who|from|at|in)\\b|$)").exec(t))) {
+    } else if ((r = new RegExp("\\bmy (" + PEOPLE + ") ([a-z]+)(?= (?:is|was|and|moved|lives|lived|said|says|told|went|goes|got|gets|has|had|likes|loves|hates|just|always|never|keeps|kept|texted|texts|called|calls|came|comes|left|broke|made|makes|helped|helps|does|did|can|could|will|would|thinks|wants|needs|who|from|at|in|used|passed|died|planted|taught|built|gave|loved|love|love|used to)\\b|$)").exec(t))) {
       const w = r[2];
       if (!ADVERB.test(w) && looksLikeName(w, raw, false) || (!ADVERB.test(w) && !NOT_NAME.has(w) && !P.nlp.STOP.has(w) && plausibleName(w) && new RegExp("\\b" + w.charAt(0).toUpperCase() + w.slice(1) + "\\b").test(raw)))
         facts.push({ type: "person", rel: r[1], name: properCase(w), quiet: true });
@@ -543,6 +543,10 @@
       const fav = mem.favorites.rapper || mem.favorites.singer || mem.favorites.artist || mem.favorites.band || mem.favorites.music || mem.favorites.song;
       if (fav) return { text: `You listen to ${fav}! 🎵` };
     }
+    if (/\bwhere (?:am i|are we|will i be|was i) (?:going|traveling|travelling|flying|off to)\b|\bwhere(?:'s| is) my (?:trip|holiday|vacation|flight)\b|\b(?:remember|know) where i(?:'m| am) going\b/.test(t)) {
+      const ev = mem.events.find((e) => /\b(trip|holiday|vacation|flight|visit|travel)\b/.test(e.what) && !e.done);
+      if (ev) return { text: `You're going on your ${ev.what}${ev.when && ev.when !== "soon" && !/^on \w+ \d/.test(ev.when) && /month|week/.test(ev.when) ? " " + ev.when : ev.due ? " " + dayWord(dueOf(ev)) : ""}! ✈️` };
+    }
     if ((r = /\bwhen (?:do|am|will) i (?:fly|leave|go|travel|have)\b.*?\b(?:to )?([a-z]+)\s*$/.exec(t.trim()))) {
       const key = r[1];
       const ev = mem.events.find((e) => e.what.toLowerCase().includes(key));
@@ -655,7 +659,7 @@
         sick: "Last time you weren't feeling well. Are you feeling better?", tired: "Last time you were really tired. Did you get some rest?" }[mood.label],
         expect: { kind: "followup", about: "mood", label: mood.label } };
     }
-    const th = (mem.threads || []).slice().reverse().find((x) => !x.asked && now - x.at > 3 * 3600e3 && now - x.at < 10 * 864e5);
+    const th = (mem.threads || []).slice().reverse().find((x) => !x.asked && now - x.at > 3 * 3600e3 && now - x.at < 10 * 864e5 && !(mem.lost || []).some((w) => (x.who || "").includes(w)));
     if (th) {
       th.asked = true;
       return { text: th.valence < 0 ? `Last time you told me about your ${th.who}, and it sounded tough. How are things now?` : `Last time you told me about your ${th.who}! Any news?`,

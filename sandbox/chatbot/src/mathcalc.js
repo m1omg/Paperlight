@@ -494,7 +494,7 @@
   const ING = /(\d+(?:\.\d+)?(?:\s+\d\/\d)?|\d\/\d)\s*(grams?|g|kg|kilograms?|ml|millilit(?:re|er)s?|l|lit(?:re|er)s?|cups?|tablespoons?|tbsp|teaspoons?|tsp|ounces?|oz|pounds?|lbs?|eggs?|pinch(?:es)?|cloves?|slices?)\b(?:\s+of)?\s+(?:the\s+)?([a-z]+(?:\s+(?!and\b|or\b|of\b|to\b|for\b|in\b)[a-z]+)?)/g;
   function recipeFactor(s) {
     let r;
-    if ((r = /\b(\d+(?:\.\d+)?|one and a half|1 1\/2|two and a half|2 1\/2) times\b/.exec(s))) return { f: { "one and a half": "1.5", "1 1/2": "1.5", "two and a half": "2.5", "2 1/2": "2.5" }[r[1]] || r[1] };
+    if ((r = /\b(\d+(?:\.\d+)?|one and a half|1 1\/2|two and a half|2 1\/2) times\b(?!\s*-?\d)(?!\s*(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten)\b)/.exec(s)) && !/\bwhat(?:'s| is)\s+\d/.test(s)) return { f: { "one and a half": "1.5", "1 1/2": "1.5", "two and a half": "2.5", "2 1/2": "2.5" }[r[1]] || r[1] };
     if (/\b(double|twice)\b/.test(s)) return { f: "2" };
     if (/\b(triple|three times)\b/.test(s)) return { f: "3" };
     if (/\b(half|halve|halving)\b/.test(s) && !/\band a half\b/.test(s)) return { f: "0.5" };
@@ -511,7 +511,7 @@
     const items = [];
     let r; ING.lastIndex = 0;
     while ((r = ING.exec(s))) items.push({ q: r[1], unit: r[2], what: r[3].replace(/\s+(please|thanks)$/, "") });
-    const list = items.length ? items : (last && /\b(that|it|this|those|them|the recipe)\b/.test(s) ? last : []);
+    const list = items.length ? items : (last && /\b(double|triple|half|halve|times|x) (that|it|this|those|them|the recipe)\b|\b(that|it|this|the recipe) (doubled|tripled|halved)\b/.test(s) && s.split(/\s+/).length <= 10 ? last : []);
     if (!list.length) {
       if (fac.from) return { text: `Multiply everything by ${fText} (${fac.to} ÷ ${fac.from} = ${fText}). 🥧 So 200 g of something becomes ${format(Q.parse("200").mul(f), 2).text} g.`, items: null };
       return null;

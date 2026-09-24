@@ -377,7 +377,10 @@
     turkey: "Turkish lira", russia: "ruble", ukraine: "hryvnia", japan: "yen (¥)", china: "yuan / renminbi (¥)", india: "Indian rupee (₹)", "south korea": "won (₩)", korea: "won (₩)", thailand: "baht", vietnam: "đồng", indonesia: "rupiah",
     philippines: "Philippine peso", australia: "Australian dollar", "new zealand": "New Zealand dollar", canada: "Canadian dollar", mexico: "Mexican peso", brazil: "Brazilian real", argentina: "Argentine peso", chile: "Chilean peso",
     egypt: "Egyptian pound", "south africa": "rand", nigeria: "naira", kenya: "Kenyan shilling", morocco: "dirham", "united arab emirates": "UAE dirham", uae: "UAE dirham", dubai: "UAE dirham", israel: "shekel", "saudi arabia": "riyal", singapore: "Singapore dollar" };
+  let lastCountry = null;
   function currency(t) {
+    for (const k of Object.keys(CURRENCY).sort((a, b) => b.length - a.length)) if (new RegExp("\\b" + k + "\\b").test(t)) { lastCountry = k; break; }
+    if (/\bcurrency\b.*\b(there|in that country|over there)\b|\bwhat money do they use there\b/.test(t) && lastCountry) t = t.replace(/\b(there|in that country|over there)\b/, "in " + lastCountry);
     const r = /\b(?:what(?:'s| is)? (?:the )?currency (?:of|in|do they use in)|what (?:currency|money) (?:does|do they use in|is used in|do (?:you|they) use in)|currency (?:of|in))\s+(?:the )?([a-z .]+?)(?: use)?\s*\??$/.exec(t);
     if (!r) return null;
     const c = r[1].trim();
@@ -463,6 +466,15 @@
   const capByCountry = new Map(CAP.map(([c, k]) => [c.toLowerCase(), [c, k]]));
   const capByCity = new Map(CAP.map(([c, k]) => [k.split(" (")[0].toLowerCase(), [c, k]]));
   function capital(t) {
+    // "Lisbon is the capital of Portugal, isn't it?" / "is Lisbon the capital of Portugal?": check it
+    let c = /\b(?:is )?([a-z][a-z .'-]{1,30}?) (?:is )?the capital (?:city )?of (?:the )?([a-z][a-z .'-]{1,30}?)(?:,? (?:isn'?t it|is not it|right|correct|yes))?\??$/.exec(t.replace(/^(yes|yeah|so|and|now|oh)[,.!]*\s+/, ""));
+    if (c && !/^(what|which|whats|who)$/.test(c[1].trim())) {
+      const hit = capByCountry.get(c[2].trim().replace(/^the /, ""));
+      const w = c[1].trim().split(/\s+/);
+      const real = hit && hit[1].toLowerCase().split(" (")[0];
+      const said = [3, 2, 1].map((n) => w.slice(-n).join(" ")).find((x) => capByCity.has(x) || x === real) || w[w.length - 1];
+      if (hit) return said === real ? `Yes! ${hit[1].split(" (")[0]} is the capital of ${hit[0]}. 🏛️` : `Not quite: the capital of ${hit[0]} is ${hit[1]}. 🏛️`;
+    }
     let r = /\bcapital (?:city )?of (?:the )?([a-z .'-]+?)\??$/.exec(t) || /\b([a-z .'-]+?)(?:'s| s) capital\b/.exec(t);
     if (r) {
       const q = r[1].trim().replace(/^the /, "");
