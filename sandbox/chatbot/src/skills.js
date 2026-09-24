@@ -265,7 +265,40 @@
     return `Today is ${DAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}. 📅`;
   }
   const HOLIDAYS = { christmas: [11, 25], "new year": [0, 1], "new years": [0, 1], halloween: [9, 31], "valentine": [1, 14], "valentines day": [1, 14], "valentine's day": [1, 14], "april fools": [3, 1] };
+  const MONTHS_RE = "january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec";
+  // "november 14th", "14 november 2026", "the 14th of nov" -> {mo, da, y}
+  function findDate(t) {
+    let r = new RegExp("\\b(" + MONTHS_RE + ")\\.? (\\d{1,2})(?:st|nd|rd|th)?(?:,? (\\d{4}))?\\b").exec(t);
+    if (r) return { mo: MONTH_IDX[r[1]], da: +r[2], y: r[3] ? +r[3] : null };
+    r = new RegExp("\\b(?:the )?(\\d{1,2})(?:st|nd|rd|th)? (?:of )?(" + MONTHS_RE + ")\\b(?:,? (\\d{4}))?").exec(t);
+    if (r) return { mo: MONTH_IDX[r[2]], da: +r[1], y: r[3] ? +r[3] : null };
+    return null;
+  }
   function daysUntil(t, mem) {
+    const now0 = new Date(), today0 = new Date(now0.getFullYear(), now0.getMonth(), now0.getDate());
+    // "how many days until november 14?", "how many days is it from today to 14 november 2026?", "how many days until sam's birthday?"
+    if (/\bhow (many days|long|many weeks)\b/.test(t) && /\b(until|till|til|before|to|from (today|now))\b/.test(t)) {
+      let dt = findDate(t), label = null;
+      const pb = /\b(?:until|till|til|before|to) (?:my )?([a-z]+?)(?:'s| s|s) (?:birthday|bday)\b/.exec(t) || /\b(?:until|till|til|before|to) ([a-z]+)(?:'s| s) (?:birthday|bday)\b/.exec(t);
+      if (!dt && pb && pb[1] !== "my" && mem) {
+        const pi = mem.pinfo || {};
+        const rel = mem.people && mem.people[pb[1]] !== undefined ? pb[1] : Object.keys(mem.people || {}).find((k) => (mem.people[k] || "").toLowerCase() === pb[1]) || (pi["@" + pb[1]] ? "@" + pb[1] : null) || (pi[pb[1]] ? pb[1] : null);
+        if (rel && pi[rel] && pi[rel].birthday) { dt = findDate(pi[rel].birthday.toLowerCase()); label = `${mem.people[rel] || (rel.startsWith("@") ? U.titleCase(rel.slice(1)) : "your " + rel)}'s birthday`; }
+        else if (pb[1] === "my" || /^(my)$/.test(pb[1])) { /* "my birthday" is handled below */ }
+        else if (rel || /^[a-z]+$/.test(pb[1])) return `I don't know ${rel && mem.people[rel] ? mem.people[rel] : U.titleCase(pb[1])}'s birthday yet! When is it? 🎂`;
+      }
+      if (dt && dt.mo !== undefined && dt.da >= 1 && dt.da <= 31) {
+        let d = new Date(dt.y || today0.getFullYear(), dt.mo, dt.da);
+        if (d.getMonth() !== dt.mo) return `Hmm, ${MONTHS[dt.mo]} doesn't have ${dt.da} days! 🤔`;
+        if (!dt.y && d < today0) d = new Date(today0.getFullYear() + 1, dt.mo, dt.da);
+        const n = Math.round((d - today0) / 864e5);
+        const what = label || `${MONTHS[dt.mo]} ${dt.da}${dt.y ? ", " + dt.y : ""}`;
+        const weeks = n >= 14 ? ` That's ${Math.floor(n / 7)} weeks and ${n % 7} day${n % 7 === 1 ? "" : "s"}.` : "";
+        if (n === 0) return `That's today! 🎉`;
+        if (n < 0) return `${what} was ${-n} day${n === -1 ? "" : "s"} ago. 📅`;
+        return `${n} day${n === 1 ? "" : "s"} until ${what} (a ${DAYS[d.getDay()]})!${/\bweeks\b/.test(t) ? weeks : ""} 📅`;
+      }
+    }
     const r = /\bhow (many|long) (days )?(until|till|til|before|to) (christmas|new years?|halloween|valentines? day|valentine's day|april fools|my birthday|the weekend|friday|saturday|summer)\b/.exec(t);
     if (!r) return null;
     const what = r[4];
@@ -289,9 +322,18 @@
   }
   // "what day of the week is christmas?", "what date is it in 100 days?", "what day was it yesterday?", "what day is march 3?"
   const MONTH_IDX = { jan: 0, january: 0, feb: 1, february: 1, mar: 2, march: 2, apr: 3, april: 3, may: 4, jun: 5, june: 5, jul: 6, july: 6, aug: 7, august: 7, sep: 8, sept: 8, september: 8, oct: 9, october: 9, nov: 10, november: 10, dec: 11, december: 11 };
-  function dateMath(t) {
+  function dateMath(t, recent) {
     if (!/\b(day|date|days|weeks|christmas|halloween|new years?|valentines?|tomorrow|yesterday)\b/.test(t) || !/\b(what|which|when|how many)\b/.test(t)) return null;
     const now = new Date(), today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (/\b(what|which) (day|day of the week|weekday) (is|was|will|does) (that|it|this)\b/.test(t)) {
+      const dt = findDate(t) || (recent ? findDate(recent) : null);
+      if (dt) {
+        let y = dt.y || now.getFullYear();
+        if (!dt.y && /\bnext year\b/.test(t)) y++;
+        const d = new Date(y, dt.mo, dt.da);
+        return `${MONTHS[dt.mo]} ${dt.da}, ${y} ${d < today ? "was" : "is"} a ${DAYS[d.getDay()]}. 📅`;
+      }
+    }
     const fmt = (d) => `${DAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
     let r;
     const hol = /\b(christmas|halloween|new years?(?: day)?|valentines? day|valentine's day|april fools)\b/.exec(t);
@@ -359,7 +401,7 @@
     return std + (dst ? 1 : 0);
   }
   const fmtClock = (mins) => { mins = ((mins % 1440) + 1440) % 1440; let h = Math.floor(mins / 60); const m = Math.round(mins % 60); const ap = h >= 12 ? "PM" : "AM"; h = h % 12 || 12; return `${h}:${String(m).padStart(2, "0")} ${ap}`; };
-  function timeMath(t) {
+  function timeMath(t, mem) {
     let r;
     // "10:45 in the morning", "1:20 in the afternoon", "noon"
     t = t.replace(/\b(\d{1,2}(?::\d{2})?)\s*(?:o'?clock\s*)?in the (morning)\b/g, "$1 am").replace(/\b(\d{1,2}(?::\d{2})?)\s*(?:o'?clock\s*)?(?:in the (?:afternoon|evening)|at night|tonight)\b/g, "$1 pm")
@@ -372,12 +414,46 @@
       const h = Math.floor(d / 60), mm = d % 60;
       return `That's ${h ? h + " hour" + (h === 1 ? "" : "s") : ""}${h && mm ? " and " : ""}${mm ? mm + " minute" + (mm === 1 ? "" : "s") : ""}${h || mm ? "" : "no time at all"}. ⏱️` + (/\b(flight|fly|flying|land|lands)\b/.test(t) ? " (If the flight crosses time zones, the clock difference isn't the same as the flying time!)" : "");
     }
+    // "my flight leaves at 10:45 pm and takes 7 hours and 50 minutes, what time do i land?", "10:45 pm plus 7 hours 50 minutes"
+    {
+      const tm = /\b(\d{1,2}):(\d{2})\s*(a\.?m\.?|p\.?m\.?)?|\b(\d{1,2})\s*(a\.?m\.?|p\.?m\.?)/.exec(t);
+      const du = /(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b(?:\s*(?:and\s*)?(\d+)\s*(?:minutes?|mins?|m)\b)?|\b(\d+)\s*(?:minutes?|mins?)\b/.exec(t);
+      if (tm && du && /\b(plus|\+|after|later|land|lands|landing|arrive|arrival|finish|end|ends|get there|done|over|takes|take|lasts|long|flight|drive|trip)\b|\+/.test(t) && /\b(what time|when|time do|time will|plus|\+|arrive|land)\b|\+/.test(t) &&
+          !/\bhow long\b/.test(t.replace(/\b(is|takes|lasts) \d.*$/, ""))) {
+        const start = tm[1] !== undefined ? parseTime(tm[1], tm[2], tm[3]) : parseTime(tm[4], "0", tm[5]);
+        const add = du[3] !== undefined ? +du[3] : Math.round(+du[1] * 60) + (du[2] ? +du[2] : 0);
+        const end = start + add, days = Math.floor(end / 1440);
+        const hh = Math.floor(add / 60), mm = add % 60;
+        const durTxt = `${hh ? hh + " h" : ""}${hh && mm ? " " : ""}${mm ? mm + " min" : ""}`;
+        const flight = /\b(flight|fly|flying|land|lands|landing|plane)\b/.test(t);
+        return `${fmtClock(start)} + ${durTxt} = ${fmtClock(end)}${days === 1 ? " the next day" : days > 1 ? ` (${days} days later)` : ""}. ⏰${flight ? " (That's by the clock where you took off; if you land in another time zone, the local time will be different.)" : ""}`;
+      }
+    }
     // "what time will it be in 3 hours"
     if ((r = /\bwhat time (will it be|is it) in (\d+(?:\.\d+)?) (hours?|minutes?|mins?)\b/.exec(t))) {
       const add = +r[2] * (/^h/.test(r[3]) ? 60 : 1); const now = new Date();
       return `In ${r[2]} ${r[3]} it will be about ${fmtClock(now.getHours() * 60 + now.getMinutes() + add)} (by your device's clock). ⏰`;
     }
     const cities = Object.keys(TZ).sort((a, b) => b.length - a.length).filter((c) => new RegExp("\\b" + c + "\\b").test(t));
+    // "if I call her at 7 pm my time, what time is it for her?" / "at 7 pm London time, what time is it in Toronto?"
+    {
+      const home = mem && mem.location && TZ[mem.location.toLowerCase()] ? mem.location.toLowerCase() : null;
+      const tm = new RegExp("\\b(?:at |when it'?s |when it is )?" + TIME + "\\b").exec(t);
+      if (tm && (tm[2] || tm[3]) && /\b(what time|when)\b/.test(t) && (cities.length >= 2 || (home && cities.length >= 1 && /\bmy time\b/.test(t)))) {
+        const alt = Object.keys(TZ).sort((a, b) => b.length - a.length).join("|");
+        const srcM = new RegExp(TIME + "\\s*(?:in |at )?(" + alt + ")(?:'s)?(?: time)?\\b").exec(t);
+        let src = srcM ? srcM[4] : /\bmy time\b/.test(t) ? (home && (cities.includes(home) || !cities.length) ? home : (/\bi live in (\w+(?: \w+)?)/.exec(t) || [])[1]) : null;
+        if (src && !TZ[src]) src = cities.find((c2) => src.startsWith(c2)) || null;
+        const dstM = new RegExp("\\b(?:in|for|to) (" + alt + ")\\b(?!.*\\b(?:in|for) (?:" + alt + ")\\b)").exec(t.replace(srcM ? srcM[0] : "\u0000", " "));
+        let dst = dstM ? dstM[1] : cities.find((c2) => c2 !== src);
+        if (src && dst && src !== dst && TZ[src] && TZ[dst]) {
+          const mins = parseTime(tm[1], tm[2], tm[3]);
+          const d = offsetNow(dst) - offsetNow(src);
+          const out = mins + d * 60, dayShift = out < 0 ? " the day before" : out >= 1440 ? " the next day" : "";
+          return `When it's ${fmtClock(mins)} in ${U.titleCase(src)}, it's ${fmtClock(out)}${dayShift} in ${U.titleCase(dst)}. 🕒 (${U.titleCase(dst)} is ${Math.abs(d)} hour${Math.abs(d) === 1 ? "" : "s"} ${d > 0 ? "ahead" : d < 0 ? "behind" : "the same"}${d === 0 ? "" : " right now"}.)`;
+        }
+      }
+    }
     if (!cities.length) return null;
     // "is Lisbon in the same time zone as London?"
     if (cities.length >= 2 && /\b(same time ?zone|time difference|what time is it in|what time will it be in|when it'?s|when it is|ahead|behind|hours? (ahead|behind|difference))\b/.test(t)) {

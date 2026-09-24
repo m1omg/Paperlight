@@ -285,7 +285,11 @@
     if (/\b(human|humans|real life|irl|in real life|human body|world war|ww1|ww2|wwii|history|biology|chemistry|physics|in science|in math|president|country|countries|planet|solar system|in the ocean)\b/.test(text) && !/\b(minecraft|mc|in the game|in game)\b/.test(text)) return null;
     // "what's your favorite mob?" / "do you like creepers?" are about Pip, and "I know what a creeper is" isn't a question
     if (/\bpiston door|redstone door|2x2 door\b/.test(text)) return null;
+    // "me and omar want to go to the nether. what do we need"
+    if (/\b(go|get|going|travel|goin) (to|into) the nether\b/.test(text) && /\b(what do (we|i|you) need|what should (we|i) (bring|take|pack)|what to bring|how do (we|i)|need to bring|how to)\b/.test(text)) { const g = D.guides.find((x) => x.q.includes("nether portal")); if (g) return done(state, { text: g.a, kind: "guide" }, null); }
     if (/\bnether\b/.test(text) && /\b(scary|scared|too scary|frightening|spooky|safe for|creepy)\b/.test(text)) { const g = D.guides.find((x) => x.q.includes("is the nether scary")); if (g) return done(state, { text: g.a, kind: "guide" }, null); }
+    // "lol i should get a cat to keep mia away 😂": a joke, not a question
+    if (!m.isQuestion && !/\?/.test(m.clean) && /\b(lol|lmao+|haha+|jk)\b|😂|🤣/u.test(m.clean.toLowerCase()) && !/\b(how|what|where|why|which|recipe|craft|tips?|help)\b/.test(text)) return null;
     // "all my zombies in my mob farm fell in the lava and died lmaooo rip": a story, not a question
     if (!m.isQuestion && !/\b(how|what|where|why|which|can|should|help|tips?|recipe|best way)\b/.test(text) && /\b(fell|died|burned|burnt|drowned|exploded|blew up|despawned|got blown up)\b/.test(text)) return null;
     if (/\b(safe|parental controls?|family settings|strangers|turn off (the )?chat|chat off)\b/.test(text) && /\b(minecraft|servers?|online|multiplayer|realms?)\b/.test(text)) { const g = D.guides.find((x) => x.q.includes(/parental|chat|block/.test(text) ? "minecraft parental controls" : "is minecraft safe for kids")); if (g) return done(state, { text: g.a, kind: "guide" }, null); }

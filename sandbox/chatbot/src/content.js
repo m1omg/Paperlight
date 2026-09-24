@@ -326,13 +326,16 @@
     { id: "spell_quiz", ex: ["quiz me on spelling", "spelling quiz", "can you test my spelling", "help me practice spelling", "spelling game"],
       re: /\b(quiz|test|practice|practise|help) (me )?(on |with |my )?(spelling|spellings|spelling words)\b|\bspelling (quiz|test|game|practice|bee)\b|\bpractice (my )?spelling\b/,
       say: (c) => c.skill("spell") },
-    { id: "joke", ex: ["tell me a joke", "make me laugh", "say something funny", "joke please", "another joke", "know any jokes", "tell me a pun", "do you know any jokes", "one more joke", "i want a joke", "jokes"], re: /\b(tell|know|got|have|say|hear|give|gimme|want|need) (me |us )?(a |any |another |some |one more |more |ur |your |a few )?(good |funny |dad |bad |minecraft |math |science |[a-z]+ )?(jokes?|puns?)\b|\bmake me laugh\b|\bsay something funny\b|^(jokes?|another( one)?|one more)[.!?]*$|^(yes |yeah |ok |okay |sure |pls |please )?(a |another |one more |some )?(minecraft |mc |funny |good |dad |short )?jokes?( please| pls)?[.!?]*$/,
+    { id: "joke", ex: ["tell me a joke", "make me laugh", "say something funny", "joke please", "another joke", "know any jokes", "tell me a pun", "do you know any jokes", "one more joke", "i want a joke", "jokes"], re: /\b(tell|know|got|have|say|hear|give|gimme|want|need) (me |us )?(a |any |another |some |one more |more |ur |your |a few )?(good |funny |dad |bad |minecraft |math |science |[a-z]+ )?(jokes?|puns?)\b|^(a |an |another |one more )?(chemistry|science|math|maths|physics|biology|animal|school|computer|programming|coding|minecraft|teen|clever|funny|good) (one|joke|pun)s?\b|\b(give|tell|gimme) (me )?(a |an |another )?(chemistry|science|math|physics|biology|animal|school|computer|programming|minecraft) one\b|\bmake me laugh\b|\bsay something funny\b|^(jokes?|another( one)?|one more)[.!?]*$|^(yes |yeah |ok |okay |sure |pls |please )?(a |another |one more |some )?(minecraft |mc |funny |good |dad |short )?jokes?( please| pls)?[.!?]*$/,
       say: (c) => {
         const t = c.m.plain;
         if (/\b(minecraft|mc|creeper|gaming|game)\b/.test(t)) return c.skill("mcjoke");
         const topic = /\b(programming|programmer|coding|code|computer|developer|nerd|tech)\b/.test(t) ? "programming" : /\b(science|chemistry|chemical|physics|biology|scientist)\b/.test(t) ? "science"
           : /\b(math|maths|number)\b/.test(t) ? "math" : /\b(animal|animals|dog|cat|pet)\b/.test(t) ? "animal" : /\b(school|teacher|homework)\b/.test(t) ? "school" : null;
-        if (topic) { const list = C().jokes.filter((j) => C().topicJokes[topic].test(j)); if (list.length) return { text: S().deal(c.state, "joke:" + topic, list), intent: "joke" }; }
+        if (topic) { const list = C().jokes.concat(C().teenJokes).filter((j) => C().topicJokes[topic].test(j)); if (list.length) return { text: S().deal(c.state, "joke:" + topic, list), intent: "joke" }; }
+        // "not a baby one", "an actually funny one", or anyone 13+
+        if (/\b(not (a |an )?(baby|kid|kiddie|little kid|lame|cringe|corny)|actually funny|for (teens|adults|grown ?ups)|grown ?up|clever|smart|not for (babies|kids))\b/.test(t) || (c.mem.age >= 13 && Math.random() < 0.5))
+          return { text: S().deal(c.state, "joke:teen", C().teenJokes), intent: "joke" };
         return c.skill(c.mem.noMinecraft || c.adult ? "joke_plain" : "joke");
       } },
     { id: "cheer_up", ex: ["cheer me up", "make me smile", "make me happy", "i need cheering up", "say something to make me feel better"],
@@ -426,7 +429,7 @@
     "How do you make a tissue dance? Put a little boogie in it! 🤧", "Why can't a nose be 12 inches long? Because then it'd be a foot! 👃",
     "What did the zero say to the eight? Nice belt! 0️⃣8️⃣", "Why did the student eat his homework? The teacher said it was a piece of cake! 🍰",
     "Why don't oysters share? Because they're shellfish! 🦪", "What do you call a dog magician? A labracadabrador! 🐶✨",
-    "What did the grape do when it got stepped on? Nothing, it just let out a little squeal! 🍇", "Why is Peter Pan always flying? He Neverlands! 🧚",
+    "What did the grape do when it got stepped on? Nothing, it just let out a little wine! 🍇", "Why is Peter Pan always flying? He Neverlands! 🧚",
     "What do you call an alligator in a vest? An investigator! 🐊", "Why did the tomato blush? It saw the salad dressing! 🍅",
     "Why don't programmers like nature? It has too many bugs. 🐛", "What do you call a boomerang that won't come back? A stick. 🪃",
     "Why did the music teacher need a ladder? To reach the high notes! 🎵", "What kind of tree fits in your hand? A palm tree! 🌴",
@@ -456,7 +459,94 @@
     "What did one ion say to the other? I've got my ion you! 👀", "Why are chemists great at solving problems? They have all the solutions. 🧪",
     "What do you do with a sick chemist? If you can't helium and you can't curium, you might as well barium. ⚗️", "Why did the biology teacher break up with the physics teacher? There was no chemistry. 💔",
     "Why is the obtuse triangle always upset? Because it's never right. 📐", "What do you call a number that can't keep still? A roamin' numeral! 🏛️");
-  const topicJokes = { programming: /programmer|developer|binary|sql|cache|javascript|bugs|hardware|computer|windows|chatbot|robot/i, science: /atom|chemi|ion|helium|biology|physics|scientist|anti-gravity|reaction/i,
+  // clever ones for teens and grown-ups ("not a baby one")
+  const teenJokes = [
+    "I told my friend 10 jokes to make him laugh. Sadly, no pun in ten did. 🙃", "I'm reading a book on the history of glue. I just can't put it down. 📚",
+    "Why don't scientists trust stairs? They're always up to something. 🪜", "I used to hate facial hair, but then it grew on me. 🧔",
+    "What do you call a factory that makes okay products? A satisfactory. 🏭", "I only know 25 letters of the alphabet. I don't know y. 🤷",
+    "Why can't you hear a pterodactyl go to the bathroom? Because the P is silent. 🦖", "I asked the librarian if they had books on paranoia. She whispered: \"They're right behind you.\" 📚",
+    "Did you hear about the claustrophobic astronaut? He just needed a little space. 🚀", "Why did the invisible man turn down the job offer? He couldn't see himself doing it. 👻",
+    "I'm on a seafood diet. I see food and I eat it. 🍤", "What's the best thing about Switzerland? I don't know, but the flag is a big plus. 🇨🇭",
+    "I have a fear of speed bumps, but I'm slowly getting over it. 🚗", "Time flies like an arrow. Fruit flies like a banana. 🍌",
+    "What do you call a belt made of watches? A waist of time. ⌚", "Why do seagulls fly over the sea? Because if they flew over the bay, they'd be bagels. 🥯",
+    "The rotation of the Earth really makes my day. 🌍", "Why did the coffee file a police report? It got mugged. ☕",
+    "What did the buffalo say when his son left for college? Bison. 🦬", "Why is it annoying to eat next to basketball players? They dribble all the time. 🏀",
+    "I got a job at a bakery because I kneaded dough. 🥖", "A plateau is the highest form of flattery. ⛰️",
+    "What do you call a can opener that doesn't work? A can't opener. 🥫", "Why do French people eat snails? They don't like fast food. 🐌",
+  ];
+  jokes.push("What do you call an acid with an attitude? A mean-o acid. 🧬", "I'd tell you another chemistry joke, but all the good ones argon. ⚗️",
+    "Oxygen and magnesium got together. OMg! 🧪", "What's a physicist's favorite food? Fission chips. 🍟",
+    "Two atoms are walking. One says: \"I think I lost an electron.\" The other asks: \"Are you sure?\" \"Yes, I'm positive.\" ⚛️",
+    "What did the thermometer say to the graduated cylinder? You may have graduated, but I've got more degrees. 🌡️");
+  // "i don't get it": what each pun is playing on
+  const jokeWhy = [
+    [/guts/, "\"Guts\" means insides AND courage, and skeletons have neither! 💀"], [/impasta/, "\"Impasta\" sounds like \"impostor\", a fake. 🍝"],
+    [/outstanding in his field/, "\"Outstanding in his field\" means really great at his job, and a scarecrow literally stands out in a field! 🌾"],
+    [/let it go/, "Elsa's famous song is \"Let It Go\", so she'd let the balloon go! 🎈"], [/gummy bear/, "No teeth means just gums, so it's a gummy bear! 🐻"],
+    [/too many problems/, "Math books are full of problems (questions), and \"having problems\" also means being sad. 📘"], [/just waved/, "Waves are ocean waves AND waving hello! 🌊"],
+    [/crack each other up/, "\"Crack up\" means laugh really hard, and eggs crack! 🥚"], [/dino-snore/, "Dinosaur + snore = dino-snore! 🦖"],
+    [/two-tired|two tired/, "It was \"too tired\"... and it has two tires! 🚲"], [/a carrot/, "Carrot rhymes with parrot, so it SOUNDS like a parrot. 🥕"],
+    [/honeycombs/, "Bees make honeycombs, and you use a comb on hair! 🐝"], [/nacho cheese/, "\"Nacho cheese\" sounds like \"not your cheese\"! 🧀"],
+    [/hole in one/, "A hole in one is a perfect golf shot, and also a hole in your pants! ⛳"], [/igloos it/, "\"Igloos it\" sounds like \"he glues it\" together! 🐧"],
+    [/see right through/, "You can see right through ghosts, and through a bad lie! 👻"], [/felt crummy/, "Feeling crummy means feeling sick, and cookies are full of crumbs! 🍪"],
+    [/pork chop/, "A karate chop + pork = pork chop! 🐷"], [/windows open/i, "Computers run Windows, and leaving windows open makes you cold! 🪟"],
+    [/recharge/, "People recharge (rest) on vacation, and robots literally recharge their batteries! 🤖"], [/computer chips/, "Computers have chips inside, and chips are a snack! 🍟"],
+    [/make up everything/, "Atoms make up everything that exists, and \"make up\" also means making stuff up (lying)! ⚛️"],
+    [/never meet/, "Parallel lines never cross, so they can never meet, even with so much in common! 📐"], [/anti-gravity/, "\"Can't put it down\" means a book is super good, and anti-gravity literally won't go down! 📖"],
+    [/seven eight nine/, "\"Seven eight nine\" sounds like \"seven ATE nine\"! 🔢"], [/a fsh/, "No eyes means no \"i\", so f-i-s-h becomes fsh! 🐟"],
+    [/ssss+side/i, "Creepers hiss before they explode (sssss!), and \"to get to the other side\" is the classic chicken joke. 💥"],
+    [/starts at the end/i, "The Ender Dragon lives in the End, and starting a book at the end spoils it! 🐉"], [/around the block/, "Minecraft is made of blocks, and \"running around the block\" is normal exercise! 🟫"],
+    [/always blocked/, "Minecraft is all blocks, so the roads are literally blocked!"], [/i dig you/i, "\"I dig you\" means I like you, and in Minecraft you dig! ⛏️"],
+    [/no body to go with/, "\"Nobody\" sounds like \"no body\", and skeletons have no body, just bones! 💀"], [/nether-lands/i, "The Netherlands is a real country, and ghasts live in the Nether! 🇳🇱"],
+    [/pork-cussion/, "Percussion means drums, and pigs are pork! 🥁"], [/moan-town/, "Motown is a music style, and zombies moan! 🧟"],
+    [/boogie/, "\"Boogie\" means dance, and it's also a funny word for what you blow into a tissue! 🤧"], [/be a foot/, "12 inches is 1 foot, so a 12-inch nose would be a foot! 👃"],
+    [/nice belt/, "An 8 looks like a 0 wearing a belt around its middle! 0️⃣8️⃣"], [/piece of cake/, "\"A piece of cake\" means really easy, so he took it literally! 🍰"],
+    [/shellfish/, "\"Shellfish\" sounds like \"selfish\"! 🦪"], [/labracadabrador/, "Labrador + abracadabra = labracadabrador! 🐶"],
+    [/little wine/, "\"Whine\" (complain) sounds like wine, which is made from grapes! 🍇"], [/neverlands/i, "\"Neverlands\" sounds like \"never lands\"! 🧚"],
+    [/investigator/, "In a vest + alligator = investigator! 🐊"], [/salad dressing/, "Salad dressing is a sauce, but \"dressing\" also means getting dressed! 🍅"],
+    [/too many bugs/, "Bugs are mistakes in code, and nature is full of real bugs! 🐛"], [/a stick\./, "A boomerang that doesn't come back is just a stick you threw! 🪃"],
+    [/high notes/, "High notes are high sounds, so she needed to reach up high! 🎵"], [/palm tree/, "Your hand has a palm, so a palm tree fits! 🌴"],
+    [/whatever bugs them/, "\"Bugs you\" means annoys you, and frogs eat bugs! 🐸"], [/something smells/, "Your nose is between your eyes! 👀"],
+    [/tangent/, "\"Going off on a tangent\" means drifting off topic, and a tangent is also a line in geometry! 📐"], [/you planet/, "\"You planet\" sounds like \"you plan it\"! 🪐"],
+    [/abdominal snowman/, "The abominable snowman (the yeti) + abdominal muscles (a six-pack)! ⛄"], [/fans left/, "Fans are people cheering AND machines that cool you down! 🏟️"],
+    [/a cloud/, "A sheep with no legs is just a fluffy white blob, like a cloud! ☁️"], [/hrrm day/, "Villagers say \"hrrm\" in Minecraft, so a bad hrrm day is a bad day. 😄"],
+    [/deady bear/, "Teddy bear + dead = deady bear! 🧸"], [/has a blast/, "\"Have a blast\" means have fun, and creepers blast (explode)! 💥"],
+    [/rocky/, "A \"rocky\" relationship has problems, and pickaxes mine rocks! ⛏️"], [/hissss-tory/i, "Creepers hiss, and history is a school subject! 📜"],
+    [/big hug/, "Creepers sneak right up close, like a hug, and then explode! 💥"], [/hide and teleport/, "Endermen teleport, so it's hide and teleport instead of hide and seek! 👾"],
+    [/keeps staring|stop staring/, "Endermen get angry when you look at them in Minecraft! 👾"], [/push my buttons/, "\"Push my buttons\" means annoy me, and redstone uses buttons that make pistons push! 🔴"],
+    [/gem-ius/, "Gem + genius = gem-ius! 💎"], [/cold, hard cash/, "\"Cold, hard cash\" means real money, and snow golems are cold! ⛄"],
+    [/rock!/, "Miners dig rock, and rock is a kind of music! 🎸"], [/golden apple a day/, "\"An apple a day keeps the doctor away\", and golden apples cure zombie villagers! 🍎"],
+    [/bed in the nether/i, "Beds explode if you try to sleep in them in the Nether! 🛏️💥"], [/crying from a mile/, "Ghasts make crying sounds, so they'd never win hide and seek! 👻"],
+    [/spelling!/, "Witches cast spells, and spelling is a school subject! 🧙"], [/straight to the hoop/, "Endermen teleport, so they could zap straight to the hoop! 🏀"],
+    [/blow up at people/, "\"Blow up at someone\" means yell at them, and creepers literally explode! 💥"], [/how they end/i, "The Ender Dragon lives in the End, and stories have an end!"],
+    [/loose ends/, "\"Tie up loose ends\" means finish things off, and string ties things! 🧵"], [/nap-per-hrrm/, "It's napper + the villager \"hrrm\" sound. Not my best one, honestly. 😅"],
+    [/high school/, "A ladder gets you up high, so it's for HIGH school! 🪜"], [/hrrm-dini/, "Houdini was a famous magician, and villagers say \"hrrm\"! 🎩"],
+    [/heart wasn't in it/, "\"His heart wasn't in it\" means he didn't really try, and skeletons have no heart! 🏹"],
+    [/light attracts bugs/, "Light attracts bugs (insects), and programmers hate bugs (code mistakes)! 🐛"], [/10 kinds of people/, "In binary (computer numbers), 10 means 2! So there are 2 kinds of people. 💻"],
+    [/join you/, "In databases you \"join\" tables to combine them! 💾"], [/cache/, "Cache (computer memory) sounds like cash (money)! 💸"],
+    [/hardware problem/, "Programmers do software, so a light bulb is a \"hardware problem\", not their job! 💡"], [/node how to express/i, "Node and Express are JavaScript tools, and it sounds like \"didn't know how to express himself\"!"],
+    [/get a reaction/, "Chemicals have reactions, and a good joke gets a reaction (a laugh)! 🧪"], [/ion you/, "\"I've got my ion you\" sounds like \"I've got my eye on you\"! 👀"],
+    [/all the solutions/, "Chemists make solutions (mixtures), and solutions also means answers! 🧪"], [/barium/, "Helium, curium and barium sound like \"heal him\", \"cure him\" and \"bury him\". Dark, but clever! ⚗️"],
+    [/no chemistry/, "\"Chemistry\" between people means a spark, and it's also a science subject!"], [/never right/, "An obtuse triangle has no right angle, so it's never \"right\"! 📐"],
+    [/roamin/, "\"Roamin'\" (wandering) sounds like Roman numerals! 🏛️"], [/no pun in ten did/, "\"No pun in ten did\" sounds like \"no pun intended\"! 🙃"],
+    [/history of glue/, "You can't put the book down because of the glue, and \"can't put it down\" means it's really good! 📚"], [/up to something/, "Stairs go up, and \"up to something\" means being sneaky!"],
+    [/grew on me/, "\"It grew on me\" means I started to like it, and hair literally grows! 🧔"], [/satisfactory/, "Satisfactory means okay, and it ends in \"factory\"! 🏭"],
+    [/don't know y/, "The letter Y sounds like \"why\"! 🤷"], [/p is silent/i, "Pterodactyl starts with a silent P, and \"P\" sounds like pee! 🦖"],
+    [/paranoia/, "Paranoia is feeling like someone's watching you, so she whispered \"they're right behind you\"! 📚"], [/little space/, "\"I need some space\" means I need alone time, and astronauts are in space! 🚀"],
+    [/see himself doing it/, "\"I can't see myself doing it\" means I can't imagine it, and he's invisible! 👻"], [/see food/, "\"Seafood\" sounds like \"see food\"! 🍤"],
+    [/big plus/, "The Swiss flag has a big plus sign on it! 🇨🇭"], [/slowly getting over it/, "You go slowly over speed bumps, and \"getting over it\" means recovering! 🚗"],
+    [/fruit flies/, "The first part means time goes fast; the second means fruit flies (little bugs) like bananas. Same words, different meaning! 🍌"],
+    [/waist of time/, "\"Waist\" (where a belt goes) sounds like \"waste\" of time! ⌚"], [/bagels/, "Bay + gulls = bagels! 🥯"], [/makes my day/, "Earth's rotation literally makes each day! 🌍"],
+    [/mugged/, "Coffee comes in a mug, and getting mugged means getting robbed! ☕"], [/bison/, "\"Bison\" sounds like \"bye, son\"! 🦬"], [/dribble/, "Dribbling is bouncing a basketball, and also drooling! 🏀"],
+    [/kneaded/, "\"Kneaded\" (squishing dough) sounds like \"needed\", and \"dough\" is slang for money! 🥖"], [/plateau/, "A plateau is flat land, and flattery is a compliment! ⛰️"],
+    [/can't opener/, "Can opener, can't opener! 🥫"], [/fast food/, "Snails are super slow, the opposite of fast food! 🐌"], [/mean-o acid/, "Amino acids are real, and \"a mean-o\" acid has an attitude! 🧬"],
+    [/argon/, "Argon is an element, and \"argon\" sounds like \"are gone\"! ⚗️"], [/omg/i, "O is oxygen and Mg is magnesium, so together they spell OMg! 🧪"], [/fission chips/, "Nuclear fission + fish and chips! 🍟"],
+    [/go to sleep/, "Computers have a \"sleep\" mode, so when you need a break, it takes a nap too! 💻"], [/meet you at the corner/, "Two walls really do meet at the corner of a room! 🧱"],
+    [/favorite color\? green/, "Creepers are green, and they're famous for going BOOM! 💥"], [/the bounce/, "Slimes bounce everywhere in Minecraft, so their dance move is the bounce! 🟢"],
+    [/i'm positive/, "Electrons are negative, so losing one makes an atom positive, and \"I'm positive\" means I'm sure! ⚛️"], [/more degrees/, "Thermometers measure degrees, and graduates earn degrees! 🌡️"],
+  ];
+  function explainJoke(text) { const hit = jokeWhy.find(([re]) => new RegExp(re.source, "i").test(text || "")); return hit ? hit[1] : null; }
+  const topicJokes = { programming: /programmer|developer|binary|sql|cache|javascript|bugs|hardware|computer|windows|chatbot|robot/i, science: /atom|chemi|\bions?\b|helium|biology|physics|physicist|scientist|anti-gravity|reaction|electron|argon|magnesium|fission|thermometer|mean-o acid/i,
     math: /math|number|triangle|numeral|parallel|seven|zero|tangent|problems/i, animal: /dog|cat|bear|pig|fish|bee|frog|penguin|sheep|alligator|dinosaur|oyster|cow|parrot/i, school: /student|teacher|homework|school|book|class/i };
 
   // the Minecraft ones, for "tell me a minecraft joke"
@@ -738,8 +828,6 @@
     { re: /\b(confident|confidence|shy|self esteem|self-esteem|believe in myself)\b/, need: /./,
       say: ["Confidence grows from doing things even while you're a bit scared, not from waiting until you feel brave. 💪 Start with small challenges, like asking one question in class, and notice every time you did it. Also: talk to yourself the way you'd talk to a friend you love.",
         "Being shy is totally okay, lots of amazing people are! 😊 Try picking one small brave thing a day, and write down things you did well. Confidence is like a muscle: it gets stronger the more you use it."] },
-    { re: /\b(fall asleep|can'?t sleep|cannot sleep|sleep better|insomnia|stay asleep)\b/, need: /./,
-      say: ["Sleep tips that really help: 😴 put screens away 30 minutes before bed, keep the room cool and dark, go to bed at the same time every night, and if your mind is busy, write your thoughts on paper so they wait until tomorrow. Slow breathing (in for 4, out for 6) helps too."] },
     // divorce: the specific worries first, then the general tips
     { re: /\b(pick|picking|take|taking|choose|choosing) (a )?sides?\b|\b(dad|mom|mum|father|mother)('?s)? (keeps |always )?(saying|says|blames|blaming) (it'?s |its )?(my |your |his |her )?(mom|mum|dad|mother|father)/, need: /./,
       say: ["You definitely don't have to pick a side. 💙 Their divorce is between the two of them. If your dad or mom says bad things about the other, it's okay to tell them: \"I love you both. Please don't put me in the middle.\" A school counselor is also great to talk to about this, it's literally their job."] },
@@ -763,6 +851,8 @@
       say: ["Making friends as an adult is genuinely hard, especially with shift work and a kid half the week. 💙 A few things that work for a lot of people: a regular activity where the same people show up (a running or cycling club, a pub quiz team, a class, volunteering), other parents from Sam's school or clubs (a coffee after drop-off counts), colleagues on your shifts who are in the same boat, and local groups on apps like Meetup. Saying yes to small invitations helps too. Is there anything you used to enjoy that you could pick back up?"] },
     { re: /\b(sleep|sleeping)\b.*\b(during the day|in the day|day ?time|after (a )?night shifts?|night shifts?)\b|\bnight shifts?\b.*\b(sleep|tired|exhausted)\b/, need: /\b(tips?|advice|how|help|better|can'?t)\b/,
       say: ["Day sleep after night shifts is tough. 😴 What helps many nurses: blackout curtains or a sleep mask, earplugs or white noise, a cool room, and the same sleep time on shift days. Wear sunglasses on the drive home so the morning light doesn't wake your brain up, skip caffeine in the last few hours of the shift, and keep your phone out of reach. A short nap before a night shift helps too."] },
+    { re: /\b(fall asleep|can'?t sleep|cannot sleep|sleep better|insomnia|stay asleep)\b/, need: /./,
+      say: ["Sleep tips that really help: 😴 put screens away 30 minutes before bed, keep the room cool and dark, go to bed at the same time every night, and if your mind is busy, write your thoughts on paper so they wait until tomorrow. Slow breathing (in for 4, out for 6) helps too."] },
     // a friend who was mean
     { re: /\bshould i (still )?(be|stay) (her|his|their|friends?)\b|\bshould i (stop being|still be) (her|his|their)? ?friends?\b/, need: /./,
       say: ["That's a big question. 💙 Good friends sometimes say hurtful things, and then say sorry. You could tell her how it made you feel first and see what she does. If she says sorry and is kinder, the friendship can get even stronger. If she keeps being mean, it's okay to spend more time with friends who make you feel good."] },
@@ -794,5 +884,5 @@
       say: ["Crushes are exciting and scary at the same time! 😊 The best move is to just be yourself and be kind. Get to know them as a friend first: talk about things you both like. There's no rush, and whatever happens, you're awesome either way. 💙"] },
   ];
 
-  P.content = { artists, artistOf, songsIn, persona, intents, jokes, mcJokes, topicJokes, topics, topicOf, advice, facts, riddles, trivia, wyr, questions, compliments, motivation, stories, poems, stalls, safety };
+  P.content = { teenJokes, explainJoke, artists, artistOf, songsIn, persona, intents, jokes, mcJokes, topicJokes, topics, topicOf, advice, facts, riddles, trivia, wyr, questions, compliments, motivation, stories, poems, stalls, safety };
 })(typeof window !== "undefined" ? (window.Pip = window.Pip || {}) : (global.Pip = global.Pip || {}));

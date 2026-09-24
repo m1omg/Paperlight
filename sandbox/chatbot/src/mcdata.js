@@ -549,7 +549,7 @@
 
   // ---------- guides (matched by their questions) ----------
   const guides = [
-    { q: ["how to get to the nether", "how do i go to the nether", "nether portal", "how to make a nether portal", "how to build a portal"],
+    { q: ["how to get to the nether", "how do i go to the nether", "nether portal", "how to make a nether portal", "how to build a portal", "what do i need to go to the nether", "what do we need for the nether", "want to go to the nether what do we need"],
       a: "To get to the Nether: build an obsidian frame at least 4 wide and 5 tall (corners optional, so 10 obsidian), then light it with flint and steel. No diamond pickaxe for obsidian? Pour water on still lava to make obsidian right where you need it, or use a bucket to shape it. Bring food, a sword, gold armor (so piglins are friendly) and blocks to build with!" },
     { q: ["how to get to the end", "how do i find the end", "end portal", "how to find a stronghold", "stronghold", "how to find the end portal"],
       a: "To reach the End: craft Eyes of Ender (ender pearl + blaze powder), throw one and follow it. Where it flies down, dig to find the stronghold. Find the portal room and put eyes into the empty frames (up to 12 in total). Then jump in, but prepare for the Ender Dragon first!" },

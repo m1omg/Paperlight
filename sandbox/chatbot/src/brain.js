@@ -274,6 +274,8 @@
         const bits = facts.map((f) => f.type === "person" ? `your ${f.rel} is ${f.name}` : f.type === "pinfo" && f.age !== undefined ? `${mem.people[f.rel] ? (facts.some((x) => x.type === "person" && x.rel === f.rel) ? (f.rel === "son" || f.rel === "brother" ? "he's" : f.rel === "daughter" || f.rel === "sister" ? "she's" : mem.people[f.rel] + " is") : mem.people[f.rel] + " is") : "your " + f.rel + " is"} ${f.age}` : f.type === "pinfo" && f.birthday ? `${mem.people[f.rel] || "your " + f.rel}'s birthday is ${f.birthday}` : f.type === "age" ? `you're ${f.value}` : f.type === "job" ? `you're ${U.aOrAn(f.value)} ${f.value}` : f.type === "name" ? `your name is ${f.value}` : f.type === "pet" ? (f.name ? `your ${f.kind} is ${f.name}` : `you have ${U.aOrAn(f.kind)} ${f.kind}`) : f.type === "location" ? `you live in ${f.value}` : null).filter(Boolean);
         if (bits.length) out = { text: `Yes! Got it: ${U.listJoin(bits)}. 😊`, source: "memory:confirm" };
       }
+      // "I live in London... If I call her at 7 pm my time, what time is it for her?": the question comes first
+      if (!out && asks && loud.length && loud.every((f) => /^(location|job|school|pinfo)$/.test(f.type))) { const sk = this._skills(m, c, trace); if (sk) out = sk; }
       if (!out && loud.length && !(asks && loud.every((f) => /^(person|like|favorite|dislike|note)$/.test(f.type)))) out = this._ackFacts(loud, m, c);
       // 6) exact skills
       if (!out) out = this._skills(m, c, trace);
@@ -578,7 +580,7 @@
             }
             if (good) {
               this._mood("happy"); this.state.care = 0; this.mem.careFollow = null;
-              return { text: pick([`I'm really glad to hear that! 💙`, `Yay, that makes me so happy! 💙`]) + (m.tokens.length > 4 ? " " + pick(["Tell me more!", "What happened?", "That's great news."]) : " I'm here whenever you want to talk."), source: "expect:followup", expect: m.tokens.length > 4 ? { kind: "open", topic: "good news" } : null };
+              return { text: pick([`I'm really glad to hear that! 💙`, `Yay, that makes me so happy! 💙`]) + (m.tokens.length > 8 ? " " + pick(["That's great news.", "That really helps, doesn't it?"]) : m.tokens.length > 4 ? " " + pick(["Tell me more!", "What happened?", "That's great news."]) : " I'm here whenever you want to talk."), source: "expect:followup", expect: m.tokens.length > 4 ? { kind: "open", topic: "good news" } : null };
             }
             if (bad) { this._mood(ex.label === "grief" ? "sad" : "sad"); return { text: pick([`I'm sorry it's still hard${n}. 💙 Do you want to talk about it? I'm listening.`, `Aw, I'm sorry. 🫂 What's been going on?`]), source: "expect:followup-bad", expect: { kind: "vent", emotion: "sad" } }; }
             break;
@@ -760,6 +762,8 @@
           if (!r && pass) { const rec = MEM.recall(this.mem, sm); if (rec) r = Object.assign(rec, { source: "memory" }); }
           // "why do hamsters do that?" after "he stuffs his cheeks with seeds": the question needs the sentence before it
           if (!r && pass && k > 0) { const both = N.analyze(analyzed[k - 1].x.replace(/[.!?]*$/, "") + " " + x); const f = S.faq(both); if (f) r = { text: f, source: "skill:knowledge" }; }
+          // "ok me and omar want to go to the nether. what do we need": the question leans on the sentence before it
+          if (!r && pass && k > 0 && x.split(/\s+/).length <= 6) { const both = N.analyze(analyzed[k - 1].x.replace(/[.!?]*$/, "") + ". " + x); const sk = this._skills(both, this.ctx(both), trace); if (sk && /^skill:(minecraft|knowledge)/.test(sk.source || "")) r = sk; }
           if (!r && pass) { const adv = this._advice(sm); if (adv && adv.score >= 0.86) r = adv; }
           const hm = pass && k > 0 && /^how many (\w+) (?:is|are|would be|does) (?:that|this|it)\b/i.exec(x.trim());
           if (!r && hm) { const q = /(\d+(?:\.\d+)?)\s*(ounces?|oz|grams?|g|pounds?|lbs?|kilograms?|kg|cups?|ml|millilit\w+|lit\w+|feet|foot|ft|meters?|metres?|miles?|km|kilometers?|inches|inch|cm)\b/i.exec(analyzed[k - 1].x); if (q) { const cv = P.math.convert(`${q[1]} ${q[2]} to ${hm[1]}`); if (cv && !cv.error) r = { text: cv.text + " 📏", source: "skill:units" }; } }
@@ -840,7 +844,7 @@
       if (parts.length < 2 || !out || !out.text) return out;
       const src = out.source || "";
       let extras = 0;
-      if (/^(safety|game|expect|command|event:grief|event:bullied|skill:time|skill:recipe|memory:name|social:artist|social:songs)/.test(src)) return out;
+      if (/^(safety|game|expect|command|event:grief|event:bullied|skill:time|skill:recipe|memory:name|social:artist|social:songs|more:|intent:joke)/.test(src)) return out;
       for (const part of parts) {
         const pm = N.analyze(part);
         // a feeling mentioned next to a request
@@ -1000,6 +1004,17 @@
       const li = this.state.lastIntent;
       const MORE = { joke: "joke", mcjoke: "mcjoke", joke_more: "joke", fact: "fact", riddle: "riddle", story: "story", poem: "poem", compliment: "compliment", motivate: "motivate", trivia: "trivia", wyr: "wyr", question: "question", ask_me: "question" };
       if (!li || !MORE[li]) return null;
+      // "i dont get it": explain the pun (and tell a new one if they asked for it)
+      if (/joke/.test(MORE[li]) && /\b(i )?(don'?t|do not|dont) (get|understand) (it|that|the joke)\b|\bexplain (it|the joke|that)\b|\bwhat does (that|it) mean\b|^(huh|what)\?*$/.test(m.plain)) {
+        const why = C.explainJoke && C.explainJoke(c.lastBot || "");
+        const wantsNew = /\b(tell|give|gimme|another|one more|different|new)\b.*\b(joke|one)\b|\b(minecraft|mc) (joke|one)\b/.test(m.plain);
+        if (why && !wantsNew) return { text: `Here's the trick: ${why}`, source: "more:explain", intent: li };
+        if (why && wantsNew) {
+          const mcW = /\b(minecraft|mc)\b/.test(m.plain) && !/\bnot (a )?minecraft\b/.test(m.plain);
+          const r2 = S.start(mcW ? "mcjoke" : "joke", c);
+          if (r2) return Object.assign(r2, { text: `Here's the trick: ${why} ${mcW ? "Here's a Minecraft one" : "Here's another"}: ${r2.text}`, source: "more:" + (mcW ? "mcjoke" : "joke") });
+        }
+      }
       if (/joke/.test(MORE[li]) && /\b(i )?(don'?t|do not|dont) get it\b|\bi said (a )?(minecraft|mc)\b|\bnot (a )?minecraft\b.*\bjoke\b/.test(m.plain)) {
         const mcWanted = /\b(minecraft|mc)\b/.test(m.plain) && !/\bnot (a )?minecraft\b/.test(m.plain);
         const r = S.start(mcWanted ? "mcjoke" : "joke", c);
@@ -1019,6 +1034,9 @@
     _skills(m, c, trace) {
       const t = m.norm;
       let r;
+      // kitchen questions read the whole message ("bake at 350F... and what if I have a fan oven?")
+      const kt = P.math.kitchen(m.clean, c.lastBot);
+      if (kt) return { text: kt.text, source: "skill:units" };
       // "what's 12 * 12 and what's the capital of Peru?" -> answer every part that a skill knows
       if (!this._splitting) {
         const parts = m.clean.split(/\s*[?]\s+|\s*[,;]?\s+and\s+(?=(?:what|whats|what's|how|who|where|when|which|what is)\b)/i).map((x) => x.trim()).filter((x) => x.length > 2);
@@ -1048,6 +1066,8 @@
         if (said) return { text: `Yep, ${said} is what I got too: ${lm.expr} = ${lm.result}. ✅`, source: "skill:math" };
         return { text: `Hmm, I checked again: ${lm.expr} = ${lm.result}. I'm pretty confident! 🧮 Which part looks wrong to you?`, source: "skill:math" };
       }
+      const lin = P.math.linear(m.clean);
+      if (lin) return { text: lin.text, source: "skill:math" };
       const ch = P.math.chem(m.clean);
       if (ch) return { text: ch.text, source: "skill:chem" };
       const fs = P.math.fractionSteps(m.clean);
@@ -1117,8 +1137,8 @@
         if (mm) { const cv = P.math.convert(`${mm[1].replace(/,/g, "")} ${mm[2].replace("°", "").toLowerCase()} to ${unitAsk[1]}`); if (cv && !cv.error) return { text: cv.text + " 📏", source: "skill:units" }; }
       }
       r = S.daysUntil(m.plain, this.mem); if (r) return { text: r, source: "skill:countdown" };
-      r = S.dateMath(m.plain); if (r) return { text: r, source: "skill:date" };
-      r = S.timeMath(m.clean.toLowerCase()); if (r) return { text: r, source: "skill:time" };
+      r = S.dateMath(m.plain, this.state.history.filter((h) => h.role === "user").slice(-3).map((h) => h.text.toLowerCase()).reverse().join(" ")); if (r) return { text: r, source: "skill:date" };
+      r = S.timeMath(m.clean.toLowerCase(), this.mem); if (r) return { text: r, source: "skill:time" };
       r = S.currency(m.plain.replace(/[?!.]+$/, "")); if (r) return { text: r, source: "skill:currency" };
       if (/\b(there|that country)\b/.test(m.plain) && /\bcurrency|money\b/.test(m.plain)) { /* handled above once a country was named */ }
       r = S.petFood(m.plain); if (r) return { text: r, source: "skill:petfood" };
@@ -1531,6 +1551,12 @@
       const ownDivorce = /\b(i|we) (got|am getting|are getting|were|was|just got) (divorced|separated)\b|\bmy (divorce|ex[- ]?(wife|husband|partner)?|ex)\b|\b(after|since) (the|my|our) divorce\b|\bmy (wife|husband) (left|and i (split|separated|divorced))\b/.test(t) && !/\bmy parents\b/.test(t);
       if (ownDivorce && !/\b(how|what|should|ideas?|tips?|advice)\b.*\?|\b(any ideas|how (do|can|could) i|what should i)\b/.test(t)) {
         this._mood("sad");
+        // "most of our friends were really her friends, so my social life kind of disappeared"
+        const adultFriends = C.advice.find((a) => a.say.some((x) => /Making friends as an adult/.test(x)));
+        if (adultFriends && /\b(how to|how do i|how can i|don'?t know how to|dont know how to) (make|find|meet)\b/.test(t))
+          return { text: "That's one of the hardest parts of a divorce: a lot of the friendships went with the marriage. 💙 " + S.deal(this.state, "advice:adultfriends", adultFriends.say), source: "advice", score: 0.95 };
+        if (/\b(friends|social life)\b/.test(t))
+          return { text: "That's one of the hardest parts of a divorce that nobody warns you about: a lot of the friendships went with the marriage. 💙 It makes sense that it feels lonely. Would some ideas for meeting new people help, or would you rather just talk about it for a bit?", source: "event:divorce", score: 0.95, expect: { kind: "needs" } };
         return { text: S.deal(this.state, "own-divorce", ["I'm sorry. 💙 A divorce turns everything upside down, even when it was the right call. The quiet house and the weeks without your kid can be really lonely. How are you doing with it these days?", "That's a lot to go through. 💙 Missing the everyday noise of family life is so hard. What helps you most on the quiet days?"]), source: "event:divorce", score: 0.93, expect: { kind: "vent", emotion: "sad" } };
       }
       if (!ownDivorce && /\b(my )?(parents|mom and dad|mum and dad) (are|r|re|is|just|got|get) ?(getting |going to get |gonna get )?(divorced|a divorce|splitting up|separating|separated|breaking up)\b|\b(the |their |my parents'? )divorce\b|\bdivorce\b/.test(t) && !this._isAdult()) {

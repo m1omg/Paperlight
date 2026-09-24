@@ -136,6 +136,11 @@
       if (cand.length === 1 && looksLikeName(cand[0], raw, m.tokens.length === 1 && !/\b(not|cannot|no|never)\b/.test(m.plain))) facts.push({ type: "name", value: properCase(cand[0].toLowerCase()) });
     }
 
+    // "im max 14 and i like fortnite": a name and an age right after "I'm"
+    if (!facts.some((f) => f.type === "name") && (expectingName || !mem.name) && (r = /^\s*(?:(?:hi+|hey+|hello+|yo|sup)[\s,!.]+)?(?:i am|im|i'm|it is|its|this is)\s+([a-z]{2,20})\s+(\d{1,2})\b/.exec(m.plain)) &&
+        !NOT_NAME.has(r[1]) && !P.nlp.STOP.has(r[1]) && plausibleName(r[1]) && looksLikeName(r[1], raw, true)) {
+      facts.push({ type: "name", value: properCase(r[1]) });
+    }
     // "its LILY" / "lily 🌸" when Pip already knows they're Lily: a reminder, not a new name
     if (!facts.some((f) => f.type === "name") && mem.name) {
       const nm = mem.name.toLowerCase();
@@ -143,14 +148,14 @@
     }
     // "jayden im 10": a name right before the age
     if (!facts.some((f) => f.type === "name") && ((r = /^\s*(?:(?:hi+|hey+|hello+|yo|sup|hii+)[\s,!.]+)?(?:(?:its|it is|this is|i am|im)\s+)?([a-z]{2,20})[\s,.!]*(?:and\s+)?(?:im|i am|i'm)\s+(\d{1,2})\b/.exec(m.plain)) ||
-        ((expectingName || !mem.name) && (r = /^\s*([a-z]{2,20})\s*[,.!]+\s*(\d{1,2})(?:\s*(?:and a half|½|1\/2))?(?:\s*(?:years? old|yrs?|yo))?\s*[.!]*$/.exec(m.plain))))) {
+        ((expectingName || !mem.name) && (r = /^\s*([a-z]{2,20})(?:\s*[,.!]+\s*|\s+)(\d{1,2})(?:\s*(?:and a half|½|1\/2))?(?:\s*(?:years? old|yrs?|yo))?\s*[.!]*$/.exec(m.plain))))) {
       const cand = r[1].replace(/(.)\1{2,}$/, "$1").replace(/(.)\1{2,}/g, "$1$1");
       if (!NOT_NAME.has(cand) && !P.nlp.STOP.has(cand) && plausibleName(cand) && !/^(and|yes|yeah|yep|yup|no|nope|ok|okay|so|well|um|uh|lol|haha|hmm|also|but|because|cause|bc|hi|hey|hello|sup|yo|dude|bro|well|now|today|still|just|almost|nearly|only|about|like)$/.test(cand) &&
           looksLikeName(cand, raw, expectingName || !mem.name || !P.nlp.knownWord(cand))) facts.push({ type: "name", value: properCase(cand) });
     }
     // "hey im dev, 13", "ava. 10 and a half": a number right after the name is the age
     const nf = facts.find((f) => f.type === "name");
-    if (nf && (r = new RegExp("\\b" + nf.value.toLowerCase() + "\\b[\\s,.!]*(?:and\\s+)?(?:i'?m\\s+|i am\\s+)?(\\d{1,2})(\\s*(?:and a half|½|1/2))?(?:\\s*(?:years? old|yrs?(?: old)?|yo))?\\s*[.!]*$").exec(m.plain.replace(/\s*[.!]+$/, "")))) {
+    if (nf && (r = new RegExp("\\b" + nf.value.toLowerCase() + "\\b(?:\\s+here)?[\\s,.!]*(?:and\\s+)?(?:i'?m\\s+|i am\\s+)?(\\d{1,2})(\\s*(?:and a half|½|1/2))?(?:\\s*(?:years? old|yrs?(?: old)?|yo))?(?!\\s*(?:%|percent|times|minutes?|mins?|hours?|days?|weeks?|months?|dollars?|pounds?|euros?|kg|lbs?|cm|km|miles?|years? ago|of\\b|x\\b|out of|[/:.]\\d))").exec(m.plain.replace(/\s*[.!]+$/, "")))) {
       const a = +r[1];
       if (a >= 3 && a <= 99) facts.push({ type: "age", value: a, half: !!r[2] });
     }
@@ -287,9 +292,10 @@
       if (rel && age >= 0 && age < 110 && !/^(friend|friends|teacher|boss|crush)$/.test(rel) || rel && age >= 0 && age < 110 && /\bmy (friend|crush|best friend)\b/.test(t)) facts.push({ type: "pinfo", rel, age, quiet: true });
       const MONTHS = "january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec";
       const DATE = "((?:" + MONTHS + ") \\d{1,2}(?:st|nd|rd|th)?|\\d{1,2}(?:st|nd|rd|th)? (?:of )?(?:" + MONTHS + "))";
-      if ((pr = new RegExp("\\b(?:my (" + PEOPLE + ")(?:'s| s)|([a-z]+)(?:'s| s)) (?:birthday|bday|birth day) is (?:on )?(?:the )?" + DATE).exec(t))) {
-        const r2 = pr[1] || relOfName(pr[2]);
-        if (r2) facts.push({ type: "pinfo", rel: r2, birthday: normDate(pr[3]), name: mem.people[r2] || null });
+      if ((pr = new RegExp("\\b(?:my (" + PEOPLE + ")(?:'s| s|s)|([a-z]+)(?:'s| s)) (?:birthday|bday|birth day) is (?:on )?(?:the )?" + DATE).exec(t))) {
+        // someone Pip doesn't know yet is kept under their name ("@sam")
+        const r2 = pr[1] || relOfName(pr[2]) || (pr[2] && looksLikeName(pr[2], raw, true) && !NOT_NAME.has(pr[2]) && !/^(my|his|her|their|our|your|its|todays|tomorrows)$/.test(pr[2]) ? "@" + pr[2] : null);
+        if (r2) facts.push({ type: "pinfo", rel: r2, birthday: normDate(pr[3]), name: mem.people[r2] || (r2.startsWith("@") ? properCase(r2.slice(1)) : null) });
       }
     }
     // "my dog rocky ... hes a beagle"
@@ -600,11 +606,14 @@
         if (rel && pi[rel] && pi[rel].age !== undefined) return { text: `${mem.people[rel] && mem.people[rel].toLowerCase() !== w ? mem.people[rel] + ", your " + rel + ", is" : mem.people[rel] ? mem.people[rel] + " is" : "Your " + rel + " is"} ${personAge(pi[rel])}! 😊` };
         if (rel) return { text: `Hmm, I don't think you've told me how old ${mem.people[rel] || "your " + rel} is. How old?` };
       }
-      const bd = /\bwhen is (?:my )?([a-z]+)(?:'s| s) (?:birthday|bday)\b/.exec(t);
+      let bd = /\bwhen is (?:my )?([a-z]+)(?:'s| s) (?:birthday|bday)\b/.exec(t);
+      // "when is sams birthday" (no apostrophe)
+      if (!bd && (bd = /\bwhen is (?:my )?([a-z]+?)s (?:birthday|bday)\b/.exec(t)) && !(mem.people[bd[1]] !== undefined || Object.values(mem.people).some((v) => (v || "").toLowerCase() === bd[1]) || pi["@" + bd[1]] || new RegExp("^(" + PEOPLE + ")$").test(bd[1]))) bd = null;
+      if (bd && new RegExp("^(" + PEOPLE + ")$").test(bd[1]) && mem.people[bd[1]] === undefined && !(pi[bd[1]] && pi[bd[1]].birthday)) return { text: `I don't know your ${bd[1]}'s birthday yet! When is it? 🎂` };
       if (bd && bd[1] !== "my") {
         const w = bd[1];
-        const rel = mem.people[w] !== undefined ? w : Object.keys(mem.people).find((k) => (mem.people[k] || "").toLowerCase() === w) || (/^(his|her)$/.test(w) && mem._lastRel) || null;
-        if (rel && pi[rel] && pi[rel].birthday) return { text: `${mem.people[rel] || "Your " + rel}'s birthday is ${pi[rel].birthday}! 🎂${daysUntilText(pi[rel].birthday)}` };
+        const rel = mem.people[w] !== undefined ? w : Object.keys(mem.people).find((k) => (mem.people[k] || "").toLowerCase() === w) || (/^(his|her)$/.test(w) && mem._lastRel) || (pi["@" + w] ? "@" + w : null) || (pi[w] ? w : null);
+        if (rel && pi[rel] && pi[rel].birthday) return { text: `${mem.people[rel] || (rel.startsWith("@") ? properCase(rel.slice(1)) : "Your " + rel)}'s birthday is ${pi[rel].birthday}! 🎂${daysUntilText(pi[rel].birthday)}` };
         if (rel) return { text: `I don't know ${mem.people[rel] || "your " + rel}'s birthday yet! When is it?` };
       }
     }
@@ -617,7 +626,8 @@
     }
     // "when is my match?", "what day is my test again"
     {
-      const ev = /\b(?:when|what day|what time) (?:is|s|was) my ([a-z]+(?: [a-z]+)?)\b/.exec(t) || /\bwhen (?:do|will) i (?:have|play) my ([a-z]+)\b/.exec(t);
+      const ev = /\b(?:when|what day|what time) (?:is|s|was) my ([a-z]+(?: [a-z]+)?)\b/.exec(t) || /\bwhen (?:do|will) i (?:have|play) my ([a-z]+)\b/.exec(t) ||
+        (/\b(?:when|what day|what time) (?:is|s|was) (?:it|that)\b/.test(t) && /\bmy ((?:[a-z]+ )?(?:match|game|test|exam|quiz|recital|tournament|party|trip|appointment|concert|show|play|race|meet))\b/.exec(t));
       if (ev && !/^(birthday|bday|name)$/.test(ev[1])) {
         const key = ev[1].replace(/ (again|tho|though)$/, "").split(" ").pop();
         const e = mem.events.slice().reverse().find((x) => x.what.toLowerCase().split(" ").some((w) => w === key || w === key + "es" || w + "es" === key || w === key.replace(/s$/, "")));

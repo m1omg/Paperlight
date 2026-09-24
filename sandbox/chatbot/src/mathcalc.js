@@ -416,7 +416,7 @@
   }
   // grams per US cup for common baking ingredients (they vary with how you scoop!)
   const DENSITY = { "all purpose flour": 125, "plain flour": 125, flour: 125, "bread flour": 130, "self raising flour": 125, "self rising flour": 125, "whole wheat flour": 120,
-    "granulated sugar": 200, "caster sugar": 200, sugar: 200, "brown sugar": 220, "icing sugar": 120, "powdered sugar": 120, butter: 227, "cocoa powder": 85, cocoa: 85,
+    "granulated sugar": 200, "caster sugar": 200, sugar: 200, "brown sugar": 220, "icing sugar": 120, "powdered sugar": 120, butter: 226.8, "cocoa powder": 85, cocoa: 85,
     "rolled oats": 90, oats: 90, rice: 185, honey: 340, milk: 240, water: 237, "chocolate chips": 170, "grated cheese": 100, cheese: 100, "ground almonds": 96, "almond flour": 96, salt: 288, yogurt: 245, cream: 240, oil: 218 };
   function cupsToGrams(s) {
     const ing = Object.keys(DENSITY).sort((a, b) => b.length - a.length).find((k) => new RegExp("\\b" + k + "\\b").test(s));
@@ -492,14 +492,14 @@
     return { text: `${label || withCommas(v.toDecimal()) + " " + (one ? singular(a.name) : a.name)} ${eq} ${ft} ${r.n === r.d ? singular(b.name) : b.name}${exactNote}${extra}`, value: r };
   }
   // recipes: "one and a half times: 225 g flour, 55 g butter and 150 ml milk", "it serves 4 but I need 6"
-  const ING = /(\d+(?:\.\d+)?(?:\s+\d\/\d)?|\d\/\d)\s*(grams?|g|kg|kilograms?|ml|millilit(?:re|er)s?|l|lit(?:re|er)s?|cups?|tablespoons?|tbsp|teaspoons?|tsp|ounces?|oz|pounds?|lbs?|eggs?|pinch(?:es)?|cloves?|slices?)\b(?:\s+of)?\s+(?:the\s+)?([a-z]+(?:\s+(?!and\b|or\b|of\b|to\b|for\b|in\b)[a-z]+)?)/g;
+  const ING = /(\d+(?:\.\d+)?(?:\s+\d\/\d)?|\d\/\d)\s*(grams?|g|kg|kilograms?|ml|millilit(?:re|er)s?|l|lit(?:re|er)s?|cups?|tablespoons?|tbsp|teaspoons?|tsp|ounces?|oz|pounds?|lbs?|eggs?|pinch(?:es)?|cloves?|slices?)\b(?:(?:\s+of)?\s+(?:the\s+)?([a-z]+(?:\s+(?!and\b|or\b|of\b|to\b|for\b|in\b)[a-z]+)?))?/g;
   function recipeFactor(s) {
     let r;
     if ((r = /\b(\d+(?:\.\d+)?|one and a half|1 1\/2|two and a half|2 1\/2) times\b(?!\s*-?\d)(?!\s*(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten)\b)/.exec(s)) && !/\bwhat(?:'s| is)\s+\d/.test(s)) return { f: { "one and a half": "1.5", "1 1/2": "1.5", "two and a half": "2.5", "2 1/2": "2.5" }[r[1]] || r[1] };
     if (/\b(double|twice)\b/.test(s)) return { f: "2" };
     if (/\b(triple|three times)\b/.test(s)) return { f: "3" };
     if (/\b(half|halve|halving)\b/.test(s) && !/\band a half\b/.test(s)) return { f: "0.5" };
-    if ((r = /\bserves? (\d+)\b.*?\b(?:serve|feed|for|make it for|cook for|cooking for|to feed)\s+(\d+)\b/.exec(s)) && +r[1] > 0) return { f: Q.parse(r[2]).div(Q.parse(r[1])), from: r[1], to: r[2] };
+    if ((r = /\bserves? (\d+)\b.*?\b(?:serve|feed|for|make it for|cook for|cooking for|to feed|need|want|have|making)\s+(\d+)\b/.exec(s)) && +r[1] > 0) return { f: Q.parse(r[2]).div(Q.parse(r[1])), from: r[1], to: r[2] };
     return null;
   }
   function scaleRecipe(text, last) {
@@ -511,7 +511,12 @@
     const fText = format(f, 3).text;
     const items = [];
     let r; ING.lastIndex = 0;
-    while ((r = ING.exec(s))) items.push({ q: r[1], unit: r[2], what: r[3].replace(/\s+(please|thanks)$/, "") });
+    while ((r = ING.exec(s))) {
+      // "2 eggs, 150 ml cream": eggs name themselves
+      const what = (r[3] || "").replace(/\s+(please|thanks)$/, "");
+      if (!what && !/^eggs?$/.test(r[2])) continue;
+      items.push({ q: r[1], unit: r[2], what: /^eggs?$/.test(r[2]) && (!what || /^(and|or|plus|with)\b/.test(what)) ? "" : what });
+    }
     const list = items.length ? items : (last && /\b(double|triple|half|halve|times|x) (that|it|this|those|them|the recipe)\b|\b(that|it|this|the recipe) (doubled|tripled|halved)\b/.test(s) && s.split(/\s+/).length <= 10 ? last : []);
     if (!list.length) {
       if (fac.from) return { text: `Multiply everything by ${fText} (${fac.to} ÷ ${fac.from} = ${fText}). 🥧 So 200 g of something becomes ${format(Q.parse("200").mul(f), 2).text} g.`, items: null };
@@ -521,7 +526,7 @@
       const q = /\d \d\/\d/.test(it.q) ? Q.parse(it.q.split(" ")[0]).add(Q.parse(it.q.split(" ")[1].split("/")[0]).div(Q.parse(it.q.split("/")[1]))) : /\//.test(it.q) ? Q.parse(it.q.split("/")[0]).div(Q.parse(it.q.split("/")[1])) : Q.parse(it.q);
       const v = format(q.mul(f), 2).text;
       const unit = /^(g|grams?)$/.test(it.unit) ? "g" : /^(ml|millilit)/.test(it.unit) ? "ml" : it.unit;
-      return `${v} ${v === "1" ? unit.replace(/(egg|clove|slice|cup|pinche|pound|ounce)s$/, (x) => x.replace(/s$/, "").replace(/pinche$/, "pinch")) : unit} ${it.what}`.replace(/ (eggs?) (\w+)/, " $1");
+      return `${v} ${v === "1" ? unit.replace(/(egg|clove|slice|cup|pinche|pound|ounce)s$/, (x) => x.replace(/s$/, "").replace(/pinche$/, "pinch")) : unit.replace(/^egg$/, "eggs")} ${it.what}`.replace(/ (eggs?) (\w+)/, " $1").trim();
     });
     return { text: `For ${fText === "2" ? "double" : fText === "0.5" ? "half" : fText + " times"} the recipe: ${scaled.length > 1 ? scaled.slice(0, -1).join(", ") + " and " + scaled[scaled.length - 1] : scaled[0]}. 🧁`, items: list.map((it) => it) };
   }
@@ -666,5 +671,146 @@
   }
   function U0(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
-  P.math = { Q, evaluate, solve, convert, compare, format, toExpression, CalcError, scaleRecipe, fractionSteps, chem, molarMass };
+  // ---------- one-variable linear equations: "solve 2x + 5 = 17", "3(x - 2) = 2x + 4" ----------
+  function linear(text) {
+    let s = text.trim().replace(/[?!.]+$/, "").replace(/−|–/g, "-").replace(/×/g, "*").replace(/÷/g, "/");
+    const asked = /^(?:(?:ok|okay|so|um|pip|please|pls|can you|could you|help me)[\s,]+)*(?:solve|find [a-z]|what is [a-z]|work out [a-z]|what does [a-z] equal)\b/i.test(s) || /\b(solve|find [a-z]\b|for [a-z]\b)/i.test(s);
+    s = s.replace(/^(?:(?:ok|okay|so|um|pip|please|pls|can you|could you|help me)[\s,]+)*(?:solve(?: for [a-z])?|find [a-z](?: if| in| when)?|what is [a-z](?: if| in| when)?|work out [a-z](?: if| in)?|what does [a-z] equal(?: if| in)?)[:\s]+/i, "").replace(/,?\s*(?:solve )?for [a-z]\s*$/i, "").replace(/\s+what is [a-z]$/i, "").trim();
+    if ((s.match(/=/g) || []).length !== 1) return null;
+    const vars = (s.match(/[a-z]/gi) || []).map((v) => v.toLowerCase());
+    const uniq = [...new Set(vars)];
+    if (uniq.length !== 1 || !/^[\d\s.+\-*/()=a-z]+$/i.test(s)) return null;
+    const v = uniq[0];
+    // bare "y=-59" is a coordinate, not homework
+    if (!asked && !/\d\s*[a-z]|[a-z]\s*[*/+]|[+*/]\s*[a-z]|[a-z].*[a-z]|\(/i.test(s)) return null;
+    const src = s.toLowerCase().replace(/\s+/g, "");
+    let i = 0;
+    const L = (a, b) => ({ a, b });
+    const ZQ = Q.parse("0"), OQ = Q.parse("1");
+    function atom() {
+      let c = src[i];
+      if (c === "(") { i++; const e = expr(); if (src[i] !== ")") throw 0; i++; return e; }
+      if (c === "-") { i++; const e = atom(); return L(e.a.neg ? e.a.neg() : ZQ.sub(e.a), ZQ.sub(e.b)); }
+      if (c === "+") { i++; return atom(); }
+      const num = /^\d+(?:\.\d+)?/.exec(src.slice(i));
+      if (num) { i += num[0].length; const q = Q.parse(num[0]); if (src[i] === v) { i++; return L(q, ZQ); } if (src[i] === "(") { const e = atom(); return L(q.mul(e.a), q.mul(e.b)); } return L(ZQ, q); }
+      if (c === v) { i++; return L(OQ, ZQ); }
+      throw 0;
+    }
+    function term() {
+      let e = atom();
+      while (src[i] === "*" || src[i] === "/" || src[i] === "(" || src[i] === v) {
+        const op = src[i] === "*" || src[i] === "/" ? src[i++] : "*";
+        const f = atom();
+        if (op === "*") { if (e.a.sign() !== 0 && f.a.sign() !== 0) throw 0; e = e.a.sign() === 0 ? L(f.a.mul(e.b), f.b.mul(e.b)) : L(e.a.mul(f.b), e.b.mul(f.b)); }
+        else { if (f.a.sign() !== 0 || f.b.sign() === 0) throw 0; e = L(e.a.div(f.b), e.b.div(f.b)); }
+      }
+      return e;
+    }
+    function expr() {
+      let e = term();
+      while (src[i] === "+" || src[i] === "-") { const op = src[i++]; const f = term(); e = op === "+" ? L(e.a.add(f.a), e.b.add(f.b)) : L(e.a.sub(f.a), e.b.sub(f.b)); }
+      return e;
+    }
+    let left, right;
+    try { left = expr(); if (src[i] !== "=") return null; i++; right = expr(); if (i !== src.length) return null; } catch (e) { return null; }
+    const coef = left.a.sub(right.a), rhs = right.b.sub(left.b);
+    const nice = (q) => { const f = format(q, 4); return (f.fraction && !f.exact ? f.fraction + " (≈ " + f.text + ")" : f.text).replace(/^-/, "−"); };
+    const shown = s.replace(/\s*([=+\-*/])\s*/g, " $1 ").trim().replace(/(^|[=(]\s*)-\s+/g, "$1-").replace(/\(\s*-\s+/g, "(-").replace(/\*/g, "×").replace(/\//g, "÷").replace(/ - /g, " − ").replace(/(^|\s|\()-(?=[\da-z])/gi, "$1−").replace(/\s+/g, " ").trim();
+    if (coef.sign() === 0) return { text: rhs.sign() === 0 ? `${shown}: both sides are always equal, so every number works for ${v}! ♾️` : `${shown}: there's no solution. The ${v}'s cancel out and you're left with ${nice(left.b)} = ${nice(right.b)}, which is never true.` };
+    const ans = rhs.div(coef);
+    // keep the unknown positive: "−2x = −8" reads better as "2x = 8"
+    let k = coef, r = rhs;
+    if (k.sign() < 0) { k = ZQ.sub(k); r = ZQ.sub(r); }
+    const steps = [];
+    const vx = (q) => (q.sub(OQ).sign() === 0 ? v : nice(q) + v);
+    const unitFrac = k.n === 1n && k.d > 1n;
+    if (unitFrac) { steps.push(`${v} ÷ ${k.d} = ${nice(r)}`, `${v} = ${nice(r)} × ${k.d}`); }
+    else { steps.push(`${vx(k)} = ${nice(r)}`); if (k.sub(OQ).sign() !== 0) steps.push(`${v} = ${nice(r)} ÷ ${nice(k)}`); }
+    steps.push(`${v} = ${nice(ans)}`);
+    const norm = (x) => x.replace(/\s+/g, "");
+    const uniqSteps = steps.filter((x, j) => (j === 0 ? norm(x) !== norm(shown) : x !== steps[j - 1]));
+    const moved = right.a.sign() !== 0 ? `the ${v}'s to one side and the numbers to the other` : "the numbers to the other side";
+    const how = unitFrac ? `, then multiplied by ${k.d}` : k.sub(OQ).sign() !== 0 ? `, then divided by ${nice(k)}` : "";
+    return { text: `${shown}\n→ ${uniqSteps.join("\n→ ")}\nSo ${v} = ${nice(ans)}! ✏️ (I moved ${moved}${how}.)`, value: ans };
+  }
+
+  // ---------- kitchen: sticks of butter, cup fractions, oven temperatures ----------
+  const FRAC_GLYPH = { "1/2": "½", "1/4": "¼", "3/4": "¾", "1/3": "⅓", "2/3": "⅔", "1/8": "⅛" };
+  function amountOf(a) {
+    a = a.trim().replace(/\s+/g, " ");
+    const W = { a: "1", an: "1", one: "1", two: "2", three: "3", four: "4", five: "5", six: "6" };
+    let r;
+    if ((r = /^(\d+) (\d)\/(\d)$/.exec(a))) return Q.parse(r[1]).add(Q.parse(r[2]).div(Q.parse(r[3])));
+    if ((r = /^(\d+)\/(\d+)$/.exec(a))) return Q.parse(r[1]).div(Q.parse(r[2]));
+    if (/^\d+(\.\d+)?$/.test(a)) return Q.parse(a);
+    if ((r = /^(a|an|one|two|three|\d+) and (a|one) half$/.exec(a))) return Q.parse(W[r[1]] || r[1]).add(Q.parse("0.5"));
+    if (/^(half|half a|half an|a half|one half)$/.test(a)) return Q.parse("0.5");
+    if (/^(a quarter|quarter|one quarter|a quarter of a|quarter of a)$/.test(a)) return Q.parse("0.25");
+    if (/^(three quarters|three quarters of a|3 quarters|three fourths)$/.test(a)) return Q.parse("0.75");
+    if (/^(a third|one third|a third of a|third of a)$/.test(a)) return Q.parse("1").div(Q.parse("3"));
+    if (/^(two thirds|two thirds of a|2 thirds)$/.test(a)) return Q.parse("2").div(Q.parse("3"));
+    if (W[a]) return Q.parse(W[a]);
+    return null;
+  }
+  function prettyAmount(q) {
+    if (q.isInt()) return q.toString();
+    const whole = q.n / q.d, rest = new Q(q.n % q.d, q.d);
+    const g = FRAC_GLYPH[rest.toString()];
+    if (g) return (whole > 0n ? whole.toString() : "") + g;
+    return q.toDecimal(2);
+  }
+  function kitchen(text, lastBot) {
+    const s = " " + text.toLowerCase().replace(/[?!]+/g, " ").replace(/\s+/g, " ") + " ";
+    let r;
+    // "how much is a stick of butter in grams?", "2 sticks of butter"
+    if ((r = /\b(\d+(?:\.\d+)?|a|one|two|three|four|half a|half)\s*sticks? of butter\b/.exec(s)) || (/\bstick of butter\b/.test(s) && (r = [null, "1"]))) {
+      if (/\b(grams?|g|how much|how many|weigh|ounces?|oz|cups?|tablespoons?|tbsp|in metric)\b/.test(s)) {
+        const n = amountOf(r[1]) || Q.parse("1");
+        const g = Math.round(n.toNumber() * 113.4);
+        const one = n.sub(Q.parse("1")).sign() === 0;
+        return { text: `${one ? "1 stick" : prettyAmount(n) + " sticks"} of butter = ${g} g (${one ? "½ cup, 8 tablespoons, 4 oz" : prettyAmount(n.mul(Q.parse("0.5"))) + " cup" + (n.toNumber() > 2 ? "s" : "")}). 🧈 US butter sticks are 4 oz each.` };
+      }
+    }
+    // "how many grams is half a cup of butter? and 3/4 cup of sugar?"
+    const AMT = "(\\d+ \\d/\\d|\\d+/\\d+|\\d+(?:\\.\\d+)?|a|an|one|two|three|half an?|a half|one half|half|a quarter(?: of an?)?|quarter of an?|three quarters(?: of an?)?|a third(?: of an?)?|two thirds(?: of an?)?|(?:a|one|two|\\d+) and (?:a|one) half)";
+    const ING = Object.keys(DENSITY).sort((a, b) => b.length - a.length).join("|");
+    const re = new RegExp("\\b" + AMT + "\\s+(cups?|tablespoons?|tbsp|teaspoons?|tsp)(?:\\s+and\\s+a\\s+half)?\\s+(?:of\\s+)?(?:the\\s+)?(" + ING + ")\\b", "g");
+    const wantsGrams = /\b(grams?|g|weigh|in metric)\b/.test(s) || /\bhow (much|many)\b.*\b(grams?|g)\b/.test(s);
+    if (wantsGrams && !/\b(\d+(?:\.\d+)?)\s*(?:grams?|g)\b/.test(s)) {
+      const out = [];
+      let mm;
+      while ((mm = re.exec(s))) {
+        let n = amountOf(mm[1]);
+        if (!n) continue;
+        if (/\band a half\b/.test(mm[0]) && /cups?/.test(mm[2]) && !/and (a|one) half$/.test(mm[1])) n = n.add(Q.parse("0.5"));
+        const per = /^cup/.test(mm[2]) ? Q.parse("1") : /^(tablespoon|tbsp)/.test(mm[2]) ? Q.parse("1").div(Q.parse("16")) : Q.parse("1").div(Q.parse("48"));
+        const g = Math.round(n.mul(per).toNumber() * DENSITY[mm[3]]);
+        const unit = /^cup/.test(mm[2]) ? (n.toNumber() > 1 ? "cups" : "cup") : /^(tablespoon|tbsp)/.test(mm[2]) ? "tbsp" : "tsp";
+        out.push(`${prettyAmount(n)} ${unit} of ${mm[3]} ≈ ${g} g`);
+      }
+      if (out.length) return { text: `${U0(out.join(", and "))}. 🧁 (Cups vary a bit with how you fill them, so weigh it if you can!)` };
+    }
+    // oven temperatures: "bake at 350 degrees Fahrenheit, what's that in Celsius, and what if I have a fan oven?"
+    const oven = /\b(bake|baking|oven|roast|preheat|cake|cookies|bread)\b/.test(s);
+    if ((r = /\b(\d{3})\s*(?:°|degrees?|deg)?\s*(f|fahrenheit)\b/.exec(s)) && (oven || /\bfan\b/.test(s)) && +r[1] >= 200 && +r[1] <= 550) {
+      const f = +r[1], c = (f - 32) * 5 / 9, round10 = Math.round(c / 10) * 10;
+      const fan = /\bfan|convection\b/.test(s);
+      return { text: `${f}°F ≈ ${Math.round(c)}°C, so most recipes say ${round10}°C.${fan ? ` In a fan oven, go about 20°C lower: around ${round10 - 20}°C.` : ""} 🔥` };
+    }
+    if ((r = /\b(\d{3})\s*(?:°|degrees?|deg)?\s*(c|celsius)\b/.exec(s)) && oven && /\b(fahrenheit|f|fan)\b/.test(s) && +r[1] >= 100 && +r[1] <= 300) {
+      const c = +r[1], f = c * 9 / 5 + 32;
+      const fan = /\bfan|convection\b/.test(s);
+      return { text: `${c}°C ≈ ${Math.round(f)}°F (usually rounded to ${Math.round(f / 25) * 25}°F).${fan ? ` In a fan oven, use about ${c - 20}°C.` : ""} 🔥` };
+    }
+    // "and for a fan oven, should I set it lower?"
+    if (/\b(fan|convection|fan[- ]assisted) oven\b/.test(s) && /\b(lower|higher|reduce|set|temperature|temp|what|how|should|adjust|change)\b/.test(s)) {
+      const lt = /(\d{3})°C/.exec(lastBot || "");
+      const base = lt ? Math.round(+lt[1] / 10) * 10 : null;
+      return { text: `Yes: fan ovens cook hotter because the air moves, so set it about 20°C (25°F) lower${base ? `: ${base}°C becomes about ${base - 20}°C fan` : ""}. Start checking a few minutes early too. 🔥` };
+    }
+    return null;
+  }
+
+  P.math = { Q, evaluate, solve, convert, compare, format, toExpression, CalcError, scaleRecipe, fractionSteps, chem, molarMass, linear, kitchen };
 })(typeof window !== "undefined" ? (window.Pip = window.Pip || {}) : (global.Pip = global.Pip || {}));
