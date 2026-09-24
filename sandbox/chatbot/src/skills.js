@@ -103,20 +103,21 @@
         if (/\b(hint|clue|help)\b/.test(t)) { g.tries++; const a = g.r[1][0]; return { text: `Hint: it starts with "${a[0].toUpperCase()}" and has ${a.replace(/ /g, "").length} letters. 😉`, chips: ["I give up"] }; }
         if (/\b(give up|i do not know|idk|tell me|what is it|no idea|answer|reveal|i quit|dunno|no clue|pass|skip)\b/.test(t)) { st.game = null; return { text: `The answer is... ${g.r[2]} Want another riddle?`, expect: { kind: "yesno", yes: "riddle" } }; }
         if (matchesAnswer(m.clean, g.r[1])) { st.game = null; return { text: pick(["Yes! 🎉 You got it! ", "Correct! Nice brain! 🧠 ", "That's right! 🎉 "]) + g.r[2] + " Another one?", expect: { kind: "yesno", yes: "riddle" } }; }
+        if (m.tokens.length > 8 || m.isQuestion && !/^(is it|a |an |the )/.test(t)) return idle(g, st);
         g.tries++;
         if (g.tries >= 3) { st.game = null; return { text: `Good guesses! The answer was: ${g.r[2]} Want another?`, expect: { kind: "yesno", yes: "riddle" } }; }
-        if (m.tokens.length > 8 || m.isQuestion && !/^(is it|a |an |the )/.test(t)) return idle(g, st);
         return { text: pick(["Nope, not quite! Try again 🤔", "Hmm, good guess, but no! Want a hint?", "Not that one! One more try?"]), chips: ["Hint", "I give up"] };
       }
       case "trivia": {
         const q = g.q;
-        if (/\b(skip|pass|next)\b/.test(t)) { g.asked++; const r = start("trivia", c); r.text = `It was ${q[2]}. Next: ` + r.text.replace("Trivia time! 🧠 ", ""); return r; }
+        if (/\b(skip|pass|next)\b/.test(t)) { g.asked++; const r = start("trivia", c); r.text = `It was ${q[2].replace(/^The /, "the ")}. Next: ` + r.text.replace("Trivia time! 🧠 ", ""); return r; }
         const idk = /\b(i do not know|idk|no idea|not sure|dunno|give up|no clue)\b/.test(t);
         if (!idk && m.tokens.length > 8) return idle(g, st);
         g.asked++;
         const right = !idk && matchesAnswer(m.clean, q[1]);
         if (right) g.score++;
-        const verdict = right ? pick(["Correct! 🎉", "Yes! You got it! ✅", "That's right! 🧠"]) : idk ? `No worries! It's ${q[2]}.` : `Not quite, it's ${q[2]}.`;
+        const ans = q[2].replace(/^The /, "the ");
+        const verdict = right ? pick(["Correct! 🎉", "Yes! You got it! ✅", "That's right! 🧠"]) : idk ? `No worries! It's ${ans}.` : `Not quite, it's ${ans}.`;
         if (g.asked >= 5) { st.game = null; return { text: `${verdict} That's 5 questions: you got ${g.score}/5! ${g.score >= 4 ? "Trivia champion! 🏆" : g.score >= 2 ? "Nice job! 😊" : "You'll get them next time! 💪"} Play again?`, expect: { kind: "yesno", yes: "trivia" } }; }
         const nx = start("trivia", c);
         return { text: `${verdict} (Score: ${g.score}/${g.asked}) Next question: ${nx.text}`, chips: nx.chips };
@@ -255,6 +256,15 @@
   // ---------- general knowledge (question variants -> answer) ----------
   const FAQ = [
     [["is the earth flat", "is the world flat", "is the earth round"], "Nope, the Earth is round! (Technically a slightly squished sphere.) We know from photos taken from space, ships disappearing hull-first over the horizon, and the round shadow Earth casts on the Moon during an eclipse. 🌍"],
+    [["is a tomato a fruit", "is tomato a fruit or a vegetable"], "Yes! Botanically a tomato is a fruit (a berry, even!), but cooks treat it like a vegetable. 🍅"],
+    [["is a whale a fish", "are whales fish"], "Nope! Whales are mammals: they breathe air, are warm-blooded and feed their babies milk. 🐋"],
+    [["is a bat a bird", "are bats birds"], "No, bats are mammals! They're the only mammals that can truly fly. 🦇"],
+    [["is a spider an insect", "are spiders insects"], "No! Spiders are arachnids: 8 legs instead of 6, and no antennae. 🕷️"],
+    [["is pluto a planet"], "Pluto was reclassified as a dwarf planet in 2006, because it hasn't cleared its orbit of other objects. Still a great little world though! 🪐"],
+    [["is a peanut a nut", "are peanuts nuts"], "Surprise: peanuts are legumes, like beans and peas, not true nuts! 🥜"],
+    [["is a strawberry a berry", "are strawberries berries"], "Funny enough, no! Botanically strawberries aren't berries, but bananas are. 🍓🍌"],
+    [["is a banana a berry", "are bananas berries"], "Yes! Botanically a banana is a berry. 🍌"],
+    [["is glass a liquid"], "No, glass is an amorphous solid. Old windows are thicker at the bottom because of how they were made, not because the glass flowed. 🪟"],
     [["is the moon made of cheese"], "Sadly no! 🧀 The Moon is made of rock and dust. Astronauts brought back 382 kg of it, and not a single cracker's worth of cheese."],
     [["did we land on the moon", "was the moon landing fake", "is the moon landing real"], "Yes, it was real! 12 astronauts walked on the Moon between 1969 and 1972, and they left reflectors there that scientists still bounce lasers off today. 🌙"],
     [["are dinosaurs real", "did dinosaurs exist"], "Yes! Dinosaurs lived for about 165 million years and went extinct about 66 million years ago (birds are their living relatives!). 🦖"],
@@ -395,9 +405,9 @@
   // "should I play minecraft or read?", "pizza or burgers?"
   function choose(m, persona) {
     const raw = m.clean.replace(/[?!.]+$/, "");
-    const r = /^(?:(?:should i|do i|would you|which is better|what('s| is) better|which one|pick one|choose|you choose|do you prefer|which do you prefer|what do you prefer)[:,]?\s+)?(.{1,40}?),? or (.{1,40}?)$/i.exec(raw);
+    const r = /^(?:(?:should i|do i|would you|which is better|what(?:'s| is) better|which one|pick one|choose|you choose|do you prefer|which do you prefer|what do you prefer|do you like|do you love|which do you like(?: more| better)?|what do you like(?: more| better)?|are you team|team)[:,]?\s+)?(.{1,40}?),? or (.{1,40}?)$/i.exec(raw);
     if (!r || m.tokens.length > 14) return null;
-    let a = r[2].trim(), b = r[3].trim();
+    let a = r[1].trim(), b = r[2].trim();
     a = a.replace(/^(to |a |an |the |should i |i should )/i, ""); b = b.replace(/^(to |a |an |the |should i )/i, "");
     if (!a || !b || a.toLowerCase() === b.toLowerCase() || /\b(not|no)$/i.test(b)) return null;
     // Pip's own taste first

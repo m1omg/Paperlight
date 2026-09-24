@@ -233,7 +233,7 @@
       /\b(smelt|smelting|cook|cooking)\b/.test(text) ? "smelt" :
       /\b(craft|crafting|recipe|recipes|make|made|build|create|construct)\b/.test(text) ? "recipe" :
       /\b(get|find|obtain|collect|farm|found|locate|mine|where|spawn|spawns)\b/.test(text) ? "obtain" :
-      /\b(what is|what are|what does|tell me about|explain|use for|used for|good for|info)\b/.test(text) ? "info" : null;
+      /\b(what is|what are|what does|tell me about|explain|use for|used for|good for|info|use (it|them|this|that|one) for|what is it for|what s it for|what does (it|that|this) do|what do (they|those) do)\b/.test(text) ? "info" : null;
 
     let mentions = findMentions(toks);
     const shortFollow = mc.last && turn - mc.turn <= 2 && toks.length <= 4 &&
@@ -252,7 +252,7 @@
         const guess = byName(mat + " " + fam) || byName((mat === "Golden" ? "Golden " : mat + " ") + fam);
         if (guess && guess !== last.ref) mentions = [{ at: 0, len: 1, phrase: guess.name.toLowerCase(), hits: [{ kind: "item", ref: guess }] }];
       }
-      if (!mentions.length && /\b(it|that|this|them|those|one|ones)\b/.test(text) && (want || /\?$/.test(m.clean))) {
+      if ((!mentions.length || want === "info") && /\b(it|that|this|them|those|one|ones)\b/.test(text) && (want || /\?$/.test(m.clean)) && !mentions.some((x) => x.len > 1)) {
         mentions = [{ at: 0, len: 1, phrase: last.ref.name.toLowerCase(), hits: [{ kind: last.kind, ref: last.ref }] }];
       }
     }
@@ -271,6 +271,16 @@
         const list = hits.length > shown.length ? shown.join(", ") + ` and ${hits.length - shown.length} more` : U.listJoin(shown);
         return done(state, { text: `With ${uses[1].trim()} you can craft: ${list}. Ask me for any recipe!`, kind: "uses" }, null);
       }
+    }
+
+    // "how many iron ingots do I need for it?" right after a recipe
+    const hmIt = /\bhow many (\w+(?: \w+)?)\b.*\b(for it|for that|for one|for this|for them|to make it|to craft it|to make one|to craft one)\b/.exec(text);
+    if (hmIt && mc.last && mc.last.kind === "item" && turn - mc.turn <= 3 && (mc.last.ref.grid || mc.last.ref.shapeless)) {
+      const want1 = sing(hmIt[1].split(" ")[0]);
+      for (const [nm, cnt] of ingredientCounts(mc.last.ref)) {
+        if (nm.toLowerCase().split(/\s+/).map(sing).includes(want1)) return done(state, { text: `You need ${cnt} ${plural(nm, cnt)} for ${article(mc.last.ref.name)}.`, kind: "count" }, null);
+      }
+      return done(state, { text: `${article(mc.last.ref.name)} doesn't need any ${hmIt[1]}. It takes ${ingredientText(mc.last.ref)}.`, kind: "count" }, null);
     }
 
     // full armor set question

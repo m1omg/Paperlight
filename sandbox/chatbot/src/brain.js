@@ -25,7 +25,9 @@
     [/^i (?:can not|cannot|can't) (.{3,60})$/, ["What makes you think you can't {1}?", "Have you tried? Sometimes it just takes practice!", "Maybe you can, just not yet! 💪"]],
     [/^i (?:do not|don't) (.{3,60})$/, ["Why don't you {1}?", "Do you wish you did?", "Fair enough! Why not?"]],
     [/^i (?:just |recently )?(?:finished|made|built|drew|wrote|won|learned|started|beat|completed) (.{3,60})$/, ["Nice! Tell me more about it!", "Ooh, how did that go?", "That's cool! How do you feel about it?"]],
+    [/^i (?:play|practice|train|do) (.{2,50})$/, ["Ooh, {1}! How long have you been doing that?", "Nice! Are you good at it? 😄", "Cool! What do you like most about it?"]],
     [/^i (?:played|watched|went to|visited|saw|read|tried|ate|had|made|built|drew|baked|cooked|got to|spent the day) (.{2,50})$/, ["Nice! How was it?", "Ooh, that sounds fun! How did it go?", "Cool! Tell me more about it!"]],
+    [/^(she|he|they) (?:is|was|are|were|s) (?:only |just )?(\d{1,2})(?: years old| yo)?$/, ["Aww, only {2}! Little kids don't always know better. 😅", "{2}? That's so young! I'm sure it wasn't on purpose. 💙"]],
     [/^my (\w+) (?:is|was|are|were) (.{2,50})$/, ["Why do you say your {1} is {2}?", "Tell me more about your {1}!", "How do you feel about that?"]],
     [/^(?:because|cause|cuz) (.{3,60})$/, ["That makes sense.", "Is that the only reason?", "Oh, I see!"]],
     [/^(?:do|can|will|would|should|could|are|is|have) you (.{3,60})\?*$/, ["Hmm, I'm not sure I can {1}! What about you?", "Good question! What do you think?"]],
@@ -133,6 +135,7 @@
         text = lead[2];
       }
       text = String(text).replace(new RegExp("[,\\s]+" + bn + "[?!.]*$", "i"), (x) => x.replace(/[^?!.]/g, ""));
+      text = text.replace(/^\s*(?:anyway(?:s)?|so|well|ok so|okay so|btw|by the way|also|um+|uh+|hmm+|oh and|and)\s*[,.!]?\s+(?=\S.{3,})/i, "");
       const m = N.analyze(text);
       const c = this.ctx(m);
       const trace = [];
@@ -422,6 +425,12 @@
         if (r.notes.includes("pct")) s += " (the % is taken of the first number, like on a calculator)";
         return { text: pick(["", "", "Easy! ", "Let me calculate... ", "🧮 "]) + s + (/[.)]$/.test(s) ? "" : ""), source: "skill:math" };
       }
+      // "how tall is it in feet?" right after Pip gave a measurement
+      const unitAsk = /\b(?:in|to|into|as) (feet|foot|ft|meters?|metres?|m|km|kilometers?|miles?|inches|cm|centimeters?|kg|kilograms?|pounds?|lbs|celsius|fahrenheit|c|f)\??$/.exec(m.plain.replace(/[?!.]+$/, ""));
+      if (unitAsk && (/\b(it|that|this|those)\b/.test(m.plain) || /^(what about|how about|and|in|now|what is it|what's it)\b/.test(m.plain)) && c.lastBot) {
+        const mm = /(-?\d[\d,]*(?:\.\d+)?)\s*(km|m|ft|feet|miles|meters|metres|kg|pounds|lbs|°C|°F|cm|inches)\b/i.exec(c.lastBot);
+        if (mm) { const cv = P.math.convert(`${mm[1].replace(/,/g, "")} ${mm[2].replace("°", "").toLowerCase()} to ${unitAsk[1]}`); if (cv && !cv.error) return { text: cv.text + " 📏", source: "skill:units" }; }
+      }
       r = S.daysUntil(m.plain, this.mem); if (r) return { text: r, source: "skill:countdown" };
       r = S.wordTools(m); if (r) return { text: r, source: "skill:words" };
       r = S.capital(m.plain.replace(/[?!.]+$/, "")); if (r) return { text: r, source: "skill:capital" };
@@ -469,6 +478,11 @@
         this._mood("sad");
         return { text: isPet ? pick([`Oh no... I'm so sorry about your ${who}. 💙 Losing a pet is like losing a family member. Do you want to tell me about them?`, `I'm really sorry. 😢 Your ${who} was lucky to have someone who loved them so much. What was their name?`])
           : pick([`I'm so, so sorry about your ${who}. 💙 That's one of the hardest things anyone can go through. I'm here if you want to talk about them.`, `Oh no... I'm really sorry for your loss. 🫂 How are you holding up?`]), source: "event:grief", score: 0.95, expect: { kind: "vent", emotion: "sad" } };
+      }
+      if ((r = new RegExp("\\bmy (?:little |big |baby |younger |older )?(" + FAM + "|" + PETS + ") (?:just |accidentally )?(?:broke|ruined|destroyed|wrecked|ate|chewed|lost|stole|took|deleted|knocked over|smashed|ripped|spilled \\w+ on) my ([a-z ]{2,30})").exec(t))) {
+        this._mood("angry");
+        const thing = r[2].replace(/\s+(yesterday|today|again|last \w+)$/, "");
+        return { text: pick([`Oh no, your ${thing}! 😣 That's so frustrating. Was it an accident?`, `Nooo, not your ${thing}! 😖 I'd be upset too. Can it be fixed?`]), source: "event:broken", score: 0.9, expect: { kind: "vent", emotion: "angry" } };
       }
       if (/\b(broke up with me|dumped me|we broke up|i broke up|my (girlfriend|boyfriend|gf|bf|partner|crush) (left|cheated|rejected)|got dumped|rejected me)\b/.test(t)) {
         this._mood("sad");
@@ -545,7 +559,7 @@
       }
       if ((r = /\bdo (?:you|u) (like|love|enjoy|hate|play|watch|listen to|eat) ([a-z0-9][a-z0-9 '-]{1,40})$/.exec(t)) || (r = /\bwhat do you think (?:about|of) ([a-z0-9][a-z0-9 '-]{1,40})$/.exec(t)) && (r = [r[0], "like", r[1]])) {
         const thing = r[2].replace(/^(the|a|an) /, "").trim();
-        if (/^(me|it|that|this|them|him|her|you|yourself)$/.test(thing)) return null;
+        if (/^(me|it|that|this|them|him|her|you|yourself)$/.test(thing) || / or /.test(thing)) return null;
         const low = thing.toLowerCase();
         const dis = Object.keys(C.persona.dislikes).find((k) => low.includes(k.replace(/s$/, "")));
         if (dis && C.persona.dislikes[dis]) return { text: C.persona.dislikes[dis], source: "opinion:dislike", score: 0.85 };
@@ -626,7 +640,8 @@
         const r = re.exec(m.plain.replace(/[.!]+$/, ""));
         if (r) {
           const parts = r.slice(1).map((x) => reflect(x || "").replace(/[?.!]+$/, ""));
-          add({ text: U.fill(pick(outs).replace(/\{(\d)\}/g, "{a$1}"), { a1: parts[0], a2: parts[1] }), source: "eliza", score: 0.52 });
+          const specific = /\\d|she\|he\|they/.test(re.source);
+          add({ text: U.fill(pick(outs).replace(/\{(\d)\}/g, "{a$1}"), { a1: parts[0], a2: parts[1] }), source: "eliza", score: specific ? 0.62 : 0.52 });
           break;
         }
       }
@@ -655,6 +670,7 @@
       const v = m.emotion.valence;
       if (m.isQuestion) return { text: pick(["Hmm, good question! What do you think? 🤔", "Ooh, I'm not sure! What's your take?", "That's a tricky one! What made you think of it?"]), source: "react:question", score: 0.47 };
       if (venting || v < -0.3) return { text: pick(["Oh no, that sounds rough. 😟 What happened?", "That sounds hard. I'm here if you want to talk about it. 💙", "I'm sorry. 💙 How are you feeling about it?", "Ugh, that's no fun. Do you want to tell me more?"]), source: "react:negative", score: 0.48, expect: { kind: "vent" } };
+      if (m.tokens.includes("haha")) return { text: pick(["Haha! 😂 That sounds hilarious!", "Hahaha, I wish I could have seen that! 😄", "LOL! 😂 What happened next?"]), source: "react:funny", score: 0.47 };
       if (v > 0.3) return { text: pick(["That's awesome! 😄 Tell me more!", "Nice! How did that feel?", "Ooh, that sounds fun! 😊", "Love that! What happened next?"]), source: "react:positive", score: 0.46 };
       return { text: pick(["Interesting! Tell me more? 😊", "Oh really? What happened?", "Mhm! How do you feel about that?", "Ooh, go on! 👂"]), source: "react:neutral", score: 0.45 };
     }

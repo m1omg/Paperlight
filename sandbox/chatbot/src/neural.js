@@ -619,6 +619,8 @@
       const ctxWords = this._contentWords(ctxAll);
       const userSide = history.filter((h) => h.role === "user").slice(-1).map((h) => h.text).join(" ") + " " + userText;
       const ctx3rd = /\b(he|she|him|her|his|hers|mom|mum|dad|mother|father|brother|sister|friend|teacher|boss|girlfriend|boyfriend|wife|husband|cat|dog|coach|grandma|grandpa|son|daughter|baby|uncle|aunt|cousin|neighbou?r)\b/i.test(userSide);
+      const ctxFem = /\b(she|her|hers|sister|mom|mum|mother|grandma|grandmother|aunt|girlfriend|wife|daughter|girl|niece|lady|woman)\b/i.test(userSide);
+      const ctxMasc = /\b(he|him|his|brother|dad|father|grandpa|grandfather|uncle|boyfriend|husband|son|boy|nephew|guy|man)\b/i.test(userSide);
       const userVal = P.nlp.emotion(P.nlp.words(P.nlp.normalize(userText, { spell: false }))).valence;
       const userAsked = /\?\s*$/.test(userText) || /^(do|does|did|are|is|was|were|can|could|will|would|should|have|has)\b/i.test(userText.trim());
       const cands = [];
@@ -666,8 +668,12 @@
         for (const w of words) { if (ctxWords.has(w)) shared++; else if (this._specific(w)) novel++; }
         const n = c.text.split(/\s+/).length;
         c.lex = 0.025 * Math.min(shared, 2) - 0.06 * Math.min(novel, 3) + (n < 3 ? -0.03 : n > 24 ? -0.03 : 0);
-        // "I hope he does!" when nobody mentioned a "he"
+        // "I hope he does!" when nobody mentioned a "he" (or when they talked about their sister)
         if (!ctx3rd && /\b(he|she|him|her|his|hers)\b/i.test(c.text)) c.lex -= 0.08;
+        else if (ctxFem && !ctxMasc && /\b(he|him|his)\b/i.test(c.text)) c.lex -= 0.1;
+        else if (ctxMasc && !ctxFem && /\b(she|her|hers)\b/i.test(c.text)) c.lex -= 0.1;
+        // very short messages with almost no content ("what about in km") give retrieval little to go on
+        if (ctxWords.size <= 1 && shared === 0 && userText.split(/\s+/).length <= 5) c.lex -= 0.05;
         // mood must match: no "that's great!" to a bad day, no "that's so sad" to pancakes
         const cv = P.nlp.emotion(P.nlp.words(P.nlp.normalize(c.text, { spell: false }))).valence;
         if (userVal <= -0.5 && cv >= 0.5) c.lex -= 0.14;

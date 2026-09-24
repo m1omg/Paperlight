@@ -53,7 +53,7 @@
     ice: "ice cream flavor", "ice cream": "ice cream flavor", "ice cream flavor": "ice cream flavor", thing: "thing", person: "person" };
 
   function cleanValue(v) {
-    return v.replace(/\b(too|also|as well|lol|haha|though|tho|btw|now|right now|i guess|i think|very much|so much|a lot|lots|really|honestly)\b/g, "")
+    return v.replace(/\b(too|also|as well|lol|haha|though|tho|btw|now|right now|i guess|i think|very much|so much|a lot|lots|really|honestly|more|better|the most|best|the best|instead)\b/g, "")
       .replace(/\s+(and|but|because|since|so|when|which|who|if)\b.*$/, "").replace(/[^a-z0-9' &+-]/gi, " ").replace(/\s+/g, " ").trim();
   }
   function properCase(s) { return s.replace(/\b[a-z]/g, (c) => c.toUpperCase()); }
@@ -179,7 +179,7 @@
     }
 
     // upcoming events worth asking about later
-    if ((r = /\bi (?:have|got|have got|will have|am having) (?:a|an|my|the|this|that|some|another|a big|a huge|an important)? ?(big |huge |important |final |math |science |english |history |spanish |french |job |driving |piano |dance |soccer |football |basketball )?(test|exam|exams|quiz|interview|game|match|recital|appointment|date|presentation|party|trip|surgery|operation|competition|tournament|concert|audition|meeting|job interview|driving test|dentist appointment|doctor appointment|finals|midterm|midterms|essay|project|race|performance|show)\b(?:.*?\b(tomorrow|today|tonight|next week|this week|this weekend|on (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|next (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|later|soon|in \w+ days?))?/.exec(t))) {
+    if ((r = /\b(?:i|we) (?:have|got|have got|will have|am having|are having) (?:a|an|my|our|the|this|that|some|another|a big|a huge|an important)? ?(big |huge |important |final |math |science |english |history |spanish |french |job |driving |piano |dance |soccer |football |basketball )?(test|exam|exams|quiz|interview|game|match|recital|appointment|date|presentation|party|trip|surgery|operation|competition|tournament|concert|audition|meeting|job interview|driving test|dentist appointment|doctor appointment|finals|midterm|midterms|essay|project|race|performance|show)\b(?:.*?\b(tomorrow|today|tonight|next week|this week|this weekend|on (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|next (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|later|soon|in \w+ days?))?/.exec(t))) {
       facts.push({ type: "event", what: ((r[1] || "") + r[2]).trim(), when: r[3] || "soon" });
     }
 
@@ -295,7 +295,7 @@
       if (p) return { text: `You told me you have ${U.aOrAn(kind)} ${kind}, but not its name. What's it called?`, expect: { kind: "petname", pet: kind } };
       return { text: `You haven't told me about ${U.aOrAn(kind)} ${kind} yet! Do you have one?` };
     }
-    if ((r = new RegExp("\\b(?:what is|whats|do you (?:know|remember)) my (" + PEOPLE + ")(?:'s| s)? name\\b").exec(t))) {
+    if ((r = new RegExp("\\b(?:what is|whats|do you (?:know|remember)|what was) my (" + PEOPLE + ")(?:'s| s|s)? name\\b").exec(t))) {
       const n = mem.people[r[1]];
       return n ? { text: `Your ${r[1]}'s name is ${n}.` } : { text: `You haven't told me your ${r[1]}'s name yet.` };
     }
