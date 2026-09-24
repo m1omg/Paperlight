@@ -149,7 +149,8 @@
       (r = /\bmy age is (\d{1,3})\b/.exec(t)) || (r = /\bi (?:just )?turned (\d{1,3})\b/.exec(t)) || (expect && (expect.kind === "age" || (expect.q && /how old are you/i.test(expect.q))) && (r = /^\s*(?:i am |im )?(\d{1,3})\b/.exec(m.plain))) ||
       (mem._askedAge && (r = /^\s*(?:i am |im |i'm )?(\d{1,2})(?: years old| yo)?\s*[.!]*$/.exec(m.plain)))) {
       const a = parseInt(r[1], 10);
-      if (a >= 3 && a <= 120) facts.push({ type: "age", value: a });
+      if (a >= 3 && a <= 105) facts.push({ type: "age", value: a });
+      else if (a > 105 && a < 1000) facts.push({ type: "age_odd", value: a, quiet: false });
     }
 
     // where they live
@@ -164,6 +165,7 @@
       const md = /([a-z]+) (\d{1,2})|(\d{1,2})(?:st|nd|rd|th)?(?: of)? ([a-z]+)/.exec(r[1]);
       const mon = md ? (md[1] || md[4]) : null, day = md ? +(md[2] || md[3]) : null;
       if (!(mon && MON[mon] && day > MON[mon])) facts.push({ type: "birthday", value: r[1] === "today" ? "today" : properCase(r[1]).replace(/ Of /, " of ") });
+      else facts.push({ type: "birthday_bad", value: properCase(mon), max: MON[mon] });
     }
 
     // favorites: "my favorite color is blue", "blue is my favorite color"

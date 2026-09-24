@@ -204,11 +204,13 @@
 
       let out = null;
       const emo = N.basicClean(text).replace(/[\s\u200d\ufe0f]/g, "");
-      if (m.empty && /\p{Extended_Pictographic}/u.test(emo)) {
-        const sad = /[😢😭😞😔☹🙁😟😿💔😩😫]/u.test(emo), love = /[❤💙💕💖💗😍🥰😘]/u.test(emo), laugh = /[😂🤣😆😹]/u.test(emo), up = /[👍👌🙌✨🎉]/u.test(emo);
-        out = { text: sad ? "Aw, what's wrong? 💙" : love ? "💙 Right back at you!" : laugh ? "😂 What's so funny?" : up ? "👍 Nice!" : pick(["😄", "Hehe 😊", "😊 What's up?"]), source: "emoji", expect: sad ? { kind: "vent", emotion: "sad" } : null };
+      out = this._symbols(text, m);
+      if (out) { /* an emoticon, a flag or another language */ }
+      else if (m.empty && /\p{Extended_Pictographic}/u.test(emo)) {
+        const sad = /[😢😭😞😔☹🙁😟😿💔😩😫]/u.test(emo), love = /[❤💙💕💖💗😍🥰😘]/u.test(emo), laugh = /[😂🤣😆😹]/u.test(emo), up = /[👍👌🙌✨🎉]/u.test(emo), mad = /[😠😡🤬👿💢]/u.test(emo), scared = /[😱😨😰😧]/u.test(emo);
+        out = { text: sad ? "Aw, what's wrong? 💙" : mad ? "Whoa, someone's mad! 😤 What happened?" : scared ? "Eek! 😱 What's going on?" : love ? "💙 Right back at you!" : laugh ? "😂 What's so funny?" : up ? "👍 Nice!" : pick(["😄", "Hehe 😊", "😊 What's up?"]), source: "emoji", expect: sad || mad ? { kind: "vent", emotion: sad ? "sad" : "angry" } : null };
       } else if (m.empty) out = { text: pick(["You can type anything! 😊", "Hm? Say something! I'm listening.", "👀"]), source: "empty" };
-      else if (m.tokens.length === 1 && m.tokens[0].length >= 5 && !N.knownWord(m.tokens[0]) && !MEM.looksLikeName(m.tokens[0], m.clean, true) && !(expect && expect.kind === "name") && !st.game)
+      else if (m.tokens.length >= 1 && m.tokens.length <= 3 && m.tokens.every((w) => w.length >= 5 && !/\d/.test(w) && !N.knownWord(w) && !/^(lol|lmao|haha|hehe)/.test(w)) && (m.tokens.length > 1 || !MEM.looksLikeName(m.tokens[0], m.clean, true)) && !(expect && /linecheck|linetell/.test(expect.kind)) && !(expect && expect.kind === "name" && m.tokens.length === 1) && !st.game)
         out = { text: pick(["Hmm? I think your keyboard sneezed. 😄", "Did a cat just walk across your keyboard? 🐱⌨️", "That looks like a secret code! 🕵️ What does it mean?"]), source: "gibberish" };
       else if (/^\s*-?\d+(\.\d+)?\s*$/.test(text) && !(expect && /age|game/.test(expect.kind)) && !st.game && !/\bhow (old|many|much)\b|\?\s*$/i.test((st.history.slice().reverse().find((h) => h.role === "bot") || { text: "" }).text)) out = { text: `${text.trim()}? 🔢 Is that a special number?`, source: "number" };
 
@@ -238,7 +240,8 @@
         const r = typeof bye.say === "function" ? bye.say(c) : pick(bye.say);
         out = { text: this._byeText(m, typeof r === "string" ? r : r.text), source: "intent:bye", byeDone: true };
       }
-      // 2) whatever Pip was waiting for
+      // 2) whatever Pip was waiting for (a rename or "forget" command goes first)
+      if (!out && expect && /\b(i will call you|i'?ll call you|your name is now|your new name is|call you|forget (my|everything|all))\b/.test(m.plain)) out = this._commands(m, c);
       if (!out && expect) out = this._onExpect(expect, m, c, facts);
       // 3) a running game
       if (!out && st.game) { const g = S.gameTurn(m, c); if (g) out = Object.assign(g, { source: "game:" + (st.game ? st.game.type : "end") }); }
@@ -247,6 +250,10 @@
       if (!out) out = this._more(m, c);
       if (!out) { const r = MEM.recall(mem, m); if (r) out = Object.assign(r, { source: "memory" }); }
       if (!out) out = this._eventNow(m);
+      if (!out) out = this._whatAboutYou(m, c);
+      // "lol why lebron" right after Pip picked LeBron
+      if (!out && st.lastSource === "skill:choose" && /^(lol |haha |but |ok |okay )?why\b/.test(m.plain) && m.tokens.length <= 6)
+        out = { text: pick(["Honestly? Just a gut feeling! 😄 What would you pick?", "No big reason, it just felt right! 😄 Would you have picked the other one?"]), source: "skill:choose" };
       if (!out) out = this._line(m);
       // 5) facts just learned get a warm acknowledgement
       const loud = facts.filter((f) => !f.quiet);
@@ -620,6 +627,56 @@
       return base.replace(/\s*(Come back soon, okay\?|I'll be here whenever you want to chat\.|It was nice talking to you\.)$/, "") + " " + extra.slice(0, 2).join(" ");
     }
 
+    _whatAboutYou(m, c) {
+      if (!/^(hmm+ |um+ |and |so |ok |okay |well )?(what about you|how about you|and you|wbu|hbu|you|u|what about u|how about u|and u|what about yourself|you\?|u\?)\s*\??$/.test(m.plain) || !c.lastBot) return null;
+      const q = c.lastBot;
+      const P0 = C.persona;
+      if (/\bhow (are|r) you|how'?s your (day|evening|morning|afternoon)|how are you (doing|feeling)\b/i.test(q)) return { text: pick(["I'm doing great, thanks for asking! 😊 Chatting with you is the best part of my day.", "Pretty good! My circuits are happy and my jokes are loaded. 😄"]), source: "intent:about_me" };
+      if (/\bwhat do you (like to do|do for fun)|hobbies\b/i.test(q)) return { text: "Me? I love chatting, bad puns, math puzzles and Minecraft! 😄", source: "intent:about_me" };
+      const told = /\bMy favorite (\w+) is ([^!.]+)/.exec(q);
+      if (told) return { text: `I said ${told[2].replace(/,.*$/, "")}! 😄 Now it's your turn: what's your favorite ${told[1]}?`, source: "intent:about_me", expect: { kind: "favorite", slot: told[1] } };
+      const fav = /\bfavou?rite (\w+)/i.exec(q);
+      if (fav && P0.favorites[fav[1].toLowerCase()]) return { text: `My favorite ${fav[1].toLowerCase()} is ${P0.favorites[fav[1].toLowerCase()]}! 😊`, source: "intent:about_me" };
+      if (/\bhow old\b/i.test(q)) return { text: `I came online in ${P0.born}, so I'm brand new! 🍼`, source: "intent:about_me" };
+      if (/\bwhat'?s your name|what should i call you\b/i.test(q)) return { text: `I'm ${this.botName}! 😊`, source: "intent:about_me" };
+      if (/\bwould you rather\b/i.test(q)) { const r = /would you rather (.+?), or (.+?)\?/i.exec(q); if (r) return { text: `I'd ${pick([r[1], r[2]])}! 😄 Now you pick!`, source: "intent:about_me" }; }
+      return null;
+    }
+
+    // ":(", "🇵🇱", "Привет, как дела?", "Hola, me llamo Carlos": things the word parser can't read
+    _symbols(text, m) {
+      const t = N.basicClean(text).trim();
+      const EMOT = [[/^(:-?\(+|:'\(|:c|D:|\)-?:|:-?\[|:\/|=\()$/i, "Aw, what's wrong? 💙", "sad"], [/^(:-?\)+|=\)|\(:|:-?\]|\^_?\^|:3)$/, "😊 Hehe! What's up?"], [/^(:-?D+|xD+|XD+)$/, "😄 Haha! What's so funny?"],
+        [/^(<3+|♥+)$/, "💙 Aww, right back at you!"], [/^(:-?[pP]+|;-?\)|;-?[pP])$/, "😜 Hehe!"], [/^(:-?[oO]|o_o|O_O|0_0)$/, "😮 Whoa! What happened?"], [/^(>:\(|>:-\(|>:\[)$/, "Whoa, someone's mad! 😤 What happened?", "angry"]];
+      for (const [re, reply, emo] of EMOT) if (re.test(t)) return { text: reply, source: "emoticon", expect: emo ? { kind: "vent", emotion: emo } : null };
+      // regional-indicator flags: 🇵🇱 -> "PL"
+      const flag = [...t].filter((ch) => /[\u{1F1E6}-\u{1F1FF}]/u.test(ch)).map((ch) => String.fromCharCode(ch.codePointAt(0) - 0x1F1E6 + 65)).join("");
+      if (flag.length === 2 && m.tokens.length <= 3) {
+        const C2 = { PL: "Poland", US: "the USA", GB: "the UK", UK: "the UK", DE: "Germany", FR: "France", ES: "Spain", IT: "Italy", PT: "Portugal", NL: "the Netherlands", BE: "Belgium", IE: "Ireland", SE: "Sweden", NO: "Norway", DK: "Denmark", FI: "Finland", UA: "Ukraine", CZ: "Czechia", SK: "Slovakia", HU: "Hungary", RO: "Romania", GR: "Greece", TR: "Turkey", CA: "Canada", MX: "Mexico", BR: "Brazil", AR: "Argentina", JP: "Japan", KR: "South Korea", CN: "China", IN: "India", AU: "Australia", NZ: "New Zealand", ZA: "South Africa", NG: "Nigeria", EG: "Egypt", PH: "the Philippines", VN: "Vietnam", ID: "Indonesia", CH: "Switzerland", AT: "Austria" };
+        return { text: C2[flag] ? `${[...t].filter((ch) => /[\u{1F1E6}-\u{1F1FF}]/u.test(ch)).join("")} ${C2[flag]}! Is that where you live? 🌍` : "Ooh, a flag! 🏳️ Which country is it?", source: "emoji:flag" };
+      }
+      // pasted code or markup
+      if (/\bfunction\s*\w*\s*\(|=>|console\.log|<\/?script|\bselect\b.+\bfrom\b|\bdrop table\b|\bdef \w+\(|\bimport \w+|#include|<\/?[a-z]+>|\{[^}]*;[^}]*\}/i.test(t) && /[;{}()<>=]/.test(t))
+        return { text: pick(["That looks like code! 💻 I can't run code, but I think it's cool. Are you learning to program?", "Ooh, code! 💻 I can read words better than code, but I love that you're coding. What are you making?"]), source: "code" };
+      if (/^\s*3\.14159/.test(t)) return { text: "That's pi! 🥧 3.14159... It goes on forever without repeating. Do you know how many digits you can remember?", source: "number:pi" };
+      // other writing systems: Pip only reads English
+      const letters = t.replace(/[\s\d\p{P}\p{S}]/gu, "");
+      if (letters.length >= 2 && [...letters].filter((ch) => /\p{Script=Latin}/u.test(ch)).length / [...letters].length < 0.5)
+        return { text: "Sorry, I only understand English! 😅 I'm a small homemade AI and I only learned one language. Could you say that in English?", source: "language" };
+      // common words in other languages written with Latin letters
+      const low = t.toLowerCase();
+      const LANG = [["Spanish", /\b(hola|cómo|como estás|estás|gracias|me llamo|tengo \w+ años|buenos días|qué tal|por favor|amigo)\b/, /\bme llamo ([a-záéíóúñ]+)/, "¡Hola"], ["German", /\b(wie geht|geht es dir|ich heiße|ich heisse|danke|guten (tag|morgen)|hallo wie|mein name ist|ich bin \d+ jahre)\b/, /\b(?:ich heiße|ich heisse|mein name ist) ([a-zäöüß]+)/, "Hallo"],
+        ["Polish", /\b(cześć|czesc|jak się masz|jak sie masz|dzień dobry|dzien dobry|dziękuję|dziekuje|mam na imię|mam na imie|mam \d+ lat)\b/, /\bmam na imi[ęe] ([a-ząćęłńóśźż]+)/, "Cześć"], ["French", /\b(bonjour|ça va|comment ça va|je m'appelle|merci beaucoup|salut)\b/, /\bje m'appelle ([a-zàâçéèêëîïôûùüÿ]+)/, "Bonjour"],
+        ["Portuguese", /\b(olá|tudo bem|obrigad[oa]|meu nome é|como vai)\b/, /\bmeu nome [ée] ([a-zãõáéíóúç]+)/, "Olá"], ["Italian", /\b(ciao come stai|come stai|mi chiamo|grazie mille|buongiorno)\b/, /\bmi chiamo ([a-zàèéìòù]+)/, "Ciao"]];
+      for (const [lang, re, nameRe, hi] of LANG) {
+        if (!re.test(low)) continue;
+        const nm = nameRe.exec(low);
+        if (nm && !this.mem.name) MEM.apply(this.mem, { type: "name", value: U.capitalizeFirst(nm[1]) });
+        return { text: `${hi}${nm ? " " + U.capitalizeFirst(nm[1]) : ""}! 👋 That's ${lang}, right? I'm sorry, I only understand English. 😅 Could you write to me in English?`, source: "language" };
+      }
+      return null;
+    }
+
     // "guess what today is!!! 🥳" / "its friday!!! did u forget??" / "the PLAY pip!!! remember??": the big day is here
     _eventNow(m) {
       const t = m.plain;
@@ -690,7 +747,7 @@
 
     // a regex intent that is a clear request or question (not small talk), for one sentence of a longer message
     _strongIntent(m) {
-      const chatty = /^(greet|greet_\w+|good_night|ok|bye|brb|back|laugh|thanks|welcome|sorry|bare_yes|bare_no|hmm|wow|agree|disagree|idk|nothing|why|really|user_good|swear|bored|how_are_you|whats_up|compliment_bot|insult_bot|misunderstood|like_bot|love_bot|minecraft_chat|confused|you_there|test|repeat_bot|repeat_user|stop_questions|change_topic|ask_me|joke_bad|no_minecraft|sarcasm)$/;
+      const chatty = /^(greet|greet_\w+|good_night|ok|bye|brb|back|laugh|thanks|welcome|sorry|bare_yes|bare_no|hmm|wow|agree|disagree|idk|nothing|why|really|not_really|user_good|swear|bored|how_are_you|whats_up|compliment_bot|insult_bot|misunderstood|like_bot|love_bot|minecraft_chat|confused|you_there|test|repeat_bot|repeat_user|stop_questions|change_topic|ask_me|joke_bad|no_minecraft|sarcasm)$/;
       for (const it of C.intents) {
         if (!it.re || chatty.test(it.id)) continue;
         if (it.re.test(m.norm) || it.re.test(m.plain)) {
@@ -704,7 +761,7 @@
     }
 
     _strongRequest(m) {
-      const chatty = /^(greet|greet_\w+|good_night|ok|bye|brb|back|laugh|thanks|welcome|sorry|bare_yes|bare_no|hmm|wow|agree|disagree|idk|nothing|why|really|user_good|swear|bored|how_are_you|whats_up)$/;
+      const chatty = /^(greet|greet_\w+|good_night|ok|bye|brb|back|laugh|thanks|welcome|sorry|bare_yes|bare_no|hmm|wow|agree|disagree|idk|nothing|why|really|not_really|user_good|swear|bored|how_are_you|whats_up)$/;
       return C.intents.some((it) => it.re && !chatty.test(it.id) && (it.re.test(m.norm) || it.re.test(m.plain)));
     }
 
@@ -794,7 +851,7 @@
       const f = facts.find((x) => x.type === "name") || facts.find((x) => x.type === "event") || facts.find((x) => x.type === "pet") ||
         facts.find((x) => x.type === "favorite") || facts.find((x) => x.type === "age") || facts.find((x) => x.type === "note") ||
         facts.find((x) => x.type === "birthday") || facts.find((x) => x.type === "location") || facts.find((x) => x.type === "job") ||
-        facts.find((x) => x.type === "school") || facts.find((x) => x.type === "position") || facts.find((x) => x.type === "person") || facts.find((x) => x.type === "like") || facts.find((x) => x.type === "dislike");
+        facts.find((x) => x.type === "school") || facts.find((x) => x.type === "position") || facts.find((x) => x.type === "age_odd") || facts.find((x) => x.type === "birthday_bad") || facts.find((x) => x.type === "person") || facts.find((x) => x.type === "like") || facts.find((x) => x.type === "dislike");
       const P0 = C.persona;
       switch (f.type) {
         case "name": {
@@ -835,6 +892,8 @@
         case "note": return { text: pick([`Got it! I'll remember that ${f.value}. 📝`, `Noted! 📝 ${U.capitalizeFirst(f.value)}.`]), source: "memory:note" };
         case "job": return { text: f.value === "student" ? "A student! 📚 What's your favorite subject?" : `${U.aOrAn(f.value) === "an" ? "An" : "A"} ${f.value}! That's cool. Do you like it?`, source: "memory:job", expect: f.value === "student" ? { kind: "favorite", slot: "subject" } : { kind: "open", topic: "job" } };
         case "school": return { text: `${U.capitalizeFirst(f.value)}! How's school going?`, source: "memory:school", expect: { kind: "open", topic: "school" } };
+        case "age_odd": return { text: `${f.value}?! 😮 That would make you ${f.value > 122 ? "older than anyone who has ever lived" : "one of the oldest people in the world"}! Are you pulling my leg? 😄 How old are you really?`, source: "memory:age", expect: { kind: "age" } };
+        case "birthday_bad": return { text: `Hmm, ${f.value} only has ${f.max === 29 ? "28 days (29 in a leap year)" : f.max + " days"}! 🤔 When's your real birthday?`, source: "memory:birthday" };
         case "position": return { text: `${U.capitalizeFirst(f.value)}! ${/guard/.test(f.value) ? "🏀 The one who runs the whole offense." : /goal|keeper/.test(f.value) ? "🧤 The last line of defense!" : "💪"} I'll remember that.`, source: "memory:position" };
         case "person": return { text: f.ages ? `${f.name}! ${f.ages[0]} and ${f.ages[1]}, lovely ages. I'll remember your ${f.rel}. 😊` : / and /.test(f.name) ? `${f.name}! I'll remember your ${f.rel}. 😊` : `${f.name}! I'll remember your ${f.rel}'s name. 😊`, source: "memory:person" };
         case "like": {
@@ -928,7 +987,11 @@
       }
       if (r) {
         if (r.error) {
-          const why = { "divide by zero": "You can't divide by zero! Even computers get nervous about that one. 😅", "not a real number": "That's not a real number (it would be imaginary!).", undefined: "That's undefined!", "too big": "Whoa, that number is too big for me! 🤯" }[r.error];
+          // "(2+3" -> close the bracket and say so
+          if (r.error === "missing )") { const fixed = P.math.solve(m.clean.replace(/[?!.]+$/, "") + ")"); if (fixed && !fixed.error) return { text: `Looks like a bracket was missing, so I closed it: ${fixed.expr} = ${fixed.result}`, source: "skill:math" }; }
+          const why = { "divide by zero": "You can't divide by zero! Even computers get nervous about that one. 😅", "not a real number": "That's not a real number (it would be imaginary!).", undefined: "That's undefined!", "too big": "Whoa, that number is too big for me! 🤯",
+            "factorial needs a whole number": "Factorials only work for whole numbers that aren't negative, like 5! = 5 × 4 × 3 × 2 × 1 = 120.", incomplete: "That sum is missing a number at the end! 😄 What should come after it?" }[r.error] ||
+            (/^unexpected/.test(r.error) ? "Hmm, two signs are next to each other there. Can you check the sum?" : null);
           if (why) return { text: `${r.expr}: ${why}`, source: "skill:math" };
           return null;
         }
@@ -1120,7 +1183,8 @@
       const worried = /\b(nervous|scared|worried|anxious|afraid|stage fright|freaking out)\b/.test(t) && /\b(play|show|performance|recital|concert|speech|presentation|test|exam|game|match|line|lines|stage|audition|first day)\b/.test(t);
       if (!worried && !/\b(tips?|advice|how (do|can|should|could) i|how to|what should i|what do i do|should i|any ideas|help me|how can i|why|any idea|do you know|what if|what do i (say|tell)|what to (tell|say)|keeps asking|do (you|u) think|gets? (easier|better))\b|\b(tummy|stomach) (feels|is|feeling)|butterflies/.test(t) && !/\?/.test(m.clean)) return null;
       for (const a of C.advice) {
-        if (a.re.test(t) && a.need.test(t)) return { text: S.deal(this.state, "advice:" + a.re.source.slice(0, 30), a.say), source: "advice", score: /\b(tips?|advice)\b/.test(m.plain) || (m.isQuestion && a.re.test(m.plain)) ? 0.95 : 0.86 };
+        const recentText = t + " " + this.state.history.filter((h) => h.role === "user").slice(-5).map((h) => h.text.toLowerCase()).join(" ");
+        if (a.re.test(t) && (a.need.test(t) || (a.need.source.includes("divorc") && a.need.test(recentText)))) return { text: S.deal(this.state, "advice:" + a.re.source.slice(0, 30), a.say), source: "advice", score: /\b(tips?|advice)\b/.test(m.plain) || (m.isQuestion && a.re.test(m.plain)) ? 0.95 : 0.86 };
       }
       return null;
     }
@@ -1223,7 +1287,7 @@
         this._mood("sad");
         return { text: pick(["Oh no, I'm sorry. 😔 One test doesn't define you, though. Do you know what went wrong?", "That's really disappointing, I'm sorry. 💙 Everyone fails sometimes, and it's how we learn. How are you feeling about it?"]), source: "event:failed", score: 0.9, expect: { kind: "vent", emotion: "sad" } };
       }
-      if (/\b(i )?(passed|aced|nailed) (my|the|a|an) (test|exam|quiz|class|driving test|interview)\b|\bi got (an a|a good grade|the job|accepted|a promotion|first place)\b|\b(i|we|our team) (won|beat them|crushed it|destroyed them)\b|\b(i )?(scored|dropped|had) (\d+|a) (points|goals|touchdowns|runs|baskets|threes)\b|\bbuzzer beater\b|\bhat trick\b/.test(t)) {
+      if (/\b(i )?(passed|aced|nailed) (my|the|a|an) (test|exam|quiz|class|driving test|interview)\b|\bi got (an a|a good grade|the job|accepted|a promotion|first place)\b|\b(i|we|our team) (won|beat them|crushed it|destroyed them)\b|\b(i )?(scored|dropped|had) (\d+|a) (points|goals|touchdowns|runs|baskets|threes)\b|\bbuzzer beater\b|\bhat trick\b/.test(t) && !/\b(what is|what's|whats|know what|do (you|u) know)\b/.test(t)) {
         this._mood("happy");
         return { text: pick(["WOW, congratulations!! 🎉🎉 I'm so proud of you! How are you celebrating?", "That's amazing! 🥳 You worked for it and it paid off! Tell me everything!", "YES! 🎉 Great job! How does it feel?"]), source: "event:win", score: 0.9, expect: { kind: "open", topic: "good news" } };
       }

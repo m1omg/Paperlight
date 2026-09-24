@@ -162,7 +162,11 @@
         return { text: `${verdict}${tip} (Score: ${g.score}/${g.asked}) Next: ${nx.text}`, chips: nx.chips };
       }
       case "rps": {
+        const bt = /\bwhat (beats|wins against|can beat) (rock|stone|paper|scissors?)\b/.exec(t);
+        if (bt) { const w = { rock: "paper ✋ (paper covers rock)", stone: "paper ✋ (paper covers rock)", paper: "scissors ✌️ (scissors cut paper)", scissors: "rock ✊ (rock smashes scissors)", scissor: "rock ✊ (rock smashes scissors)" }[bt[2]]; return { text: `${U.capitalizeFirst(w)}! Now make your move! 😄`, chips: ["Rock", "Paper", "Scissors"] }; }
+        if (/\b(rules|how do (you|i|we) play|how does it work)\b/.test(t)) return { text: "Rock beats scissors, scissors beat paper, paper beats rock! ✊✋✌️ Pick one!", chips: ["Rock", "Paper", "Scissors"] };
         const mv = /\b(rock|stone|fist)\b/.test(t) ? "rock" : /\b(paper|sheet)\b/.test(t) ? "paper" : /\b(scissors?|scissor|sissors|shears)\b/.test(t) ? "scissors" : null;
+        if (!mv && m.tokens.length <= 2 && !m.isQuestion && !/^(ok|okay|yes|no|hmm|lol|wait|what)$/.test(t)) return { text: `Haha, "${m.clean.replace(/[.!?]+$/, "")}" isn't a move! 😄 Pick rock, paper or scissors.`, chips: ["Rock", "Paper", "Scissors"] };
         if (!mv) return idle(g, st);
         const mine = pick(["rock", "paper", "scissors"]);
         const beats = { rock: "scissors", paper: "rock", scissors: "paper" };
@@ -630,6 +634,13 @@
     [["who is the president", "who is the president of the united states", "who is the prime minister"], "Leaders change with elections, and I can't go online to check the latest, so I'd better not guess! 🗳️"],
   ];
   let faqIndex = null, this_ = false;
+  // words the knowledge base asks about are real words: never "correct" buzzer beater into "buz better"
+  if (P.nlp && P.nlp.addWords) {
+    const vocab = new Set();
+    for (const [qs] of FAQ) for (const q of qs) for (const w of q.split(/\s+/)) if (/^[a-z]{3,}$/.test(w)) vocab.add(w);
+    "buzzer beater dunk layup rebound dribble goalie striker midfielder quarterback touchdown homerun pitcher shortstop fortnite roblox bedwars skywars hypixel zerobuild minecraft axolotl axolotls purpur amethyst netherite enderman endermen".split(" ").forEach((w) => vocab.add(w));
+    P.nlp.addWords([...vocab], 0.3);
+  }
   function faq(m) {
     if (!faqIndex) { faqIndex = new P.nlp.TfIdf(); FAQ.forEach(([qs], i) => qs.forEach((q) => faqIndex.add(q, i))); }
     // "can you explain what a mole is in chemistry? simply pls" -> "what is a mole in chemistry"
