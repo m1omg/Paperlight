@@ -220,7 +220,7 @@
         const sf = P.safety.check(m, st, mem);
         if (sf) {
           out = { text: sf.text, source: sf.source, expect: sf.care ? { kind: "vent", emotion: "sad" } : null };
-          const RANK = { overdose: 6, friendcrisis: 5, crisis: 5, abuse: 5, sextortion: 5, meetstranger: 5, grooming: 4, runaway: 4, neglect: 4, eating: 2, cyberbully: 1, hurt: 1 };
+          const RANK = { overdose: 6, friendcrisis: 5, crisis: 5, abuse: 5, sextortion: 5, meetstranger: 5, grooming: 4, runaway: 4, neglect: 4, threat: 3, eating: 2, cyberbully: 1, hurt: 1 };
           if (sf.care && (!(st.care > 0) || (RANK[sf.kind] || 0) >= (RANK[st.careKind] || 0))) { st.careKind = sf.kind; mem.careFollow = { at: Date.now(), asked: false, kind: sf.kind }; }
           if (sf.care) { st.care = Math.max(st.care || 0, sf.care); st.ventTurns = Math.max(st.ventTurns || 0, 4); }
         }
