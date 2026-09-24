@@ -30,7 +30,8 @@ node cli.js --fresh    # start with an empty memory
 
 The terminal version keeps its memory in `~/.pip_memory.json` (change it with the `PIP_MEMORY` environment variable).
 
-**Tests:** `node test/run_tests.js` runs 73 scripted conversation checks (add `--neural` to load the networks too).
+**Tests:** `node test/run_tests.js` runs 79 scripted conversation checks (add `--neural` to load the networks too).
+`node test/eval_chat.js` plays a 40-message sample chat and shows the top neural candidates for each reply.
 
 ## Things to try
 
@@ -45,6 +46,8 @@ The terminal version keeps its memory in `~/.pip_memory.json` (change it with th
 | `let's play a game`, `tell me a riddle`, `quiz me`, `would you rather` | games with scores |
 | `I'll call you Nova` | renames Pip |
 | `how many r's are in strawberry` | counts letters properly |
+| `what is an axolotl`, `what does happy mean`, `who is einstein` | definitions from a 69,000-word dictionary (WordNet) |
+| `what can I craft with slimeballs` | reverse recipe lookup |
 
 Open **Show brain** in the top-right corner to see how Pip picked each reply: every candidate (scripted intent,
 knowledge skill, retrieved human line, PipGPT sample, reflection rule), where it came from and its score.
@@ -63,12 +66,21 @@ Every message goes through the same pipeline (`src/brain.js`):
    pets, family, upcoming tests or trips, "remember that...") and stored. Pip uses them later: greeting you by
    name, "How did your math test go?", "What's my dog's name?".
 5. **Exact skills**: calculator and unit converter (`src/mathcalc.js`, exact fractions with BigInt), Minecraft
-   (`src/minecraft.js` + `src/mcdata.js`), world capitals, general-knowledge questions, time and date, spelling,
-   letter counting, games (`src/skills.js`).
+   (`src/minecraft.js` + `src/mcdata.js`), world capitals, general-knowledge questions, a WordNet dictionary,
+   time and date, spelling, letter counting, games (`src/skills.js`).
 6. **Scored candidates** for everything else: about 80 scripted intents with personality (`src/content.js`),
    opinions and favorites, empathy for life events (a pet died, a breakup, bullying, passing a test), the
-   **neural candidates** and ELIZA-style reflections ("I think my teacher hates me" → "What makes you think your
-   teacher hates you?"). The highest score wins, and Pip avoids repeating itself.
+   **neural candidates**, ELIZA-style reflections ("I think my teacher hates me" → "What makes you think your
+   teacher hates you?") and short mood-matched reactions. The highest score wins, and Pip avoids repeating itself.
+
+A neural reply only wins when it beats the safe scripted options. Each candidate (a retrieved human line or a
+PipGPT sample) is scored on:
+- the retrieval network's similarity,
+- a BM25 keyword match between your message and the message that line originally answered,
+- PipGPT's PMI score: how much more likely the reply is after *your* message than after a bland "ok",
+  which penalizes replies that would fit anything,
+- penalties for specific words nobody mentioned ("What rides did you go on?"), an unexplained "he" or "she",
+  and a mismatched mood ("That's great!" to a bad day).
 
 ### The neural networks (`src/neural.js`, trained with `training/`)
 
@@ -124,5 +136,7 @@ data/               exported model weights, reply bank, tokenizer, spelling word
 training/           Python scripts that downloaded the data and trained the networks
 test/run_tests.js   scripted conversation tests
 ```
+
+Word definitions come from [WordNet 3.0](https://wordnet.princeton.edu/) (Princeton University, WordNet license).
 
 Made by Claude (Anthropic) as a from-scratch chatbot project.

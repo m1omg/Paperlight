@@ -305,6 +305,15 @@
     "Why don't oysters share? Because they're shellfish! 🦪", "What do you call a dog magician? A labracadabrador! 🐶✨",
     "What did the grape do when it got stepped on? It let out a little wine! 🍇", "Why is Peter Pan always flying? He Neverlands! 🧚",
     "What do you call an alligator in a vest? An investigator! 🐊", "Why did the tomato blush? It saw the salad dressing! 🍅",
+    "Why don't programmers like nature? It has too many bugs. 🐛", "What do you call a boomerang that won't come back? A stick. 🪃",
+    "Why did the music teacher need a ladder? To reach the high notes! 🎵", "What kind of tree fits in your hand? A palm tree! 🌴",
+    "Why are frogs so happy? They eat whatever bugs them! 🐸", "What did the left eye say to the right eye? Between you and me, something smells. 👀",
+    "Why was the math lesson so long? The teacher kept going off on a tangent. 📐", "How do you organize a space party? You planet! 🪐",
+    "What do you call a snowman with a six-pack? An abdominal snowman! ⛄", "Why did the stadium get hot after the game? All the fans left! 🏟️",
+    "What do you call a sheep with no legs? A cloud! ☁️🐑", "Why can't a bicycle stand up by itself? It's two tired! 🚲",
+    "What did the Enderman say to the player? Stop staring, it's rude! 👾", "Why did the villager refuse to trade? He had a bad hrrm day. 😄",
+    "What's a zombie's favorite toy? A deady bear! 🧸", "How does a creeper party? It has a blast! 💥",
+    "Why did Steve break up with his pickaxe? It kept making things rocky. ⛏️",
   ];
   const facts = [
     "Octopuses have three hearts and blue blood! 🐙", "Honey never spoils. Archaeologists have found 3,000-year-old honey that's still edible! 🍯",
@@ -328,6 +337,13 @@
     "The dot over the letters i and j is called a tittle. ✍️", "Some cats are allergic to humans! 🐈",
     "Jupiter is so big that all the other planets in our solar system could fit inside it. 🪐", "Rats laugh when they're tickled! 🐀",
     "The heart of a blue whale is about the size of a small car! 🐋", "There are more trees on Earth than stars in the Milky Way! 🌲✨",
+    "Octopuses can taste things with their arms! 🐙", "A cloud can weigh more than a million pounds (it's just spread out). ☁️",
+    "Dolphins give each other names: each one has its own signature whistle! 🐬", "An ostrich's eye is bigger than its brain! 🦤",
+    "The Great Wall of China is NOT visible from space with the naked eye, that's a myth! 🧱", "Crows can recognize human faces and hold grudges! 🐦‍⬛",
+    "A teaspoon of a neutron star would weigh about a billion tons! ⭐", "Penguins propose to each other with pebbles! 🐧",
+    "Your bones are about five times stronger than steel of the same weight! 🦴", "Honeybees can recognize human faces too! 🐝",
+    "Venus spins backwards compared to most planets, so the Sun rises in the west there! 🌅",
+    "In Minecraft, pandas can have personalities, like lazy, playful, worried or aggressive! 🐼", "In Minecraft, a charged creeper explosion makes mobs drop their heads! 💀",
   ];
   const riddles = [
     ["What has keys but can't open locks?", ["piano", "keyboard"], "A piano! 🎹"],
