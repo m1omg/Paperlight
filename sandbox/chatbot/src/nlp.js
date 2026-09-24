@@ -58,6 +58,10 @@
     "bummed sucks sucked suck crappy lousy shitty rough blue meh blah unmotivated empty numb worthless useless failure " +
     "failed fail sadness sorrow heartbreak dumped rejected", 1);
   addEmo("lonely", "lonely alone isolated lonesome friendless ignored excluded unloved unwanted invisible", 1.2);
+  addEmo("lonely", "miss missing", 0.7);
+  addEmo("sad", "bad tough guilty ashamed embarrassed homesick regret sadder saddest", 0.8);
+  addEmo("angry", "unfair jealous", 0.9);
+  addEmo("anxious", "scary awkward freaking panicky shaky", 0.8);
   addEmo("anxious", "anxious anxiety worried worry worrying nervous scared afraid stressed stress stressful panic " +
     "panicking overwhelmed terrified frightened tense uneasy dread dreading fear fearful insecure paranoid", 1.1);
   addEmo("angry", "angry mad furious annoyed annoying irritated pissed frustrated frustrating hate hated rage livid " +
@@ -205,6 +209,8 @@
     for (let i = 0; i < tokens.length; i++) {
       const e = EMO[tokens[i]];
       if (!e) continue;
+      // "my best friend" / "have fun at school" style phrases are not feelings
+      if (tokens[i] === "best" && /^(friends?|part|thing|way|mate|buddy)$/.test(tokens[i + 1] || "")) continue;
       let w = e.w;
       let neg = false;
       for (let j = Math.max(0, i - 3); j < i; j++) if (NEGATORS.has(tokens[j])) neg = true;
@@ -219,6 +225,8 @@
       if (cat === "happy" && /^(good|nice|cool|fine|best|super|fun|perfect)$/.test(tokens[i])) w *= 0.6;
       scores[cat] = (scores[cat] || 0) + w;
     }
+    const joined = " " + tokens.join(" ") + " ";
+    if (/ (by myself|on my own|no one to|nobody to|(do not|don't|dont) (really |even )?have (anyone|anybody|any friends)|no friends|have nobody|have no one|nobody to talk to|sit alone|eat alone) /.test(joined)) scores.lonely = (scores.lonely || 0) + 1.2;
     let best = null, bestV = 0;
     for (const k in scores) if (scores[k] > bestV) { best = k; bestV = scores[k]; }
     const positive = (scores.happy || 0) + (scores.love || 0) * 0.5;

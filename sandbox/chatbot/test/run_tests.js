@@ -74,6 +74,19 @@ const groups = [
     ["i just want it to stop", /safe/i, "support:stop"],
     ["i feel a bit better now", /glad|happy|great/i, "support:better"],
   ]],
+  ["follow-ups on the next visit", [
+    ["hi", /name|call you/i],
+    ["i'm Leo", /Leo/, "memory"],
+    ["i have a spelling test tomorrow", /spelling test/i, "memory"],
+    ["/away 48", /spelling test/i, "greeting"],
+    ["it went great!", /yay|awesome|woohoo|happy for you/i, "expect:followup"],
+    ["i'm so sad today", /sorry|hug|here for you/i, "feelings"],
+    ["/away 20", /feeling down|any better/i, "greeting"],
+    ["not really", /sorry|listening|going on/i, "expect:followup-bad"],
+    ["i have a piano recital on friday", /recital/i, "memory"],
+    ["/away 200", /recital/i, "greeting"],
+    ["it's not until next week", /hasn't happened|ask you again/i, "expect:followup"],
+  ]],
   ["persona", [
     ["what's your name", /Pip/],
     ["are you chatgpt", /from-scratch|scratch/i, "intent:bot_how"],
@@ -107,16 +120,35 @@ const groups = [
   ]],
 ];
 
+function shiftTime(o, ms) {
+  if (Array.isArray(o)) return o.forEach((x) => shiftTime(x, ms));
+  if (!o || typeof o !== "object") return;
+  for (const k of Object.keys(o)) {
+    if (/^(at|due|lastSeen|ageAt|firstSeen)$/.test(k) && typeof o[k] === "number") o[k] -= ms;
+    else shiftTime(o[k], ms);
+  }
+}
+
 (async () => {
   Pip.util.setSeed(12345);
   const neural = process.argv.includes("--neural") ? await Pip.loadNeural() : null;
   let pass = 0, fail = 0;
   for (const [name, steps] of groups) {
     const store = { data: null, getItem() { return this.data; }, setItem(k, v) { this.data = v; } };
-    const brain = new Pip.Brain({ storage: store, neural, debug: true });
+    let brain = new Pip.Brain({ storage: store, neural, debug: true });
     brain.greet();
     for (const [msg, re, src] of steps) {
-      const out = await brain.reply(msg);
+      let out;
+      const away = /^\/away (\d+)/.exec(msg);
+      if (away) {
+        // close the app, let time pass, open it again
+        brain.save();
+        const mem = JSON.parse(store.data);
+        shiftTime(mem, +away[1] * 3600e3);
+        store.data = JSON.stringify(mem);
+        brain = new Pip.Brain({ storage: store, neural, debug: true });
+        out = brain.greet();
+      } else out = await brain.reply(msg);
       const ok = re.test(out.text) && (!src || (out.source || "").startsWith(src));
       if (ok) pass++; else { fail++; console.log(`✗ [${name}] "${msg}"\n    got (${out.source}): ${out.text}\n    want: ${re}${src ? " from " + src : ""}`); }
     }

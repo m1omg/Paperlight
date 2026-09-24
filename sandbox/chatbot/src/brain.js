@@ -35,6 +35,30 @@
 
   const venting0 = (st, expect) => (expect && expect.kind === "vent") || st.ventTurns > 0;
 
+  // hobbies people mention, and a good follow-up question for each
+  const HOBBIES = [[/\b(draw|drawing|sketch|sketching|doodling|fanart|fan art)\b/, "drawing"], [/\b(paint|painting)\b/, "painting"], [/\b(anime)\b/, "anime"], [/\b(manga)\b/, "manga"],
+    [/\bminecraft\b/, "Minecraft"], [/\broblox\b/, "Roblox"], [/\bfortnite\b/, "Fortnite"], [/\b(video games|gaming|games|play games|playing games)\b/, "video games"],
+    [/\b(reading|read books|books)\b/, "reading"], [/\b(music|listening to music)\b/, "music"], [/\b(sing|singing)\b/, "singing"], [/\b(dance|dancing|ballet)\b/, "dancing"],
+    [/\b(piano)\b/, "piano"], [/\b(guitar)\b/, "guitar"], [/\b(drums)\b/, "drums"], [/\b(violin)\b/, "violin"],
+    [/\b(soccer)\b/, "soccer"], [/\b(football)\b/, "football"], [/\b(basketball)\b/, "basketball"], [/\b(baseball)\b/, "baseball"], [/\b(hockey)\b/, "hockey"], [/\b(tennis)\b/, "tennis"], [/\b(volleyball)\b/, "volleyball"],
+    [/\b(swim|swimming)\b/, "swimming"], [/\b(cook|cooking)\b/, "cooking"], [/\b(bake|baking)\b/, "baking"], [/\b(writing|write stories|writing stories|poetry)\b/, "writing"],
+    [/\b(coding|programming|code)\b/, "coding"], [/\b(skate|skating|skateboarding)\b/, "skateboarding"], [/\b(biking|cycling|bike riding|riding my bike)\b/, "biking"],
+    [/\b(hiking)\b/, "hiking"], [/\b(running|jogging)\b/, "running"], [/\b(gymnastics)\b/, "gymnastics"], [/\b(chess)\b/, "chess"], [/\b(lego|legos)\b/, "Lego"],
+    [/\b(knitting|crochet|crocheting|sewing)\b/, "crafts"], [/\b(photography|taking photos|taking pictures)\b/, "photography"], [/\b(movies|watching movies|films)\b/, "movies"],
+    [/\b(youtube|watching youtube)\b/, "YouTube"], [/\b(fishing)\b/, "fishing"], [/\b(camping)\b/, "camping"], [/\b(gardening)\b/, "gardening"], [/\b(horse riding|riding horses|horseback)\b/, "horse riding"],
+    [/\b(karate|taekwondo|judo|martial arts|boxing)\b/, "martial arts"], [/\b(sports)\b/, "sports"]];
+  const HOBBY_Q = { drawing: "What do you like to draw? 🎨", painting: "What do you like to paint? 🎨", anime: "What's your favorite anime?", manga: "What's your favorite manga?",
+    Minecraft: "Survival or creative? ⛏️", Roblox: "What's your favorite Roblox game?", Fortnite: "Do you play with friends?", "video games": "What games do you play? 🎮",
+    reading: "What are you reading right now? 📚", music: "What kind of music? 🎧", singing: "What songs do you like to sing? 🎤", dancing: "What kind of dance? 💃",
+    piano: "How long have you been playing? 🎹", guitar: "How long have you been playing? 🎸", drums: "How long have you been playing? 🥁", violin: "How long have you been playing? 🎻",
+    soccer: "Do you play on a team? ⚽", football: "Do you play on a team? 🏈", basketball: "Do you play on a team? 🏀", baseball: "Do you play on a team? ⚾", hockey: "Do you play on a team? 🏒",
+    tennis: "Are you good? 🎾", volleyball: "Do you play on a team? 🏐", swimming: "Pool or beach? 🏊", cooking: "What's the best thing you've made? 🍳", baking: "What's the best thing you've baked? 🧁",
+    writing: "What do you like to write about? ✍️", coding: "Ooh, what are you building? 💻", skateboarding: "Can you do any tricks? 🛹", biking: "Where do you like to ride? 🚲",
+    hiking: "Where's the best place you've hiked? 🥾", running: "How far do you usually run? 🏃", gymnastics: "Can you do a backflip?! 🤸", chess: "Are you good? I only know the rules! ♟️",
+    Lego: "What's the coolest thing you've built? 🧱", crafts: "What are you making right now?", photography: "What do you like to take pictures of? 📷", movies: "What's the best movie you've seen lately? 🎬",
+    YouTube: "Who do you like to watch?", fishing: "What's the biggest fish you've caught? 🎣", camping: "Tent or cabin? ⛺", gardening: "What are you growing? 🌱",
+    "horse riding": "Do you have a favorite horse? 🐴", "martial arts": "What belt are you? 🥋", sports: "Which sports? 🏅" };
+
   class Brain {
     constructor(opts) {
       opts = opts || {};
@@ -73,7 +97,7 @@
       } else {
         const fu = MEM.followUp(mem);
         const n = mem.name ? " " + mem.name : "";
-        if (fu) text = `${pick(["Hey", "Hi", "Welcome back"])}${n}! 😊 ${fu}`;
+        if (fu) { text = `${pick(["Hey", "Hi", "Welcome back"])}${n}! 😊 ${fu.text}`; expect = fu.expect; }
         else if (away && away > 3 * 864e5) text = `${n ? U.capitalizeFirst(n.trim()) + "! " : ""}It's been a while! I missed you. 😊 How have you been?`;
         else text = pick([`Hey${n}! 👋 How's your ${PART_OF_DAY()} going?`, `Welcome back${n}! 😊 What's new?`, `Hi${n}! Good to see you again. How are you?`]);
         if (!fu) expect = { kind: "howareyou" };
@@ -137,7 +161,11 @@
         text = lead[2];
       }
       text = String(text).replace(new RegExp("[,\\s]+" + bn + "[?!.]*$", "i"), (x) => x.replace(/[^?!.]/g, ""));
-      text = text.replace(/^\s*(?:anyway(?:s)?|so|well|ok so|okay so|btw|by the way|also|um+|uh+|hmm+|oh and|and)\s*[,.!]?\s+(?=\S.{3,})/i, "");
+      // "lol ok what about iron?" -> "what about iron?": laughs and fillers in front are just reactions
+      for (let i = 0; i < 3; i++) {
+        text = text.replace(/^\s*(?:anyway(?:s)?|so|well|ok so|okay so|btw|by the way|also|um+|uh+|hmm+|oh and|and|ok|okay|alright)\s*[,.!]?\s+(?=\S.{3,})/i, "")
+          .replace(/^\s*(?:lol+|lmao+|haha+|hehe+|rofl|xd+|ha+)\s*[,.!]*\s+(?=\S+\s+\S+)/i, "");
+      }
       const m = N.analyze(text);
       const c = this.ctx(m);
       const trace = [];
@@ -158,8 +186,14 @@
         out = { text: pick(["Hmm? I think your keyboard sneezed. 😄", "Did a cat just walk across your keyboard? 🐱⌨️", "That looks like a secret code! 🕵️ What does it mean?"]), source: "gibberish" };
       else if (/^\s*-?\d+(\.\d+)?\s*$/.test(text) && !(expect && /age|game/.test(expect.kind)) && !st.game) out = { text: `${text.trim()}? 🔢 Is that a special number?`, source: "number" };
 
-      // 0) safety first
-      if (!out && C.safety.crisis.test(m.plain)) out = { text: C.safety.reply, source: "safety", expect: { kind: "vent", emotion: "sad" } };
+      // 0) safety first (kids use Pip too): fixed, careful replies; nothing from these messages is stored
+      if (!out && P.safety) {
+        const sf = P.safety.check(m, st, mem);
+        if (sf) {
+          out = { text: sf.text, source: sf.source, expect: sf.care ? { kind: "vent", emotion: "sad" } : null };
+          if (sf.care) { st.care = sf.care; st.careKind = sf.kind; st.ventTurns = Math.max(st.ventTurns || 0, 4); }
+        }
+      }
 
       // 1) memory facts ("my name is...", "I have a dog", "my favorite color is...") and threads to follow up on
       const facts = out ? [] : MEM.extract(mem, m, expect);
@@ -169,17 +203,24 @@
       if (!out && expect) out = this._onExpect(expect, m, c, facts);
       // 3) a running game
       if (!out && st.game) { const g = S.gameTurn(m, c); if (g) out = Object.assign(g, { source: "game:" + (st.game ? st.game.type : "end") }); }
-      // 4) commands and memory questions
+      // 4) commands, "another one!", and memory questions
       if (!out) out = this._commands(m, c);
+      if (!out) out = this._more(m, c);
       if (!out) { const r = MEM.recall(mem, m); if (r) out = Object.assign(r, { source: "memory" }); }
       // 5) facts just learned get a warm acknowledgement
-      if (!out && facts.length) out = this._ackFacts(facts, m, c);
+      const loud = facts.filter((f) => !f.quiet);
+      if (!out && loud.length) out = this._ackFacts(loud, m, c);
       // 6) exact skills
       if (!out) out = this._skills(m, c, trace);
       // 7) intents, feelings, opinions, neural chat, fallback: scored candidates
       if (!out) out = await this._open(m, c, trace, expect);
 
       if (typeof out === "string") out = { text: out };
+      if (st.care > 0 && P.safety && !/^safety/.test(out.source || "") && /^(intent:(ok|idk|nothing|bare_no|bare_yes|hmm|laugh|user_good|agree|disagree|why|really|greet|how_are_you|whats_up|wow|thanks|sorry|welcome|bored|stop_questions|change_topic|confused)|react|fallback|eliza|neural|ack|expect:howareyou|more:|skill:choose|unknown)/.test(out.source || ""))
+        out = { text: P.safety.careReply(st.careKind, m, st), source: "safety:care", expect: { kind: "vent" } };
+      if (st.care > 0) st.care--;
+      if (/\b(i (just |already )?asked|i said|that is not what i (asked|said|meant)|that's not what i (asked|said|meant)|not what i asked|i told you already|i already told you)\b/.test(m.plain) && !/^(oops|sorry|my bad|oh)/i.test(out.text) && !/^(neural|react|fallback|eliza)/.test(out.source || ""))
+        out.text = pick(["Oops, sorry! 😅 ", "My bad! ", "Oh, sorry about that! "]) + out.text;
       out = this._extraSentences(m, out);
       out.text = this._restoreCase(out.text, m.clean);
       if (greetBack && !/^(hi|hey|hello|good (morning|afternoon|evening)|oh hi|welcome)\b/i.test(out.text)) out.text = greetBack + out.text;
@@ -187,7 +228,7 @@
       if (st.recent.includes(out.text) && out.alts && out.alts.length) out.text = this._post(pick(out.alts));
       if (out.expect) st.expect = out.expect;
       // multi-turn listening mode only for serious things (not for "my brother is annoying")
-      if (/^(safety|feelings:(sad|lonely|anxious)|event:(grief|bullied|breakup|lonely|selfesteem|failed)|support:|expect:howareyou)/.test(out.source || "") && out.expect && out.expect.kind === "vent") st.ventTurns = Math.max(st.ventTurns || 0, 4);
+      if (/^(safety|feelings:(sad|lonely|anxious)|event:(grief|bullied|breakup|lonely|selfesteem|failed)|support:|expect:howareyou|expect:followup-bad)/.test(out.source || "") && out.expect && out.expect.kind === "vent") st.ventTurns = Math.max(st.ventTurns || 0, 4);
       if (/^(feelings:happy|event:win|react:positive|support:better)/.test(out.source || "")) st.ventTurns = 0;
       if (out.intent) st.lastIntent = out.intent; else if (out.source && out.source.startsWith("intent:")) st.lastIntent = out.source.slice(7);
       else st.lastIntent = null;
@@ -236,6 +277,56 @@
           }
           break;
         }
+        case "hobby": {
+          // "What do you like to do for fun?" -> "mostly drawing. and watching anime, i'm kind of obsessed with frieren rn"
+          if (this._strongRequest(m) || (m.isQuestion && !/\b(you|u|yours)\??$/.test(t))) break;
+          const found = [];
+          for (const [re, name] of HOBBIES) if (re.test(m.plain) && !found.includes(name)) found.push(name);
+          const named = facts.filter((f) => f.type === "like" && !found.some((h) => f.value.includes(h) || h.includes(f.value)) && !HOBBIES.some(([re]) => re.test(f.value)));
+          for (const h of found) MEM.apply(this.mem, { type: "like", value: h });
+          if (!found.length && !named.length) {
+            if (m.tokens.length > 6 || NO.test(t) || /\b(idk|dunno|not sure|nothing)\b/.test(t)) break;
+            const v = m.clean.replace(/^(i like |i love |i enjoy |mostly |probably |i guess )+/i, "").replace(/[.!]+$/, "");
+            MEM.apply(this.mem, { type: "like", value: v.toLowerCase() });
+            return { text: pick([`${U.capitalizeFirst(v)}? That sounds fun! How did you get into it?`, `Ooh, ${v}! Nice. What do you like most about it?`]), source: "expect:hobby", expect: { kind: "open", topic: v } };
+          }
+          const list = U.listJoin(found.length ? found : named.map((f) => f.value));
+          let text = `${U.capitalizeFirst(list)}! ${pick(["Great combo!", "Love that!", "Nice!", "Ooh, fun!"])} `;
+          let expect = { kind: "open", topic: found[0] || named[0].value };
+          if (named.length) {
+            const X = U.titleCase(named[0].value);
+            text += `And ${X}! I don't know it yet. What's it about?`;
+            expect = { kind: "describe", topic: X };
+          } else text += HOBBY_Q[found[0]] || `How did you get into ${found[0]}?`;
+          return { text, source: "expect:hobby", expect };
+        }
+        case "describe": {
+          // the user explains something Pip didn't know ("it's an anime about an elf mage who...")
+          if (this._strongRequest(m) || m.tokens.length < 3 || (m.isQuestion && m.tokens.length < 8)) break;
+          const X = ex.topic;
+          const kindM = /\b(anime|manga|tv show|show|series|cartoon|movie|film|book|novel|video game|game|song|band|singer|rapper|youtuber|streamer|app|website|comic|webtoon|place|city|country|restaurant|dish|drink|sport|team|character|artist|podcast)\b/.exec(m.plain);
+          const kind = kindM ? kindM[1] : null;
+          const ab = /\b(?:about|where) (.{6,80}?)(?=[.!,;]| and (?:it|she|he|they|its|it's)\b| but |$)/.exec(m.plain.replace(/[?!]+$/, ""));
+          if (m.emotion.valence >= -0.3 || /\b(favorite|love|obsessed|best|good|great|amazing|cozy|cool)\b/.test(m.plain)) MEM.apply(this.mem, { type: "like", value: X.toLowerCase() });
+          const Q = { anime: "Who's your favorite character?", manga: "Who's your favorite character?", show: "Who's your favorite character?", "tv show": "Who's your favorite character?", series: "Who's your favorite character?", cartoon: "Who's your favorite character?", movie: "What's your favorite scene?", film: "What's your favorite scene?", book: "Who's your favorite character?", novel: "Who's your favorite character?", comic: "Who's your favorite character?", webtoon: "Who's your favorite character?", game: "What's the best part about playing it?", "video game": "What's the best part about playing it?", song: "What's your favorite part of it?", band: "What's their best song?", singer: "What's their best song?", rapper: "What's their best song?", youtuber: "What kind of videos do they make?", streamer: "What do they stream?", place: "Would you go back?", city: "Would you go back?", food: "What does it taste like?", dish: "What does it taste like?", sport: "Do you play it?" };
+          const A = kind ? (U.aOrAn(kind) === "an" ? "An " : "A ") + kind : null;
+          let text = ab ? `${A || U.capitalizeFirst(X)} about ${reflect(ab[1]).replace(/\bI\b/g, "you")}? ${pick(["That sounds really cool!", "Ooh, I love that idea!", "That sounds amazing!"])}`
+            : A ? `Ooh, ${A.toLowerCase()}! That sounds really cool.` : pick(["That sounds really interesting!", "Ooh, I like the sound of that!", "Cool, thanks for telling me about it!"]);
+          if (/\b(sad|cry|cried|crying|tearjerker|emotional|bittersweet)\b/.test(m.plain)) text += " Sad-but-cozy stories are the best kind. 💙";
+          text += " " + (Q[kind] || pick(["What do you like most about it?", "What got you into it?"]));
+          return { text, source: "expect:describe", expect: { kind: "open", topic: X } };
+        }
+        case "personname": {
+          // "Hmm, I don't think you've told me your best friend's name. What is it?" -> "it's Jess"
+          const r = /(?:^|\b(?:it'?s|its|it is|named|called|name is|name's|her name is|his name is|their name is|that'?s|she'?s|he'?s)\s+)([a-z][a-z'-]{1,20})(?:\s+([a-z][a-z'-]{1,20}))?\s*[.!]*$/i.exec(m.clean.split(/[.!?]\s+/)[0].trim()) ||
+            /\b(?:it'?s|its|it is|named|called|name is|her name is|his name is)\s+([a-z][a-z'-]{1,20})\b/i.exec(m.clean);
+          if (r && MEM.looksLikeName(r[1], m.clean, true) && !/^(yes|no|i|you|it|he|she|they|the|a|an|my)$/i.test(r[1])) {
+            const name = U.titleCase(r[1].toLowerCase());
+            MEM.apply(this.mem, { type: "person", rel: ex.rel, name });
+            return { text: pick([`${name}! Got it, I'll remember your ${ex.rel}'s name. 😊`, `${name}, of course! Sorry, I'll remember that now. 💙`]), source: "expect:personname" };
+          }
+          break;
+        }
         case "mcrecipe": {
           if (isYes) {
             const r = P.minecraft.answer(N.analyze("how do i craft " + ex.item), Object.assign(this.state, { turn: this.state.turn }));
@@ -257,6 +348,53 @@
           const g = /\b(rock|paper|scissors|rps)\b/.test(t) ? "rps" : /\b(guess|number)\b/.test(t) ? "guess" : /\btrivia|quiz\b/.test(t) ? "trivia" : /\briddle/.test(t) ? "riddle" : /\bwould you rather|wyr|rather\b/.test(t) ? "wyr" : null;
           if (g) return Object.assign(S.start(g, c), { source: "game:" + g });
           if (isYes) return { text: "Pick one: rock paper scissors, guess my number, trivia, riddles or would you rather!", expect: ex, chips: ["Rock paper scissors", "Guess my number", "Trivia", "Riddle", "Would you rather"], source: "expect:pickgame" };
+          break;
+        }
+        case "followup": {
+          // the answer to "How did your test go?" / "Are you feeling better?" / "How's Biscuit?"
+          if (this._strongRequest(m) || m.tokens.length > 30) break;
+          const v = m.emotion.valence;
+          const notYet = /\b(not yet|hasn'?t happened|didn'?t happen|did not happen|isn'?t until|is not until|not until|it'?s (tomorrow|next week|on \w+day|later)|got (moved|postponed|cancell?ed)|was (moved|postponed|cancell?ed))\b/.test(t);
+          const bad = !/\bnot (too |that |so )?(bad|terrible|awful|horrible)\b/.test(t) && v <= -0.3 || /\b(bad|badly|terrible|awful|horrible|failed|flunked|bombed|worse|not (good|great|well|really|so good|better|fine)|still (sad|bad|down|lonely|stressed|sick|mad|angry|tired)|no|nope|nah|meh|sucked|not really|kind of bad)\b/.test(t.replace(/\bnot (too |that |so )?(bad|terrible|awful|horrible)\b/g, "okay"));
+          const good = !bad && (v >= 0.3 || /\b(good|great|well|awesome|amazing|fantastic|better|passed|aced|nailed|got an a|went well|pretty good|fun|yes|yeah|yep|yup|much better|excellent|perfect|fine now|all good)\b/.test(t));
+          const meh = !bad && !good && /\b(ok|okay|alright|fine|so so|not bad|average|decent|same|got a (b|c)|i guess|kind of|kinda)\b/.test(t);
+          const unsure = /\b(do not know|don'?t know|dont know|idk|not sure|no idea|we'?ll see|find out|results|grades? (come|are) out)\b/.test(t);
+          const n = this.mem.name ? " " + this.mem.name : "";
+          if (ex.about === "event" || ex.about === "upcoming") {
+            const what = ex.what;
+            if (notYet) {
+              const w = /\b(tomorrow|today|tonight|next week|this week|this weekend|(?:on|next) (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b/.exec(t);
+              MEM.rearmEvent(this.mem, what, w && w[1]);
+              return { text: pick([`Oh, it hasn't happened yet! Good luck with your ${what}, you've got this. 🍀`, `Ah, okay! I'll ask you again after your ${what}. 😊 Are you ready for it?`]), source: "expect:followup", expect: { kind: "open", topic: what } };
+            }
+            if (ex.about === "upcoming") {
+              if (bad || /\b(nervous|scared|worried|anxious|not ready|stressed)\b/.test(t)) { this._mood("anxious"); return { text: pick([`It's totally normal to be nervous before a ${what}. 💙 You've prepared more than you think! Want a quick breathing trick: in for 4, hold for 4, out for 6?`, `Aw, being nervous just means you care. 💙 What part worries you most?`]), source: "expect:followup", expect: { kind: "vent", emotion: "anxious" } }; }
+              if (good || meh) return { text: pick([`Love that confidence! 💪 You're going to do great. Tell me how it went afterwards!`, `Awesome! 🍀 I'll be rooting for you. Let me know how it goes!`]), source: "expect:followup" };
+              break;
+            }
+            if (bad) { this._mood("sad"); return { text: pick([`Aw, I'm sorry it didn't go well${n}. 💙 One ${what} doesn't define you. What happened?`, `Oh no, I'm sorry. 😔 That's really disappointing. Do you want to talk about it?`]), source: "expect:followup-bad", expect: { kind: "vent", emotion: "sad" } }; }
+            if (good) { this._mood("happy"); return { text: pick([`Yay!! 🎉 I knew you'd do great on your ${what}! How does it feel?`, `That's awesome${n}! 🥳 All that effort paid off! What was the best part?`, `Woohoo! 🎉 I'm so happy for you! Tell me more!`]), source: "expect:followup", expect: { kind: "open", topic: "good news" } }; }
+            if (unsure) return { text: pick([`Fingers crossed! 🤞 When do you find out how you did?`, `The waiting is the worst part! 🤞 I bet you did better than you think.`]), source: "expect:followup", expect: { kind: "open", topic: what } };
+            if (meh) return { text: pick([`Okay is good! 😊 Was it harder or easier than you expected?`, `Not bad! 👍 Glad it's over at least. Was it hard?`]), source: "expect:followup", expect: { kind: "open", topic: what } };
+            break;
+          }
+          if (ex.about === "mood") {
+            if (bad) { this._mood(ex.label || "sad"); return { text: pick([`I'm sorry it's still hard${n}. 💙 Do you want to talk about it? I'm listening.`, `Aw, I'm sorry. 🫂 What's been going on?`]), source: "expect:followup-bad", expect: { kind: "vent", emotion: ex.label || "sad" } }; }
+            if (good) { this._mood("happy"); return { text: pick([`I'm really glad to hear that! 😊 What helped?`, `Yay, that makes me so happy! 💙 What's been good lately?`]), source: "expect:followup", expect: { kind: "open", topic: "good news" } }; }
+            if (meh) return { text: pick([`Okay is better than bad! 😊 Anything on your mind today?`, `A little better is still better. 💙 What are you up to today?`]), source: "expect:followup", expect: { kind: "open", topic: "day" } };
+            break;
+          }
+          if (ex.about === "thread") {
+            if (bad) return { text: pick([`I'm sorry it's still tough with your ${ex.who}. 💙 What's been happening?`, `Aw, that's hard. 🫂 Do you want to tell me about it?`]), source: "expect:followup-bad", expect: { kind: "vent" } };
+            if (good) return { text: pick([`That's great to hear! 😊 I'm glad things are better with your ${ex.who}.`, `Yay! 😄 What happened?`]), source: "expect:followup", expect: { kind: "open", topic: ex.who } };
+            if (meh) return { text: pick([`Okay is something! 😊 Anything new with your ${ex.who}?`, `Got it! Well, I'm here if anything comes up. 😊 What else is new?`]), source: "expect:followup", expect: { kind: "open", topic: ex.who } };
+            break;
+          }
+          if (ex.about === "pet") {
+            if (bad) return { text: `Oh no, is ${ex.pet} okay? 😟 What happened?`, source: "expect:followup-bad", expect: { kind: "vent" } };
+            if (good || meh) return { text: pick([`Aww, yay! Give ${ex.pet} a pat from me! 🐾`, `Glad to hear it! 🐾 What has ${ex.pet} been up to?`]).replace(/\byour (\w+)\b(?! from)/, "your $1"), source: "expect:followup", expect: { kind: "open", topic: "pet" } };
+            break;
+          }
           break;
         }
         case "howareyou": {
@@ -344,7 +482,7 @@
       const variants = [`Nice to meet you, ${name}! 😊`, `${name}! What a great name. 😊`, `Hi ${name}! I'm so glad to meet you. 😊`, `${name}, got it! I'll remember that. 😊`];
       const follow = pick([" How's your day going?", " What do you like to do for fun?", " So, what brings you here today?", " How are you doing?"]);
       const text = (greet ? greet + "Nice to meet you! 😊" : pick(variants)) + follow;
-      return { text, source: "memory:name", expect: /day|doing/.test(follow) ? { kind: "howareyou" } : { kind: "open", topic: "intro" } };
+      return { text, source: "memory:name", expect: /day|doing/.test(follow) ? { kind: "howareyou" } : /for fun/.test(follow) ? { kind: "hobby" } : { kind: "open", topic: "intro" } };
     }
 
     _ackFacts(facts, m, c) {
@@ -410,6 +548,20 @@
         return { text: `Okay, I forgot your ${f.what}. 🫧`, source: "command:forget" };
       }
       return null;
+    }
+
+    // "another one", "one more", "again": more of whatever Pip just did (joke, fact, riddle, story...)
+    _more(m, c) {
+      const li = this.state.lastIntent;
+      const MORE = { joke: "joke", mcjoke: "mcjoke", joke_more: "joke", fact: "fact", riddle: "riddle", story: "story", poem: "poem", compliment: "compliment", motivate: "motivate", trivia: "trivia", wyr: "wyr", question: "question", ask_me: "question" };
+      if (!li || !MORE[li]) return null;
+      const t = m.plain.replace(/^(lol|lmao|haha+|hehe+|ha+|ok|okay|yes|yeah|ya|sure|pls|please)\s+/, "");
+      if (!/^(another|one more|more|again|next|next one|gimme another|give me another|tell me another|do another|one more time|another one|more please|keep going|continue)\b/.test(t) || m.tokens.length > 10) return null;
+      let kind = MORE[li];
+      if (/\b(minecraft|mc|creeper)\b/.test(t) && /joke/.test(kind)) kind = "mcjoke";
+      else if (kind === "mcjoke" && /\b(normal|regular|other|different|not minecraft)\b/.test(t)) kind = "joke";
+      const r = S.start(kind, c);
+      return r ? Object.assign(r, { source: "more:" + kind, intent: r.intent || li }) : null;
     }
 
     _skills(m, c, trace) {
@@ -528,9 +680,15 @@
         this._mood("sad");
         return { text: pick(["Oh no, breakups really hurt. 💔 I'm sorry. Do you want to talk about what happened?", "I'm sorry. 🫂 That's really painful, and it's okay to feel sad about it. How are you doing?"]), source: "event:breakup", score: 0.9, expect: { kind: "vent", emotion: "sad" } };
       }
-      if (/\b(i am|i'm|im|i get|getting|got|being) (being )?(bullied|picked on|made fun of)\b|\b(bully|bullies) (me|at school)\b|\bpeople (are mean to me|make fun of me|laugh at me)\b/.test(t)) {
+      if (/\b(i am|i'm|im|i get|getting|got|being) (being )?(bullied|picked on|made fun of)\b|\b(bully|bullies) (me|at school)\b|\bpeople (are mean to me|make fun of me|laugh at me)\b/.test(t) ||
+          /\b(they|kids|people|everyone|some kids|some girls|some boys|classmates|the other kids|a kid|this kid|a girl|a boy)( at school| in my class)? (always |keep |keeps |all )?(call|calls|called|calling) me (names|fat|stupid|ugly|dumb|weird|a loser|loser|gay|a freak|freak|a baby|annoying|mean names)\b/.test(t) ||
+          /\b(they|kids|people|everyone|some kids|classmates|the other kids)( at school| in my class)? (always |keep |all )?(make fun of|laugh at|pick on|tease|push|pushed|trip|tripped|exclude|ignore|ignored) me\b/.test(t)) {
         this._mood("sad");
         return { text: "I'm really sorry that's happening to you. 💙 Nobody deserves to be treated like that, and it's not your fault. Have you been able to tell a parent, teacher or another adult you trust? You don't have to handle it alone. Do you want to tell me what happened?", source: "event:bullied", score: 0.95, expect: { kind: "vent", emotion: "sad" } };
+      }
+      if (/\bi (do not|don'?t|dont) want to go to school\b|\bi (hate|dread) (going to )?school\b/.test(t)) {
+        this._mood("sad");
+        return { text: pick(["That sounds really rough. 💙 When school feels that bad, there's usually a reason. What's making you not want to go?", "Aw, I'm sorry. 😔 Is something happening at school, or is it more of a general bad feeling? I'm listening."]), source: "event:school", score: 0.9, expect: { kind: "vent", emotion: "sad" } };
       }
       if (/\b(i have no friends|nobody likes me|no one likes me|everyone hates me|nobody cares about me|no one cares about me|nobody talks to me|no one talks to me|i am alone|i'm alone|i feel invisible)\b/.test(t)) {
         this._mood("lonely");
@@ -581,7 +739,8 @@
       const t = m.plain.replace(/[?!.]+$/, "");
       let r;
       if ((r = /\b(?:what is|whats|what's|what are) your (?:favorite|fav|favourite|fave) ([a-z]+(?: [a-z]+)?)\b/.exec(t)) || (r = /\bdo you have a (?:favorite|fav|favourite|fave) ([a-z]+(?: [a-z]+)?)\b/.exec(t))) {
-        const slot = MEM.SLOTS[r[1]] || MEM.SLOTS[r[1].split(" ")[0]] || r[1].split(" ")[0];
+        const w = r[1].replace(/^(minecraft|mc|video|pc|board|card|kind of|type of) /, "").split(" ");
+        const slot = MEM.SLOTS[w.join(" ")] || MEM.SLOTS[w[w.length - 1]] || MEM.SLOTS[w[0]] || (C.persona.favorites[w[w.length - 1]] ? w[w.length - 1] : w[0]);
         const fav = C.persona.favorites[slot];
         const theirs = this.mem.favorites[slot];
         if (fav) return { text: `My favorite ${slot} is ${fav}! ${theirs ? `And yours is ${theirs}, right? 😊` : "What's yours?"}`, source: "opinion:favorite", expect: theirs ? null : { kind: "favorite", slot }, score: 0.9 };
@@ -671,7 +830,8 @@
       const venting = (expect && expect.kind === "vent") || this.state.ventTurns > 0;
       const deepVent = this.state.ventTurns > 0;
       // Neural chat when nothing scripted is confident, or when the user is opening up about something.
-      if (this.neural && this.neural.ready && (!top || top.score < 0.8 || (venting && top.source.startsWith("intent:ok")))) {
+      const sensitive = (P.safety && P.safety.sensitive(m)) || this.state.care > 0;
+      if (this.neural && this.neural.ready && !sensitive && (!top || top.score < 0.8 || (venting && top.source.startsWith("intent:ok")))) {
         try {
           const n = await this.neural.respond(this.state.history, m.clean, { name: this.mem.name, bot: this.botName, venting, deepVent, recent: this.state.recent, emotion: m.emotion.label });
           for (const x of n || []) add(x);
@@ -704,7 +864,7 @@
         const qt = q.text.replace(/^(Okay, here's one: |Ooh, let me think\.\.\. |Question for you: )/, "");
         pickd = Object.assign({}, pickd, { text: pickd.text + " By the way, " + qt.charAt(0).toLowerCase() + qt.slice(1), expect: q.expect });
       }
-      if (venting && !pickd.expect && pickd.source.startsWith("neural")) pickd.expect = { kind: "vent", emotion: expect.emotion };
+      if (venting && !pickd.expect && pickd.source.startsWith("neural")) pickd.expect = { kind: "vent", emotion: (expect && expect.emotion) || m.emotion.label || "sad" };
       return pickd;
     }
 

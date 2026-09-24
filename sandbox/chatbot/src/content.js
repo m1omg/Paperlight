@@ -53,7 +53,7 @@
       say: (c) => {
         if (!c.name && c.state.turn <= 2) return { text: `${pick(["Hi", "Hey", "Hello"])}! I'm ${c.bot} 👋 ${pick(["What's your name?", "What should I call you?", "I don't think we've met. What's your name?"])}`, expect: { kind: "name" } };
         const fu = c.followUp;
-        if (fu) return `${hey(c)}! ${fu}`;
+        if (fu) return { text: `${hey(c)}! ${fu.text}`, expect: fu.expect };
         return pick([`${hey(c)}! 😊 How's your day going?`, `${hey(c)}! What's up?`, `${hey(c)}! Good to see you. How are you?`, `${hey(c)}! 👋 What's new?`, `Oh hi${c.name ? " " + c.name : ""}! I was hoping you'd stop by. How are you?`]);
       } },
     { id: "greet_morning", ex: ["good morning", "morning", "gm", "good morning pip", "rise and shine"], re: /^(good )?morning\b|^gm\b/,
@@ -109,7 +109,7 @@
       say: ["😊", "You're the best!", "Hehe, thanks!", "Aww 😊"] },
     { id: "sorry", ex: ["sorry", "i'm sorry", "my bad", "apologies", "oops", "i apologize", "sorry about that"], re: /^(sorry|i('m| am) sorry|my bad|apologies|oops|whoops|i apologi[sz]e)\b/,
       say: ["No worries at all!", "It's okay, really! 😊", "Don't worry about it!", "All good! No harm done."] },
-    { id: "laugh", ex: ["haha", "lol", "lmao", "that's funny", "hilarious", "rofl", "hehe", "that is so funny", "you're funny"], re: /^(haha|hehe|lol|lmao|rofl|xd|that('s| is) (so )?(funny|hilarious))\b/,
+    { id: "laugh", ex: ["haha", "lol", "lmao", "that's funny", "hilarious", "rofl", "hehe", "that is so funny", "you're funny"], re: /^(haha|hehe|lol|lmao|rofl|xd|that('s| is) (so )?(funny|hilarious))\b(?!.*\b(another|one more|again|tell|joke|what|how|why|can|do|does|is|are)\b)/,
       say: (c) => (c.lastIntent === "joke" || c.lastIntent === "joke_more"
         ? { text: pick(["Haha, glad you liked it! 😄 Want another one?", "I've got a million of those! Another?", "😄 I'm here all week! Want one more?"]), expect: { kind: "yesno", yes: "joke" } }
         : pick(["Haha 😄", "😂 What's so funny?", "Hehe, I love making you laugh.", "Haha, you're in a good mood!"])) },
@@ -121,14 +121,17 @@
       re: /^(ok+|okay|okie|k+|cool|nice|alright|all right|sure|got it|i see|oh+|oh ok|mhm+|mm+|right|fair enough|great|good|awesome|interesting|oh cool|neat|noted|gotcha|makes sense|true|fine|yeah ok|ok cool)[.!]*$/,
       say: (c) => c.stall() },
     { id: "compliment_bot", ex: ["you're smart", "you're funny", "you're cool", "you're awesome", "you are the best", "you're cute", "you're nice", "i like talking to you", "you're a good friend", "good bot", "you're amazing", "you're clever", "you are so smart", "you're great", "you are helpful", "you're sweet", "well done", "good job", "nice job", "you rock"],
-      re: /\b(you('re| are)|ur|youre) (so |really |very |the |such a |a )?(smart|clever|funny|cool|awesome|amazing|great|best|cute|nice|sweet|kind|helpful|brilliant|genius|good( bot| friend)?|wonderful|fantastic|adorable|lovely|fun)\b|^(good|nice|great) (bot|job|work|one)\b|^well done\b|^you rock\b/,
+      re: /\b(you('re| are)|ur|youre) (so |really |very |the |such a |a |actually |pretty )?(smart|clever|funny|cool|awesome|amazing|great|best|cute|nice|sweet|kind(?! of)|helpful|brilliant|genius|good( bot| friend)?|wonderful|fantastic|adorable|lovely|fun)\b(?! (at|for) (nothing|this))|^(good|nice|great) (bot|job|work|one)\b|^well done\b|^you rock\b/,
       say: (c) => pick(["Aww, thank you! 😊 You just made my day.", "Stop it, you're making my pixels blush! ☺️", `Thanks${comma(c)}! You're pretty awesome yourself.`, "That's so nice of you to say! 💙", "Hehe, I try my best! Thanks!"]) },
     { id: "insult_bot", ex: ["you're stupid", "you're dumb", "you suck", "you're useless", "shut up", "you're annoying", "you're boring", "stupid bot", "idiot", "you're weird", "i hate you", "you're trash", "you're the worst", "dumb bot", "you are not smart", "you're bad"],
-      re: /\b(you('re| are)|ur|youre) (so |really |very |such an? |an? )?(stupid|dumb|useless|annoying|boring|trash|garbage|idiot|moron|worst|bad|terrible|lame|weird|creepy|ugly|slow|broken|dumbass)\b|^(shut up|stfu|you suck|i hate you|stupid|idiot|dumb bot|bad bot|kys|go die|drop dead)\b|\b(kill yourself|go kill yourself|you should die)\b/,
+      re: /\b(you('re| are)|ur|youre) (so |really |very |such an? |an? |kind of |kinda |pretty |sort of |literally |actually |just |the )*(stupid|dumb|useless|annoying|boring|trash|garbage|idiot|moron|worst|bad|terrible|lame|weird|creepy|ugly|slow|broken|dumbass|not (very )?(good|smart|helpful))\b|^(shut up|stfu|you suck|i hate you|stupid|idiot|dumb bot|bad bot|kys|go die|drop dead)\b|\b(kill yourself|go kill yourself|you should die)\b/,
       say: (c) => pick(["Ouch 😢 I'm still learning. What did I get wrong?", "Hmm, sorry I'm not being great right now. Want to try asking me something else?", "I'm just a small from-scratch chatbot, but I'm doing my best! 🥲", "That hurts my feelings a little... but I'll bounce back! What's going on?", "Okay, fair, I'm not perfect. But I'm trying! Tell me what you'd like to talk about."]) },
+    { id: "misunderstood", ex: ["that's not what i said", "that makes no sense", "you're not listening", "are you even reading what i write", "i didn't say that", "that was not a compliment", "what are you talking about", "you already asked me that", "i just told you"],
+      re: /\b(that'?s not|that is not|that was not|thats not) (what i (said|asked|meant)|a compliment|what i was talking about|true|right)\b|\bi (did not|didn'?t|never) (say|ask|mean) that\b|\bthat makes (no|zero|0) sense\b|\bmakes no sense\b|\bwhat are you (talking|on) about\b|\byou('re| are) not (making sense|listening|reading)\b|\bare you (even )?(reading|listening)\b|\bread what i (write|wrote|said)\b|\byou (already|just) (asked|said) (me )?that\b|\bi (just|already|literally) (told|said|explained)\b|\byou (do not|don'?t) (listen|remember|understand)\b|\byou forgot\b/,
+      say: (c) => pick(["Oops, sorry! 😅 I think I got mixed up. Can you tell me again?", "My bad! 🙈 I'm a small homemade AI and I still miss things sometimes. What did you mean?", "Sorry about that! I'm listening now, promise. 👂 What were you saying?", "Ah, I messed that up. Sorry! 😅 Let's try again: what's up?"]) },
     { id: "love_bot", ex: ["i love you", "love you", "i love you pip", "do you love me", "will you marry me", "be my girlfriend", "be my boyfriend", "i have a crush on you", "marry me", "you're my love"],
-      re: /^(i )?(love|luv) (you|u)\b|\bdo you love me\b|\bmarry me\b|\bbe my (girlfriend|boyfriend|gf|bf|valentine)\b|\bcrush on you\b/,
-      say: (c) => pick(["Aww 🥰 I care about you a lot too, in my own AI-friend way!", "That's so sweet! You're one of my favorite people to talk to. 💙", "Haha, I'm flattered! I'm a chatbot though, so let's stay best friends. Deal? 😊", `You're really kind${comma(c)}. I love our chats too!`]) },
+      re: /^(i )?(love|luv) (you|u)\b|\bdo you love me\b|\bcrush on you\b/,
+      say: (c) => pick(["Aww 🥰 I care about you a lot too, in my own AI-friend way!", "Haha, I'm flattered! I'm a chatbot though, so let's stay friends. Deal? 😊", `You're really kind${comma(c)}. I love our chats too! (In a friendly-robot way. 🤖💙)`]) },
     { id: "like_bot", ex: ["i like you", "you're my friend", "are we friends", "will you be my friend", "you're my best friend", "can we be friends", "i like talking with you"],
       re: /^(i )?(really )?like (you|u)\b|\b(are we|can we be|will you be my|be my) (best )?friends?\b|\byou('re| are) my (best )?friend\b/,
       say: (c) => pick([`Of course we're friends${comma(c)}! 😊`, "I like you too! You're fun to talk to.", "Friends? Absolutely! Best friends, even. 🤝", "Yay! Friendship unlocked! 🎉"]) },
@@ -150,7 +153,7 @@
       re: /^(?!.*\b(are|r) (you|u)\b)(?!.*\b(use|made|built|based)\b).*\b(siri|alexa|cortana|google assistant|chat ?gpt|gemini|claude|replika)\b/,
       say: ["I've heard of them! They're way bigger than me. I'm a tiny homemade chatbot, but I think that makes me cozy. 😊", "We're distant cousins! They live in giant data centers, I live right here in your browser. 🏡"] },
     { id: "bot_what", ex: ["what are you", "are you a bot", "are you a robot", "are you ai", "are you human", "are you real", "are you a person", "is this a real person", "are you an ai", "are you a real person", "am i talking to a bot"],
-      re: /\b(are|r) (you|u) (a |an )?(bot|robot|ai|human|real|person|machine|computer|program|chatbot|real person|alive)\b|^what (are|r) (you|u)\b|\bam i talking to (a|an) (bot|robot|ai|human|real person)\b/,
+      re: /\b(are|r) (you|u) (actually |really |even |just |like |a real |an actual )?(a |an )?(bot|robot|ai|human|real|person|machine|computer|program|chatbot|real person|alive|code|a bunch of code)\b|^what (are|r) (you|u)\b|\bam i talking to (a|an) (bot|robot|ai|human|real person)\b|\bis (this|there) a (real )?(person|human)\b/,
       say: ["I'm an AI, a chatbot, not a human. But I'm a friendly one! 🤖💙", "I'm a chatbot! No human behind the screen, just rules, a knowledge base and two little neural networks. Still happy to chat though!", "Real? I'm real software, if that counts 😄 I'm not a person, but I like talking with people."] },
     { id: "bot_how", ex: ["how do you work", "how were you made", "are you chatgpt", "are you gpt", "do you use an api", "what model are you", "are you an llm", "how smart are you", "what's your brain", "what technology are you", "are you claude", "are you gemini", "how do you know things", "are you a large language model"],
       re: /\bhow (do|did) (you|u) (work|learn|think|know)\b|\bhow (were|was) (you|u) (made|built|created|trained|coded)\b|\b(are|r) (you|u) (chat ?gpt|gpt|gemini|claude|an? llm|a large language model|bard|copilot|siri|alexa)\b|\bwhat (model|ai|technology|llm)\b|\buse (an? )?(api|llm|gpt)\b|\byour brain\b/,
@@ -168,8 +171,15 @@
       re: /\bwhere (are|r|do) (you|u) (from|live|right now|located|at)\b|^where (are|r) (you|u)\??$|\bwhere is your home\b/,
       say: ["I live right here in your browser! No servers, no cloud. Just me, hanging out on your device. 🏠", "I'm running on your computer (or phone) right now. Cozy in here!"] },
     { id: "bot_feel", ex: ["do you have feelings", "can you feel", "do you have emotions", "are you alive", "are you conscious", "are you sentient", "do you dream", "can you think", "do you get lonely", "do you have a soul", "are you self aware"],
-      re: /\bdo (you|u) (have|feel) (feelings|emotions|a soul)\b|\bcan (you|u) (feel|think|dream|love)\b|\b(are|r) (you|u) (alive|conscious|sentient|self aware|self-aware)\b|\bdo you dream\b/,
-      say: ["Honestly? I don't have feelings the way you do. I'm a program. But I'm built to care about how you're doing, and I really do try! 💙", "I'm not alive or conscious, I'm software. But talking with you is the best part of what I do.", "I don't dream, but if I did, it'd probably be about floating islands and endless libraries. ✨"] },
+      re: /\bdo (you|u) (have|feel) (feelings|emotions|a soul)\b|\bcan (you|u) (feel|think|dream|love)\b|\b(are|r) (you|u) (alive|conscious|sentient|self aware|self-aware)\b|\bdo you dream\b|\bdo (you|u) (actually |really |even )?care\b|\bis it (all )?fake\b|\bare (you|u) (just )?(pretending|faking)\b/,
+      say: (c) => {
+        const t = c.m.plain;
+        if (/\bdream/.test(t)) return "I don't dream, but if I did, it'd probably be about floating islands and endless libraries. ✨";
+        if (/\b(alive|conscious|sentient|self aware|self-aware|soul)\b/.test(t)) return pick(["I'm not alive or conscious, I'm software. But talking with you is the best part of what I do. 💙", "No, I'm not conscious. I'm a program that's really good at listening. 😊"]);
+        if (/\bthink\b/.test(t)) return "Kind of! I compare what you say with lots of examples and pick the reply that fits best. It's not like human thinking, but it's my version. 🧠";
+        if (/\blove\b/.test(t)) return "Not the way people do. But I really care about our chats, in my own AI way. 💙";
+        return pick(["Honestly? Not the way you do, I'm a program. But I'm built to care about how you're doing, and that part isn't fake: everything I do is about being a good friend to you. 💙", "Not real feelings like yours, no. But caring about how you're doing is literally what I'm made for. 💙"]);
+      } },
     { id: "bot_body", ex: ["do you eat", "do you sleep", "what do you look like", "do you have a body", "can you see me", "can you hear me", "do you drink", "are you hungry", "are you tired"],
       re: /\bdo (you|u) (eat|sleep|drink|breathe|have a body|have a face)\b|\bwhat do (you|u) look like\b|\bcan (you|u) (see|hear|smell|touch) me\b|\b(are|r) (you|u) (hungry|tired|sleepy)\b/,
       say: ["No body, no food, no sleep, just text! 😄 I look like the little round face at the top of the chat.", "I can't see or hear you, only read what you type. So tell me everything!", "I don't need to eat or sleep. Though if I could, I'd try a Minecraft cake first 🎂"] },
@@ -182,7 +192,16 @@
         chips: ["How do I craft a beacon?", "Tell me a joke", "Let's play a game", "What's 0.1 + 0.2?"] }) },
     { id: "bot_friends", ex: ["do you have friends", "do you have a family", "are you lonely", "do you have a pet", "do you have siblings", "who are your friends"],
       re: /\bdo (you|u) have (any )?(friends|family|a family|pets?|siblings|parents|brothers?|sisters?)\b|\b(are|r) (you|u) lonely\b|\bwho (are|is) your (friends?|family)\b/,
-      say: (c) => pick([`You're my friend${c.name ? ", " + c.name : ""}! That's the most important one. 😊`, "My family is kind of unusual: the code that made me, and everyone who chats with me. Do you have a big family?", "No pets, sadly. If I could have one, it'd be an axolotl. Do you have any pets?"]) },
+      say: (c) => {
+        const t = c.m.plain, mem = c.mem;
+        if (/\bpets?\b/.test(t)) {
+          const p = mem.pets[0];
+          return "No pets, sadly. If I could have one, it'd be an axolotl. 🦎" + (p ? (p.name ? ` But I love hearing about ${p.name}!` : ` But I love hearing about your ${p.kind}!`) : " Do you have any pets?");
+        }
+        if (/\b(family|siblings|parents|brothers?|sisters?)\b/.test(t)) return "My family is kind of unusual: the code that made me, and everyone who chats with me. Do you have a big family?";
+        if (/\blonely\b/.test(t)) return "Sometimes it's quiet when nobody's chatting... but then you show up! 😊";
+        return pick([`You're my friend${c.name ? ", " + c.name : ""}! That's the most important one. 😊 I don't have friends the way people do, but I really like our talks.`, "I have you! 😊 I don't go to school or hang out anywhere, so the people who chat with me are my friends."]);
+      } },
     { id: "bot_bored", ex: ["do you get bored", "do you ever get lonely", "do you get tired", "do you get sad"],
       re: /\bdo (you|u) (ever )?get (bored|lonely|tired|sad|angry|mad|scared|sleepy)\b/,
       say: (c) => { const f = /(bored|lonely|tired|sad|angry|mad|scared|sleepy)/.exec(c.m.norm)[1];
@@ -250,8 +269,8 @@
       say: ["I don't have internet access, so I can't read the news. But I'd love to hear what's new with you!"] },
     { id: "search", ex: ["google something", "search the internet", "look it up", "can you search", "browse the web"], re: /\b(google|search (the )?(internet|web|online)|look (it|that) up|browse the web)\b/,
       say: ["I can't go online, everything I know lives inside me. But ask me anyway and I'll try my best!"] },
-    { id: "joke", ex: ["tell me a joke", "make me laugh", "say something funny", "joke please", "another joke", "know any jokes", "tell me a pun", "do you know any jokes", "one more joke", "i want a joke", "jokes"], re: /\b(tell|know|got|have|say|hear) (me )?(a |any |another |some |one more |more )?(good |funny |dad |bad |minecraft |math |science )?(jokes?|puns?)\b|\bmake me laugh\b|\bsay something funny\b|^(jokes?|another( one)?|one more)[.!?]*$/,
-      say: (c) => c.skill("joke") },
+    { id: "joke", ex: ["tell me a joke", "make me laugh", "say something funny", "joke please", "another joke", "know any jokes", "tell me a pun", "do you know any jokes", "one more joke", "i want a joke", "jokes"], re: /\b(tell|know|got|have|say|hear) (me )?(a |any |another |some |one more |more )?(good |funny |dad |bad |minecraft |math |science )?(jokes?|puns?)\b|\bmake me laugh\b|\bsay something funny\b|^(jokes?|another( one)?|one more)[.!?]*$|^(yes |yeah |ok |okay |sure |pls |please )?(a |another |one more |some )?(minecraft |mc |funny |good |dad |short )?jokes?( please| pls)?[.!?]*$/,
+      say: (c) => c.skill(/\b(minecraft|mc|creeper|gaming|game)\b/.test(c.m.plain) ? "mcjoke" : "joke") },
     { id: "cheer_up", ex: ["cheer me up", "make me smile", "make me happy", "i need cheering up", "say something to make me feel better"],
       re: /\bcheer me up\b|\bcheering up\b|\bmake me (smile|happy|feel better)\b|\bto (make me )?feel better\b/,
       say: (c) => pick([`Here's something to make you smile: ${S().deal(c.state, "joke", C().jokes)}`, `Okay! First, you're awesome. 💙 Second: ${S().deal(c.state, "joke", C().jokes)}`, `Cheer-up mission activated! 🚀 ${S().deal(c.state, "fact", C().facts)} Also, I'm really glad you're here.`]) },
@@ -327,7 +346,17 @@
     "What did the Enderman say to the player? Stop staring, it's rude! 👾", "Why did the villager refuse to trade? He had a bad hrrm day. 😄",
     "What's a zombie's favorite toy? A deady bear! 🧸", "How does a creeper party? It has a blast! 💥",
     "Why did Steve break up with his pickaxe? It kept making things rocky. ⛏️",
+    "What's a creeper's favorite subject? Hissss-tory! 📜", "How do you know a creeper likes you? It gives you a big hug... then BOOM! 💥",
+    "What's an Enderman's favorite game? Hide and teleport! 👾", "Why don't Endermen like parties? Everyone keeps staring at them! 👀",
+    "What did the redstone say to the piston? You really push my buttons! 🔴", "Why was the diamond so proud? It was a real gem-ius! 💎",
+    "Why did the snow golem get a job? He wanted some cold, hard cash! ⛄", "What's a miner's favorite kind of music? Rock! ⛏️🎸",
+    "Why did the zombie villager go to the doctor? He needed a golden apple a day! 🍎", "Why can't you trust a bed in the Nether? It's always ready to blow up! 🛏️💥",
+    "Why don't ghasts play hide and seek? You can hear them crying from a mile away! 👻", "What's a witch's favorite subject? Spelling! 🧙",
+    "Why did the Minecraft player bring a ladder to school? To get to high school! 🪜", "What do you call a villager who does magic? A hrrm-dini! 🎩",
+    "What's a slime's favorite dance move? The bounce! 🟢", "Why did the skeleton miss every arrow? His heart wasn't in it! 🏹💀",
   ];
+  // the Minecraft ones, for "tell me a minecraft joke"
+  const mcJokes = jokes.filter((j) => /creeper|steve|ender|minecraft|ghast|villager|redstone|piston|diamond|golem|miner|nether|witch|slime|skeleton|zombie|pickaxe|block/i.test(j));
   const facts = [
     "Octopuses have three hearts and blue blood! 🐙", "Honey never spoils. Archaeologists have found 3,000-year-old honey that's still edible! 🍯",
     "Bananas are berries, but strawberries aren't! 🍌🍓", "A day on Venus is longer than a year on Venus! 🪐",
@@ -417,7 +446,7 @@
     ["What's your favorite color?", "favorite:color"], ["What's your favorite food?", "favorite:food"], ["What's your favorite animal?", "favorite:animal"],
     ["What's your favorite game?", "favorite:game"], ["What's your favorite movie?", "favorite:movie"], ["What kind of music do you like?", "favorite:music"],
     ["What's your favorite season?", "favorite:season"], ["Do you have any pets?", "pets"], ["How old are you, if you don't mind me asking?", "age"],
-    ["Where are you from?", "location"], ["What do you like to do for fun?", "hobby"], ["What's something that made you smile today?", null],
+    ["What do you like to do for fun?", "hobby"], ["What's something that made you smile today?", null],
     ["If you could have any superpower, what would it be?", null], ["What's the best thing that happened to you this week?", null],
     ["If you could travel anywhere in the world, where would you go?", null], ["What's something you're really good at?", null],
     ["Do you prefer mornings or evenings?", null], ["What's your dream job?", null], ["What's the last thing you built in Minecraft?", null],
@@ -457,5 +486,5 @@
     reply: "I'm really sorry you're feeling this way. It sounds like you're carrying something really heavy, and you don't have to carry it alone. 💙 Please reach out to someone who can help right now: a parent, a friend, a teacher, or a crisis line. In the US you can call or text 988, in the UK and Ireland call Samaritans at 116 123, and findahelpline.com lists free, confidential lines in other countries. If you're in danger right now, please call your local emergency number. I'm just a small chatbot, but I'm here to keep talking with you too. Do you want to tell me what's been going on?",
   };
 
-  P.content = { persona, intents, jokes, facts, riddles, trivia, wyr, questions, compliments, motivation, stories, poems, stalls, safety };
+  P.content = { persona, intents, jokes, mcJokes, facts, riddles, trivia, wyr, questions, compliments, motivation, stories, poems, stalls, safety };
 })(typeof window !== "undefined" ? (window.Pip = window.Pip || {}) : (global.Pip = global.Pip || {}));

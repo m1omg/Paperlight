@@ -138,8 +138,9 @@
     const abbr = new Map();
     const used = new Set();
     for (const row of card.grid) for (const nm of row) if (nm && !abbr.has(nm)) {
-      let a = nm.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
-      if (a.length < 2) a = nm.slice(0, 2).toUpperCase();
+      const words = nm.replace(/\(.*?\)/g, "").trim().split(/\s+/).filter((w) => /^[a-z]/i.test(w));
+      let a = words.map((w) => w[0]).join("").toUpperCase().slice(0, 2);
+      if (a.length < 2) a = (words[0] || nm).replace(/[^a-z]/gi, "").slice(0, 2).toUpperCase();
       let k = 2; while (used.has(a)) a = a[0] + String(k++);
       used.add(a); abbr.set(nm, a);
     }
@@ -192,7 +193,8 @@
     const hearts = mob.hp / 2;
     const h = `${mob.hp} HP (${hearts % 1 ? hearts : hearts} heart${hearts === 1 ? "" : "s"})`;
     if (want === "health") return { text: `${mob.type === "boss" ? "The " + mob.name : article(mob.name)} has ${h}.`, kind: "mob" };
-    return { text: `${mob.name} (${mob.type}, ${h}): ${mob.info}`, kind: "mob" };
+    const kind = { boss: "a boss", hostile: "a hostile mob", passive: "a friendly (passive) mob", neutral: "a neutral mob (it only attacks if you provoke it)" }[mob.type] || "a " + mob.type + " mob";
+    return { text: `${mob.type === "boss" ? "The " + mob.name : mob.name}: ${kind} with ${h}. ${mob.info}`, kind: "mob" };
   }
 
   function enchAnswer(e) {
@@ -238,6 +240,10 @@
       /\b(craft|crafting|recipe|recipes|make|made|build|create|construct)\b/.test(text) ? "recipe" :
       /\b(get|find|obtain|collect|farm|found|locate|mine|where|spawn|spawns)\b/.test(text) ? "obtain" :
       /\b(what is|what are|what does|tell me about|explain|use for|used for|good for|info|use (it|them|this|that|one) for|what is it for|what s it for|what does (it|that|this) do|what do (they|those) do)\b/.test(text) ? "info" : null;
+
+    // "what's your favorite mob?" / "do you like creepers?" are about Pip, and "I know what a creeper is" isn't a question
+    if (/\b(your|yours|urs) (favou?rite|fav|fave)\b|\bwhat(?: is| s|s)? (yours|urs)\b|\bdo (you|u) (like|love|hate|enjoy)\b|\b(what do|do) you think (of|about)\b/.test(text)) return null;
+    if (/\bi (already |do )?know (what|how|where|who|that)\b/.test(text) && !/\b(but|so) (what|how|where|why|can|do|does|is)\b/.test(text)) return null;
 
     let mentions = findMentions(toks);
     const shortFollow = mc.last && turn - mc.turn <= 2 && toks.length <= 4 &&
@@ -380,7 +386,7 @@
       if (want === "enchant" && h.kind === "ench") s += 4;
       if ((want === "recipe" || want === "smelt") && h.kind === "item") s += 3;
       if (h.kind === "item" && (h.ref.grid || h.ref.shapeless || h.ref.smithing)) s += 0.5;
-      if (h.kind === "mob" && !want) s += 1;
+      if (h.kind === "mob" && (!want || want === "info")) s += 1;
       scored.push({ s, mt, h });
     }
     scored.sort((a, b) => b.s - a.s);

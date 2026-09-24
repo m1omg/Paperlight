@@ -53,9 +53,12 @@
     ice: "ice cream flavor", "ice cream": "ice cream flavor", "ice cream flavor": "ice cream flavor", thing: "thing", person: "person" };
 
   function cleanValue(v) {
-    return v.replace(/\b(too|also|as well|lol|haha|though|tho|btw|now|right now|i guess|i think|very much|so much|a lot|lots|really|honestly|more|better|the most|best|the best|instead)\b/g, "")
+    return v.replace(/\b(too|also|as well|lol|lmao|haha|though|tho|btw|now|right now|rn|atm|lately|these days|ngl|tbh|i guess|i think|very much|so much|a lot|lots|really|honestly|more|better|the most|best|the best|instead|at all)\b/g, "")
       .replace(/\s+(and|but|because|since|so|when|which|who|if)\b.*$/, "").replace(/[^a-z0-9' &+-]/gi, " ").replace(/\s+/g, " ").trim();
   }
+  const ADVERB = /^(just|also|really|always|never|finally|still|recently|actually|literally|totally|usually|sometimes|probably|even|only|already|kinda|basically|and|who|was|is|got|has|had|said|says|lives|moved|went|keeps|told|made|thinks|wants|needs|likes|loves|hates|left|came|called|texted|did|does|can|could|will|would|from|at|in|again|too|now|then|once|today|yesterday|tomorrow|last|every|all|both|who|which|that)$/;
+  // common first names that are also in the word list (so "my friend jess moved" still counts)
+  const NAMEISH = /^(jess|jessie|max|sam|alex|ben|jack|tom|will|bill|rose|lily|daisy|grace|hope|faith|joy|ruby|amber|jade|pearl|april|may|june|summer|autumn|dawn|holly|ivy|violet|jasmine|olive|poppy|sky|river|rain|storm|hunter|chase|mason|carter|cooper|taylor|jordan|morgan|casey|charlie|frank|mark|matt|nick|pat|rob|ray|joe|jim|dan|ken|kim|lee|ann|anna|mia|leo|eli|ava|zoe|noah|liam|emma|olivia|sophia|isabella|ella|chloe|lucy|sophie|ellie|jake|josh|ryan|tyler|ethan|logan|owen|luke|adam|evan|dylan|aaron|kyle|nathan|sean|shawn|tony|andy|jay|kay|bella|luna|stella|nova|penny|molly|sadie|maggie|bailey|buddy|rocky|duke|bear|cooper|milo|oscar|toby|jasper|finn|ollie|teddy|george|harry|henry|jacob|james|john|michael|david|chris|mike|sarah|emily|hannah|ashley|megan|rachel|laura|amy|beth|katie|kate|jen|jenny|becky|abby|abbie|maya|mila|nora|leah|julia|diana|victoria|sofia|lena|nina|tina|lisa|sara|maria|elena|carlos|juan|jose|luis|diego|pedro|miguel)$/;
   function properCase(s) { return s.replace(/\b[a-z]/g, (c) => c.toUpperCase()); }
   // keyboard mashes ("asdfghjkl") and consonant soup are not names
   function plausibleName(low) {
@@ -131,16 +134,29 @@
       const slot = SLOTS[r[1].trim()] || SLOTS[r[1].split(" ")[0]] || (r[1].split(" ").length === 1 ? r[1] : null);
       const val = cleanValue(r[2]).replace(/^(the|a|an) /, "");
       if (slot && val && val.split(" ").length <= 5 && !/^(it|that|this|you|yours|mine|same)$/.test(val)) facts.push({ type: "favorite", slot, value: val });
-    } else if (expect && expect.kind === "favorite" && m.tokens.length <= 6 && !m.isQuestion &&
-      !/^(hi|hey|hello|yo|ok|okay|lol|haha|thanks|thank you|bye|what|why|how|nothing|idk|dunno|no|yes|yeah|nope|sure|cool|nice|hmm|wow|same|good|great|oh|ah|um|uh|i do not|i don't|not really|never mind|nvm|stop|help)\b/.test(m.plain)) {
-      const val = cleanValue(m.plain.replace(/^(i think |probably |hmm |um |uh |well |my favorite is |i like |i love |its |it is |i would say |definitely |maybe )+/, "")).replace(/^(the|a|an) /, "");
-      const colorOk = expect.slot !== "color" || /\b(red|orange|yellow|green|blue|purple|violet|pink|black|white|gr[ae]y|brown|teal|cyan|turquoise|magenta|gold|golden|silver|beige|maroon|navy|lime|indigo|lavender|crimson|aqua|mint|peach|rainbow|lilac|coral|scarlet|emerald|sky|dark|light|pastel)\b/.test(val);
-      const sentence = /\b(is|are|was|were|am|have|has|had|does|did|will|would|can|should|could|must|got|get|went|go)\b/.test(val) || /^(my|i|we|you|it|this|that|he|she|they|there)\b/.test(val);
-      if (val && colorOk && !sentence && val.split(" ").length <= 4 && !/^(no|nothing|none|idk|i do not know|not sure|dunno|i dont know|what|why|you|yours|same|everything|all of them)$/.test(val)) facts.push({ type: "favorite", slot: expect.slot, value: val });
+    } else if (expect && expect.kind === "favorite") {
+      // the answer to "what's your favorite X?": "green like a creeper. what's yours?", "i told you, it's green"
+      const ans = m.plain.replace(/[.!?]+$/, "")
+        .replace(/[,.!?]*\s*(?:and |so )?(?:what about you|how about you|and you|wbu|hbu|what is yours|what are yours|what about yours|and yours|yours|what is your favorite(?: \w+)?|what is yours then|u|you)\s*$/, "")
+        .replace(/^(?:i (?:already )?told (?:you|u)(?: already)?|like i said|i said|i already said)(?: that| before)?[,.]?\s*/, "")
+        .replace(/[.!?]+$/, "").trim();
+      const COLOR = /\b(?:(?:dark|light|pastel|sky|navy|neon|bright|baby|lime|forest|hot|mint|royal|blood) )?(red|orange|yellow|green|blue|purple|violet|pink|black|white|gr[ae]y|brown|teal|cyan|turquoise|magenta|gold|golden|silver|beige|maroon|navy|lime|indigo|lavender|crimson|aqua|mint|peach|rainbow|lilac|coral|scarlet|emerald)\b/;
+      const toks = ans.split(/\s+/).filter(Boolean);
+      if (ans && toks.length <= 8 && !/^(hi|hey|hello|yo|ok|okay|lol|haha|thanks|thank you|bye|what|why|how|nothing|idk|dunno|no|yes|yeah|nope|sure|cool|nice|hmm|wow|same|good|great|oh|ah|um|uh|i do not|i don't|not really|never mind|nvm|stop|help|do you|can you|are you|tell me)\b/.test(ans)) {
+        let val = null;
+        if (expect.slot === "color") { const c = COLOR.exec(ans); if (c) val = c[0]; }
+        else {
+          val = cleanValue(ans.replace(/^(i think |probably |hmm |um |uh |well |my favorite is |my favorite \w+ is |i like |i love |its |it is |it has to be |i would say |definitely |maybe |easily |obviously )+/, "")
+            .replace(/\s+(obviously|of course|for sure|definitely|probably|i guess|i think|lol|haha|tbh|honestly|duh)$/, "")).replace(/^(the|a|an) /, "");
+          const sentence = /\b(is|are|was|were|am|have|has|had|does|did|will|would|can|should|could|must|got|get|went|go)\b/.test(val) || /^(my|i|we|you|it|this|that|he|she|they|there)\b/.test(val);
+          if (sentence || val.split(" ").length > 4) val = null;
+        }
+        if (val && !/^(no|nothing|none|idk|i do not know|not sure|dunno|i dont know|what|why|you|yours|same|everything|all of them|complicated|hard to say|hard to choose|too many|a lot|lots|many|depends|it depends|so many|good question)$/.test(val)) facts.push({ type: "favorite", slot: expect.slot, value: val });
+      }
     }
 
     // likes / dislikes (not "I like you", which is about Pip)
-    if ((r = /\bi (?:really |absolutely |totally |also |just |kinda |kind of |sort of |truly )?(?:like|love|enjoy|adore|am into|am obsessed with|am a fan of|am a big fan of) ([a-z0-9][^.!?,]{1,40})/.exec(t))) {
+    if ((r = /\bi (?:really |absolutely |totally |also |just |kinda |kind of |sort of |truly |so |super |literally |lowkey |low key |still |especially )*(?:like|love|enjoy|adore|am into|am (?:really |so |kind of |kinda |super |totally |literally |lowkey |low key )*(?:obsessed with|into|addicted to|hooked on|a (?:big |huge )?fan of)) ([a-z0-9][^.!?,]{1,40})/.exec(t))) {
       let v = cleanValue(r[1]);
       if (/^to /.test(v)) v = v.replace(/^to /, "").replace(/^(\w+?)(e?)\b/, (w) => w) ;
       const pm = new RegExp("^my (?:little |baby |pet |new |cute )?(" + PET + ")$").exec(v);
@@ -166,6 +182,12 @@
     // people in their life
     if ((r = new RegExp("\\bmy (" + PEOPLE + ")(?:'s| s)? (?:name is|is named|is called|named|called) ([a-z]+)").exec(t))) {
       if (looksLikeName(r[2], raw, true)) facts.push({ type: "person", rel: r[1], name: properCase(r[2]) });
+    } else if ((r = new RegExp("\\bmy (" + PEOPLE + ") ([a-z]+)(?= (?:is|was|and|moved|lives|lived|said|says|told|went|goes|got|gets|has|had|likes|loves|hates|just|always|never|keeps|kept|texted|texts|called|calls|came|comes|left|broke|made|makes|helped|helps|does|did|can|could|will|would|thinks|wants|needs|who|from|at|in)\\b|$)").exec(t))) {
+      const w = r[2];
+      if (!ADVERB.test(w) && looksLikeName(w, raw, false) || (!ADVERB.test(w) && !NOT_NAME.has(w) && !P.nlp.STOP.has(w) && plausibleName(w) && new RegExp("\\b" + w.charAt(0).toUpperCase() + w.slice(1) + "\\b").test(raw)))
+        facts.push({ type: "person", rel: r[1], name: properCase(w), quiet: true });
+      else if (!ADVERB.test(w) && !NOT_NAME.has(w) && !P.nlp.STOP.has(w) && plausibleName(w) && w.length >= 3 && !(P.nlp.knownWord(w) && !NAMEISH.test(w)) && !/(ing|ed|ly|ness|ment|tion)$/.test(w))
+        facts.push({ type: "person", rel: r[1], name: properCase(w), quiet: true });
     }
 
     // job / school
@@ -179,8 +201,21 @@
     }
 
     // upcoming events worth asking about later
-    if ((r = /\b(?:i|we) (?:have|got|have got|will have|am having|are having) (?:a|an|my|our|the|this|that|some|another|a big|a huge|an important)? ?(big |huge |important |final |math |science |english |history |spanish |french |job |driving |piano |dance |soccer |football |basketball )?(test|exam|exams|quiz|interview|game|match|recital|appointment|date|presentation|party|trip|surgery|operation|competition|tournament|concert|audition|meeting|job interview|driving test|dentist appointment|doctor appointment|finals|midterm|midterms|essay|project|race|performance|show)\b(?:.*?\b(tomorrow|today|tonight|next week|this week|this weekend|on (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|next (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|later|soon|in \w+ days?))?/.exec(t))) {
-      facts.push({ type: "event", what: ((r[1] || "") + r[2]).trim(), when: r[3] || "soon" });
+    {
+      const NOUN = "tests?|exams?|quiz|quizzes|interview|game|match|recital|appointment|date|presentation|party|sleepover|trip|surgery|operation|competition|tournament|concert|audition|meeting|finals|midterms?|essay|project|race|performance|show|tryouts?|practice|lesson|vacation|holiday|flight|wedding|funeral|checkup|check up|playdate|camp|first day|big day|debate|speech|sats?";
+      const WHEN = "tomorrow|today|tonight|later today|next week|this weekend|this week|on the weekend|over the weekend|(?:on|next|this) (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|soon|in \\w+ days?";
+      const PLACE = { dentist: "dentist appointment", doctor: "doctor's appointment", doctors: "doctor's appointment", zoo: "trip to the zoo", beach: "beach trip", museum: "museum trip", movies: "movie night", movie: "movie night", "amusement park": "amusement park trip", "theme park": "theme park trip", "water park": "water park trip" };
+      const clean = (pre, noun) => {
+        const words = (pre || "").trim().split(/\s+/).filter((w) => w && !/^(of|lot|lots|bunch|really|very|so|super|kind|pretty|such|some|kinda|sorta|the|a|an|my|our|this|that|another|couple|few|going|gonna|to|hard|easy|difficult|scary|stupid|boring|dumb|annoying)$/.test(w));
+        return (words.join(" ") + " " + noun).trim();
+      };
+      const whenOf = (w) => (w ? w.replace(/^later today$/, "today").replace(/^(on|over) the weekend$/, "this weekend").replace(/^this (\w+day)$/, "on $1") : "soon");
+      if ((r = new RegExp("\\b(?:i|we) (?:have|got|have got|will have|am having|are having|have to do|need to do) (?:a |an |my |our |the |this |that |some |another )?((?:[a-z]+ ){0,3}?)(" + NOUN + ")\\b(?:.*?\\b(" + WHEN + ")\\b)?").exec(t)) ||
+          (r = new RegExp("\\bmy ((?:[a-z]+ ){0,3}?)(" + NOUN + ") is (?:on |)(" + WHEN + ")\\b").exec(t))) {
+        facts.push({ type: "event", what: clean(r[1], r[2]), when: whenOf(r[3]) });
+      } else if ((r = new RegExp("\\b(?:i am|we are) (?:going|goin|heading) (?:to|on) (?:a |an |the |my |our )?((?:[a-z]+ ){0,2}?)(" + NOUN + "|dentist|doctors?|zoo|beach|museum|movies?|amusement park|theme park|water park)\\b(?:.*?\\b(" + WHEN + ")\\b)?").exec(t)) && r[3]) {
+        facts.push({ type: "event", what: PLACE[r[2]] || clean(r[1], r[2]), when: whenOf(r[3]) });
+      }
     }
 
     // explicit "remember that ..."
@@ -229,10 +264,44 @@
       case "person": mem.people[f.rel] = f.name; break;
       case "job": mem.job = f.value; break;
       case "school": mem.school = f.value; break;
-      case "event": mem.events.push({ what: f.what, when: f.when, at: Date.now(), asked: false }); if (mem.events.length > 10) mem.events.shift(); break;
+      case "event": {
+        // the same event mentioned again (with a new day) replaces the old one
+        mem.events = mem.events.filter((e) => e.what !== f.what);
+        mem.events.push({ what: f.what, when: f.when, at: Date.now(), due: dueDate(f.when, Date.now()), asked: false });
+        if (mem.events.length > 10) mem.events.shift();
+        break;
+      }
       case "note": addUnique(mem.notes, f.value, 30); break;
     }
   }
+
+  // when an event probably happens: "tomorrow", "on friday", "next week"... (around noon that day)
+  const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  function dueDate(when, now) {
+    const d = new Date(now);
+    const day0 = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const at = (days, hour) => day0 + days * 864e5 + (hour === undefined ? 12 : hour) * 3600e3;
+    let r;
+    if (/^(today|later)$/.test(when)) return at(0, 15);
+    if (when === "tonight") return at(0, 21);
+    if (when === "tomorrow") return at(1);
+    if ((r = /^(?:on|next|this) (\w+)$/.exec(when)) && WEEKDAYS.includes(r[1])) {
+      let k = (WEEKDAYS.indexOf(r[1]) - d.getDay() + 7) % 7;
+      if (k === 0) k = 7;
+      return at(k);
+    }
+    if (when === "this weekend") return at(Math.max(1, (6 - d.getDay() + 7) % 7));
+    if (when === "this week") return at(2);
+    if (when === "next week") return at(7);
+    if ((r = /^in (\w+) days?$/.exec(when))) return at({ a: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, ten: 10 }[r[1]] || +r[1] || 3);
+    return now + 864e5; // "soon"
+  }
+  function dayWord(t) {
+    const a = new Date(), b = new Date(t);
+    const days = Math.round((new Date(b.getFullYear(), b.getMonth(), b.getDate()) - new Date(a.getFullYear(), a.getMonth(), a.getDate())) / 864e5);
+    return days <= 0 ? "today" : days === 1 ? "tomorrow" : "on " + U.capitalizeFirst(WEEKDAYS[b.getDay()]);
+  }
+  const dueOf = (e) => e.due || e.at + 864e5;
 
   // ---------- recall ----------
   function petText(p) { return p.name ? `your ${p.kind} ${p.name}` : `your ${p.kind}`; }
@@ -252,8 +321,8 @@
     if (mem.dislikes.length) parts.push(`you're not a fan of ${U.listJoin(mem.dislikes.slice(-3))}`);
     const ppl = Object.entries(mem.people).slice(-3).map(([k, v]) => `your ${k} is ${v}`);
     parts.push(...ppl);
-    const ev = mem.events.filter((e) => Date.now() - e.at < 14 * 864e5).slice(-2);
-    if (ev.length) parts.push(`you have ${U.listJoin(ev.map((e) => U.aOrAn(e.what) + " " + e.what + (e.when && e.when !== "soon" && Date.now() - e.at < 20 * 3600e3 ? " " + e.when : "")))} coming up`);
+    const ev = mem.events.filter((e) => dueOf(e) > Date.now() - 6 * 3600e3).slice(-2);
+    if (ev.length) parts.push(`you have ${U.listJoin(ev.map((e) => U.aOrAn(e.what) + " " + e.what + (e.when && e.when !== "soon" ? " " + dayWord(dueOf(e)) : "")))} coming up`);
     if (mem.notes.length) parts.push(`you asked me to remember that ${mem.notes[mem.notes.length - 1]}`);
     return parts;
   }
@@ -265,6 +334,22 @@
 
   // Answer questions about the user. Returns {text, expect?} or null.
   function recall(mem, m) {
+    // "what's my cat's name and what's my best friend's name?" -> answer both
+    const parts = m.plain.split(/\s+(?:and|also|plus)\s+(?=(?:what|whats|who|where|when|how|do you)\b)|[?]\s*/).map((x) => x.trim()).filter((x) => x.length > 3);
+    if (parts.length > 1) {
+      const answers = parts.map((x) => recallOne(mem, { plain: x, clean: x + "?", isQuestion: true })).filter(Boolean);
+      if (answers.length > 1) return { text: answers.map((a) => a.text).join(" "), expect: answers[answers.length - 1].expect };
+    }
+    // "and my best friend?" / "what about my sister?" right after a memory question
+    let f;
+    if ((f = new RegExp("^(?:and|what about|how about|and what about) my (" + PEOPLE + "|" + PET + ")(?:'s| s)?(?: name)?\\??$").exec(m.plain))) {
+      const w = f[1];
+      if (new RegExp("^(" + PET + ")$").test(w)) return recallOne(mem, { plain: `what is my ${w} name`, clean: "?", isQuestion: true });
+      return recallOne(mem, { plain: `what is my ${w} name`, clean: "?", isQuestion: true });
+    }
+    return recallOne(mem, m);
+  }
+  function recallOne(mem, m) {
     const t = " " + m.plain.replace(/[?!.]/g, "") + " ";
     let r;
     const ask = /\b(what|whats|what is|do you know|do you remember|remember|tell me|who|where|when|how old|which)\b/.test(t);
@@ -297,7 +382,7 @@
     }
     if ((r = new RegExp("\\b(?:what is|whats|do you (?:know|remember)|what was) my (" + PEOPLE + ")(?:'s| s|s)? name\\b").exec(t))) {
       const n = mem.people[r[1]];
-      return n ? { text: `Your ${r[1]}'s name is ${n}.` } : { text: `You haven't told me your ${r[1]}'s name yet.` };
+      return n ? { text: U.pick([`Your ${r[1]}'s name is ${n}.`, `${n}! Your ${r[1]}. 😊`]) } : { text: `Hmm, I don't think you've told me your ${r[1]}'s name yet. What is it?`, expect: { kind: "personname", rel: r[1] } };
     }
     if (/\bwhat do i (?:like|love|enjoy)\b|\bwhat are my (?:hobbies|interests)\b|\bwhat things do i like\b/.test(t)) {
       if (mem.likes.length) return { text: `You told me you like ${U.listJoin(mem.likes.slice(-6))}.` };
@@ -343,23 +428,46 @@
   }
 
   // Something from memory worth bringing up when the user comes back (Replika-style follow-ups)
+  // Returns { text, expect } so the brain knows what the next answer is about.
   function followUp(mem) {
-    const ev = mem.events.find((e) => !e.asked && Date.now() - e.at > 3 * 3600e3 && Date.now() - e.at < 14 * 864e5);
-    if (ev) { ev.asked = true; return `Last time you mentioned your ${ev.what}${ev.when && ev.when !== "soon" ? " (" + ev.when + ")" : ""}. How did it go?`; }
-    const mood = mem.moods[mem.moods.length - 1];
-    if (mood && /sad|lonely|anxious|angry|sick|tired/.test(mood.label) && Date.now() - mood.at > 3 * 3600e3 && Date.now() - mood.at < 7 * 864e5 && !mood.asked) {
-      mood.asked = true;
-      return { sad: "Last time you were feeling down. Are you doing any better today?", lonely: "Last time you felt a bit lonely. How are you feeling today?",
-        anxious: "Last time you were stressed. Did things calm down?", angry: "Last time something made you really angry. Is it any better now?",
-        sick: "Last time you weren't feeling well. Are you feeling better?", tired: "Last time you were really tired. Did you get some rest?" }[mood.label];
+    const now = Date.now();
+    const ev = mem.events.find((e) => !e.asked && now - e.at > 3 * 3600e3 && now - e.at < 14 * 864e5 && dueOf(e) <= now);
+    if (ev) {
+      ev.asked = true;
+      return { text: U.pick([`How did your ${ev.what} go? I was rooting for you! 🍀`, `Last time you told me about your ${ev.what}. How did it go?`, `I've been wondering: how did your ${ev.what} go?`]),
+        expect: { kind: "followup", about: "event", what: ev.what } };
     }
-    const th = (mem.threads || []).slice().reverse().find((x) => !x.asked && Date.now() - x.at > 3 * 3600e3 && Date.now() - x.at < 10 * 864e5);
+    const soon = mem.events.find((e) => !e.wished && e.due && e.due > now && e.due - now < 30 * 3600e3 && now - e.at > 3 * 3600e3);
+    if (soon) {
+      soon.wished = true;
+      return { text: `Your ${soon.what} is ${dayWord(soon.due)}, right? Good luck! 🍀 Are you feeling ready?`, expect: { kind: "followup", about: "upcoming", what: soon.what } };
+    }
+    const mood = mem.moods[mem.moods.length - 1];
+    if (mood && /sad|lonely|anxious|angry|sick|tired/.test(mood.label) && now - mood.at > 3 * 3600e3 && now - mood.at < 7 * 864e5 && !mood.asked) {
+      mood.asked = true;
+      return { text: { sad: "Last time you were feeling down. Are you doing any better today?", lonely: "Last time you felt a bit lonely. How are you feeling today?",
+        anxious: "Last time you were stressed. Did things calm down?", angry: "Last time something made you really angry. Is it any better now?",
+        sick: "Last time you weren't feeling well. Are you feeling better?", tired: "Last time you were really tired. Did you get some rest?" }[mood.label],
+        expect: { kind: "followup", about: "mood", label: mood.label } };
+    }
+    const th = (mem.threads || []).slice().reverse().find((x) => !x.asked && now - x.at > 3 * 3600e3 && now - x.at < 10 * 864e5);
     if (th) {
       th.asked = true;
-      return th.valence < 0 ? `Last time you told me about your ${th.who}, and it sounded tough. How are things now?` : `Last time you told me about your ${th.who}! Any news?`;
+      return { text: th.valence < 0 ? `Last time you told me about your ${th.who}, and it sounded tough. How are things now?` : `Last time you told me about your ${th.who}! Any news?`,
+        expect: { kind: "followup", about: "thread", who: th.who, valence: th.valence } };
     }
-    if (mem.pets.length && U.chance(0.3)) { const p = U.pick(mem.pets); return `How's ${petText(p)} doing?`; }
+    if (mem.pets.length && U.chance(0.3)) {
+      const p = U.pick(mem.pets);
+      return { text: `How's ${petText(p)} doing?`, expect: { kind: "followup", about: "pet", pet: p.name || "your " + p.kind } };
+    }
     return null;
+  }
+  // "it's not until next week" -> ask again after the new date
+  function rearmEvent(mem, what, when) {
+    const e = mem.events.find((x) => x.what === what);
+    if (!e) return;
+    e.asked = false; e.wished = true; e.at = Date.now();
+    if (when) { e.when = when; e.due = dueDate(when, Date.now()); } else e.due = Date.now() + 864e5;
   }
 
   // ---------- persistence ----------
@@ -375,5 +483,5 @@
     try { if (storage) storage.setItem(KEY, JSON.stringify(mem)); } catch (e) { /* ignore */ }
   }
 
-  P.memory = { noteThread, blank, extract, apply, recall, forget, followUp, summary, load, save, looksLikeName, currentAge, petText, SLOTS };
+  P.memory = { noteThread, blank, extract, apply, recall, forget, followUp, rearmEvent, dueDate, summary, load, save, looksLikeName, currentAge, petText, SLOTS };
 })(typeof window !== "undefined" ? (window.Pip = window.Pip || {}) : (global.Pip = global.Pip || {}));

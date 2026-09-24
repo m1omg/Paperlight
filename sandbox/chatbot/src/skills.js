@@ -9,8 +9,15 @@
   // take items from a list without repeating until the list is used up
   function deal(state, key, list) {
     const bag = (state.bags = state.bags || {});
-    if (!bag[key] || !bag[key].length) bag[key] = U.shuffle(list.map((_, i) => i));
-    return list[bag[key].pop()];
+    const recent = state.recent || [];
+    for (let tries = 0; tries < list.length; tries++) {
+      if (!bag[key] || !bag[key].length) bag[key] = U.shuffle(list.map((_, i) => i));
+      const item = list[bag[key].pop()];
+      // the same joke can sit in two bags ("joke" and "mcjoke"): skip anything said lately
+      const txt = typeof item === "string" ? item : Array.isArray(item) ? item[0] : null;
+      if (!txt || !recent.some((r) => r.includes(txt.slice(0, 40)))) return item;
+    }
+    return list[Math.floor(U.rand() * list.length)];
   }
   const norm = (s) => s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
   function matchesAnswer(text, answers) {
@@ -23,6 +30,7 @@
     const st = c.state;
     switch (kind) {
       case "joke": return { text: deal(st, "joke", C.jokes), intent: "joke" };
+      case "mcjoke": return { text: deal(st, "mcjoke", C.mcJokes), intent: "mcjoke" };
       case "fact": return { text: pick(["Here's one: ", "Fun fact: ", "Did you know? ", ""]) + deal(st, "fact", C.facts) };
       case "riddle": {
         const r = deal(st, "riddle", C.riddles);
