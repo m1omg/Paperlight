@@ -38,6 +38,7 @@ function pack(r) {
       const out = [];
       try {
         const { session, text } = JSON.parse(body || "{}");
+        if (typeof session !== "string" || typeof text !== "string") throw new Error("send JSON {session, text}");
         let s = sessions.get(session);
         if (!s) {
           const store = {};

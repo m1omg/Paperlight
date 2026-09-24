@@ -34,7 +34,7 @@
   const PET = "dogs?|cats?|pupp(?:y|ies)|kittens?|kitt(?:y|ies)|hamsters?|rabbits?|bunn(?:y|ies)|fish|goldfish|parrots?|birds?|" +
     "turtles?|tortoises?|snakes?|lizards?|horses?|guinea pigs?|ferrets?|gerbils?|mice|mouse|rats?|chickens?|ducks?|geckos?|axolotls?|frogs?|pigs?|goats?|cows?|budgies?|cockatiels?";
   const PEOPLE = "mom|mum|mother|dad|father|sister|brother|best friend|friend|girlfriend|boyfriend|wife|husband|son|daughter|" +
-    "grandma|grandmother|grandpa|grandfather|aunt|uncle|cousin|teacher|boss|crush|partner|roommate|neighbor|neighbour|stepmom|stepdad|baby brother|baby sister|little brother|little sister|big brother|big sister|twin";
+    "grandma|grandmother|grandpa|grandfather|grandson|granddaughter|grandchild|niece|nephew|godson|goddaughter|stepson|stepdaughter|aunt|uncle|cousin|teacher|boss|crush|partner|roommate|neighbor|neighbour|stepmom|stepdad|baby brother|baby sister|little brother|little sister|big brother|big sister|twin";
   const JOBS = new Set(("student teacher programmer developer coder software engineer nurse doctor engineer artist designer " +
     "writer author gamer youtuber streamer chef cook baker driver scientist lawyer musician singer dancer actor actress " +
     "photographer mechanic electrician plumber carpenter farmer pilot soldier firefighter police officer cop cashier " +
@@ -97,13 +97,22 @@
 
     // name
     const expectingName = expect && expect.kind === "name";
-    if ((r = /\b(?:my name is|my names|my name s|name is|i am called|call me|you can call me|people call me|everyone calls me|i go by)\s+([a-z][a-z'-]*)(?:\s+([a-z][a-z'-]*))?/.exec(t)) &&
+    if ((r = /\b(?:my name is|my names|my name s|(?<!\b(?:his|her|its|their|the|\w+'s|\w+s) )name is|i am called|call me|you can call me|people call me|everyone calls me|i go by)\s+([a-z][a-z'-]*)(?:\s+([a-z][a-z'-]*))?/.exec(t)) && !/\b\w+'?s name is\b/.test(t.replace(/\bmy name is\b/g, "")) &&
       !/\b(do not|don't|never|dont) call me\b/.test(t) && !/\bcall me (later|back|tomorrow|when|if|a|an|the|maybe|sometime)\b/.test(t)) {
       if (looksLikeName(r[1], raw, true) && r[1] !== "not") facts.push({ type: "name", value: properCase(r[1]) });
     } else if ((r = /^\s*(?:i am|im|it is|its|this is|hi i am|hello i am|hey i am|hi im|hey im|hello im)\s+([a-z][a-z'-]*)\s*[.!]?\s*$/.exec(m.plain)) && looksLikeName(r[1], raw, expectingName)) {
       facts.push({ type: "name", value: properCase(r[1]) });
+    } else if ((r = /\b(?:hi+|hello+|hey+|heyy+|hii+|yo)[!,.]*\s+(?:i am|im)\s+([a-z][a-z'-]*)\b/.exec(t)) && looksLikeName(r[1], raw, true) && !NOT_NAME.has(r[1])) {
+      facts.push({ type: "name", value: properCase(r[1]) });
+    } else if ((r = /^\s*(?:no+|nope|noo+)[!,. ]+(?:i am|im|my name is|it is|its)\s+([a-z][a-z'-]*)\b/.exec(t)) && looksLikeName(r[1], raw, true) && !NOT_NAME.has(r[1])) {
+      facts.push({ type: "name", value: properCase(r[1]) });   // "NOOO im lily!! peanut is my HAMSTER"
+    } else if ((expectingName || /^\s*(yo|hey|hi|hello|sup)\b/.test(t)) && (r = /\b(?:it is|its|i am|im|call me)\s+([a-z][a-z'-]*)(?:\s*,?\s*(\d{1,2}))?\s*[.!]*$/.exec(t)) && looksLikeName(r[1], raw, true) && !NOT_NAME.has(r[1])) {
+      facts.push({ type: "name", value: properCase(r[1]) });   // "i did tho 🙄 its LILY", "yo its tyler, 13"
+      if (r[2]) facts.push({ type: "age", value: +r[2] });
     } else if ((r = /\b(?:hi|hello|hey),?\s+(?:i am|im)\s+([a-z][a-z'-]*)\b/.exec(t)) && looksLikeName(r[1], raw, expectingName)) {
       facts.push({ type: "name", value: properCase(r[1]) });
+    } else if ((r = /(?:^|[.!?]\s+)(?:i'?m|i am|im|my name is|it'?s|this is)\s+([A-Za-z][a-z'-]{1,20})\s*[.!]+(?=\s|$)/i.exec(raw)) && looksLikeName(r[1], raw, true) && !NOT_NAME.has(r[1].toLowerCase()) && !JOBS.has(r[1].toLowerCase())) {
+      facts.push({ type: "name", value: properCase(r[1].toLowerCase()) });   // "Good afternoon, Pip. I'm Margaret. I used to be a teacher."
     } else if ((r = /^\s*(?:(?:hi|hey|hello|yo|ok|so)\s+)?([a-z][a-z'-]{1,20}) here\b/.exec(m.plain)) && !/^(its|it|me|im|i|we|you|nobody|someone|everyone|not)$/.test(r[1]) && looksLikeName(r[1], raw, false)) {
       facts.push({ type: "name", value: properCase(r[1]) });   // "Dan here. I'm 34..."
     } else if ((r = /\bmy name\b.*?\b(?:it'?s|its|it is)\s+([a-z][a-z'-]*)\b/.exec(t)) && looksLikeName(r[1], raw, true)) {
@@ -119,7 +128,8 @@
 
     // age
     if ((r = /\bi am (\d{1,3})(?: years? old| yrs? old| yo| y\/o)?\s*(?:$|[.!,;]| and| but| now| today| lol| [a-z]+ [a-z]+)/.exec(t)) || (r = /\b(\d{1,2}) (?:years? old|yrs? old|yo)\b/.exec(t)) || (r = /\bi am (\d{1,3}) years? old\b/.exec(t)) ||
-      (r = /\bmy age is (\d{1,3})\b/.exec(t)) || (r = /\bi (?:just )?turned (\d{1,3})\b/.exec(t)) || (expect && expect.kind === "age" && (r = /^\s*(?:i am |im )?(\d{1,3})\b/.exec(m.plain)))) {
+      (r = /\bmy age is (\d{1,3})\b/.exec(t)) || (r = /\bi (?:just )?turned (\d{1,3})\b/.exec(t)) || (expect && (expect.kind === "age" || (expect.q && /how old are you/i.test(expect.q))) && (r = /^\s*(?:i am |im )?(\d{1,3})\b/.exec(m.plain))) ||
+      (mem._askedAge && (r = /^\s*(?:i am |im |i'm )?(\d{1,2})(?: years old| yo)?\s*[.!]*$/.exec(m.plain)))) {
       const a = parseInt(r[1], 10);
       if (a >= 3 && a <= 120) facts.push({ type: "age", value: a });
     }
@@ -141,7 +151,8 @@
     else if ((r = /\bmy (?:favorite|fav|favourite|fave) ([a-z]+(?: [a-z]+)?) (?:is|are|would be|has to be|must be) ([^.!?,]{1,40})/.exec(t)) ||
       (r = /\b([a-z][a-z' -]{1,30}) (?:is|are) my (?:favorite|fav|favourite|fave) ([a-z]+(?: [a-z]+)?)\b/.exec(t)) && (r = [r[0], r[2], r[1]])) {
       const slot = SLOTS[r[1].trim()] || SLOTS[r[1].split(" ")[0]] || (r[1].split(" ").length === 1 ? r[1] : null);
-      const val = cleanValue(r[2]).replace(/^(the|a|an) /, "");
+      let val = cleanValue(r[2].replace(/^.*\b(cuz|because|cause|since|and|but|so|coz|bc)\s+/, "")).replace(/^(the|a|an) /, "");
+      if (slot === "color") { const cm = /\b(?:(?:dark|light|pastel|sky|navy|neon|bright|baby|lime|forest|hot|mint|royal) )?(red|orange|yellow|green|blue|purple|violet|pink|black|white|gr[ae]y|brown|teal|cyan|turquoise|magenta|gold|silver|lavender|lilac|rainbow|aqua|mint|maroon|indigo)\b/.exec(val); if (cm) val = cm[0]; }
       if (slot && val && val.split(" ").length <= 5 && !/^(it|that|this|you|yours|mine|same)$/.test(val)) facts.push({ type: "favorite", slot, value: val });
     } else if (expect && expect.kind === "favorite") {
       // the answer to "what's your favorite X?": "green like a creeper. what's yours?", "i told you, it's green"
@@ -181,7 +192,7 @@
     }
 
     // pets
-    if ((r = new RegExp("\\bi (?:have|got|own|just got|adopted) (?:a|an|one|two|three|four|five|\\d+|some|a new|a little|a baby|a pet)? ?(?:little |baby |pet |new |cute |big |small |black |white |brown |orange |grey |gray )?(" + PET + ")\\b(?:,? (?:named|called|whose name is|his name is|her name is) ([a-z]+))?").exec(t))) {
+    if ((r = new RegExp("\\bi (?:have|got|own|just got|adopted) (?:a|an|one|two|three|four|five|\\d+|some|a new|a little|a baby|a pet)? ?(?:(?:little|baby|pet|new|cute|big|small|black|white|brown|orange|grey|gray|real|fluffy|fat|tiny|old|golden|fancy) )*(" + PET + ")\\b(?:[,.!]? (?:named|called|whose name is|his name is|her name is|its name is|he'?s called|she'?s called|and (?:his|her|its) name is) ([a-z]+))?").exec(t))) {
       facts.push({ type: "pet", kind: singularPet(r[1]), name: r[2] && looksLikeName(r[2], raw, true) ? properCase(r[2]) : null });
     }
     if ((r = new RegExp("\\bmy (" + PET + ")(?:'s| s|s)? (?:name is|is named|is called|named|called) ([a-z]+)").exec(t))) {
@@ -190,6 +201,10 @@
       const w = r[2];
       if (!ADVERB.test(w) && !NOT_NAME.has(w) && !P.nlp.STOP.has(w) && plausibleName(w) && w.length >= 3 && (looksLikeName(w, raw, false) || NAMEISH.test(w) || PETNAMEISH.test(w)))
         facts.push({ type: "pet", kind: singularPet(r[1]), name: properCase(w), quiet: true });
+    }
+
+    if ((r = new RegExp("\\b([a-z]+) is my (?:pet |little |baby )?(" + PET + ")\\b").exec(t)) && !NOT_NAME.has(r[1]) && !P.nlp.STOP.has(r[1]) && plausibleName(r[1]) && r[1].length >= 3) {
+      facts.push({ type: "pet", kind: singularPet(r[2]), name: properCase(r[1]) });   // "peanut is my hamster"
     }
 
     // people in their life
@@ -202,6 +217,16 @@
       else if (!ADVERB.test(w) && !NOT_NAME.has(w) && !P.nlp.STOP.has(w) && plausibleName(w) && w.length >= 3 && !(P.nlp.knownWord(w) && !NAMEISH.test(w)) && !/(ing|ed|ly|ness|ment|tion)$/.test(w))
         facts.push({ type: "person", rel: r[1], name: properCase(w), quiet: true });
     }
+
+    if ((r = /\bmy (grandchildren|grandkids|kids|children|sons|daughters|sisters|brothers|cousins|best friends|friends|siblings)(?: are| are called| are named|,)? ([a-z]+)(?: \d+)?,? (?:and|&) ([a-z]+)\b/.exec(t)) && looksLikeName(r[2], raw, true) && looksLikeName(r[3], raw, true) && !NOT_NAME.has(r[2]) && !NOT_NAME.has(r[3])) {
+      facts.push({ type: "person", rel: r[1], name: properCase(r[2]) + " and " + properCase(r[3]) });
+    }
+    // "I used to be a teacher", "I'm a retired nurse"
+    if ((r = /\bi (?:used to be|was|worked as|am retired from being|retired as) (?:a |an )([a-z]+(?: [a-z]+)?)\b/.exec(t)) && JOBS.has(r[1].split(" ").pop())) {
+      facts.push({ type: "job", value: "retired " + r[1].split(" ").pop() });
+    }
+    // "I grow tomatoes and roses" -> gardening
+    if (/\bi (grow|plant|garden)\b|\bmy garden\b/.test(t)) facts.push({ type: "like", value: "gardening", quiet: true });
 
     // job / school
     if ((r = /\bi (?:am|work as) (?:a|an) ([a-z]+(?: [a-z]+)?)\b/.exec(t)) || (r = /(?:^|[,;] ?|\band )(?:i'?m |i am |im )?(?:a |an )?((?:software |web |game |senior |junior |high school |primary school |elementary school |retired )?(?:developer|engineer|programmer|teacher|nurse|doctor|designer|student|lawyer|accountant|chef|mechanic|electrician|artist|writer|musician|scientist|manager|firefighter|pilot))\b(?=\s*(?:$|[,.;!]|and\b))/.exec(m.clean.toLowerCase()))) {
@@ -262,7 +287,7 @@
     const stem = (w) => w.replace(/(ing|ed|es|s)$/, "");
     const ws = words.map(stem);
     let best = null, bestScore = 0;
-    (mem.diary || []).forEach((e, i) => {
+    (mem.diary || []).filter((e) => Date.now() - e.at > 1500).forEach((e, i) => {
       const ew = e.text.toLowerCase().replace(/[^a-z0-9' ]/g, " ").split(/\s+/).map(stem);
       const score = ws.filter((w) => ew.includes(w)).length + i * 0.001;
       if (score > bestScore) { best = e; bestScore = score; }
@@ -309,8 +334,8 @@
       case "job": mem.job = f.value; break;
       case "school": mem.school = f.value; break;
       case "event": {
-        // the same event mentioned again (with a new day) replaces the old one
-        mem.events = mem.events.filter((e) => e.what !== f.what);
+        // the same event mentioned again (with a new day) replaces the old one ("big game" and "game" are the same)
+        mem.events = mem.events.filter((e) => !(e.what === f.what || ((e.what.endsWith(" " + f.what) || f.what.endsWith(" " + e.what)) && Date.now() - e.at < 7 * 864e5)));
         mem.events.push({ what: f.what, when: f.when, at: Date.now(), due: dueDate(f.when, Date.now()), asked: false });
         if (mem.events.length > 10) mem.events.shift();
         break;
@@ -428,6 +453,16 @@
       if (p) return { text: `You told me you have ${U.aOrAn(kind)} ${kind}, but not its name. What's it called?`, expect: { kind: "petname", pet: kind } };
       return { text: `You haven't told me about ${U.aOrAn(kind)} ${kind} yet! Do you have one?` };
     }
+    if ((r = /\b(?:names? of my|remember my|know my|who (?:are|is) my) (grandchildren|grandkids|kids|children|sons|daughters|sisters|brothers|cousins|best friends|friends|siblings)\b/.exec(t)) && mem.people[r[1]]) {
+      return { text: `Your ${r[1]} are ${mem.people[r[1]]}! 😊` };
+    }
+    if ((r = /\bwhen (?:do|am|will) i (?:fly|leave|go|travel|have)\b.*?\b(?:to )?([a-z]+)\s*$/.exec(t.trim()))) {
+      const key = r[1];
+      const ev = mem.events.find((e) => e.what.toLowerCase().includes(key));
+      const note = mem.notes.find((n) => n.toLowerCase().includes(key));
+      if (ev) return { text: `Your ${ev.what} is ${ev.when && ev.when !== "soon" ? (/month/.test(ev.when) ? ev.when : dayWord(dueOf(ev))) : "coming up soon"}! ${U.pick(["Exciting! ✈️", "Not long now!"])}` };
+      if (note) return { text: `You told me: ${note}. 📝` };
+    }
     if ((r = new RegExp("\\b(?:what is|whats|do you (?:know|remember)|what was) my (" + PEOPLE + ")(?:'s| s|s)? name\\b").exec(t))) {
       const n = mem.people[r[1]];
       return n ? { text: U.pick([`Your ${r[1]}'s name is ${n}.`, `${n}! Your ${r[1]}. 😊`]) } : { text: `Hmm, I don't think you've told me your ${r[1]}'s name yet. What is it?`, expect: { kind: "personname", rel: r[1] } };
@@ -458,7 +493,7 @@
       return { text: `${today ? "So far we talked about" : "Last time we talked about"} ${U.listJoin(labels.slice(0, 5).reverse())}! 😊` };
     }
     // "do you remember what I was cooking?" -> search what they told Pip
-    if (/\b(do you remember|remember|what) (what|where|who|when|how|which|why)? ?(i|we) (was|were|am|did|had|have|said|told|went|ate|made|cooked|played|watched|got|bought)\b|\bwhat (was|were) i (doing|cooking|making|playing|watching|reading|eating|building|drawing)\b|\bwhat did i (tell you|say) about\b|\bwhat did i (have|eat|do|make|cook|watch|play|buy|get|build|draw)\b/.test(t) && !/\bwhat did i (just )?say\s*$/.test(t)) {
+    if (/(^|[.!?]\s*)\s*(do you remember|remember|what) (what|where|who|when|how|which|why)? ?(i|we) (was|were|am|did|had|said|told|went|ate|made|cooked|played|watched|got|bought)\b|(^|[.!?]\s*)\s*what (was|were) i (doing|cooking|making|playing|watching|reading|eating|building|drawing)\b|\bwhat did i (tell you|say) about\b|(^|[.!?]\s*)\s*what did i (have|eat|do|make|cook|watch|play|buy|get|build|draw)\b/.test(m.plain.trim()) && !/\bwhat did i (just )?say\s*$/.test(t) && !/\bguess what\b/.test(t)) {
       const hit = searchDiary(mem, m.plain);
       const old = hit && mem.sessionStart && hit.at < mem.sessionStart && /\b(tonight|tomorrow|going to|gonna|will|cooking|making|planning|trying)\b/i.test(hit.text);
       if (hit) return { text: U.pick([`You told me: "${hit.text}" 😊`, `I remember! You said: "${hit.text}"`]).replace(/([^.!?])"/, '$1."') + (old ? " " + U.pick(["How did it go?", "How did it turn out?"]) : "") };
@@ -478,7 +513,7 @@
   // "forget ..." commands
   function forget(mem, m) {
     const t = m.plain;
-    if (/\b(forget|delete|erase|wipe|clear) (everything|all|all about me|all of it|my data|your memory|everything about me|me)\b/.test(t)) return { all: true };
+    if (/^(?:(?:ok|okay|pip|please|pls|can you|could you|i want you to|i want to)\s+)*(forget|delete|erase|wipe|clear|reset) (everything|all|all about me|all of it|my data|your memory|everything about me|me|what you know about me)\b(?!.*\b(worlds?|files?|photos?|pictures?|account|minecraft|game|roblox|messages)\b)/.test(t) && !/\b(do not|don'?t|dont|never|won'?t|will you|you will)\b/.test(t)) return { all: true };
     let r;
     if ((r = /\bforget (?:my|that i|about my) (name|age|birthday|location|job|school|pets?|likes|favorites)\b/.exec(t))) {
       const k = r[1];

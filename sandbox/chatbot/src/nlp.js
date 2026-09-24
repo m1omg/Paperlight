@@ -59,7 +59,7 @@
     "failed fail sadness sorrow heartbreak dumped rejected", 1);
   addEmo("lonely", "lonely alone isolated lonesome friendless ignored excluded unloved unwanted invisible", 1.2);
   addEmo("lonely", "miss missing", 0.7);
-  addEmo("sad", "bad tough guilty ashamed embarrassed homesick regret sadder saddest crap cries garbage", 0.8);
+  addEmo("sad", "bad tough guilty ashamed embarrassed homesick regret sadder saddest crap cries garbage divorce divorced divorcing", 0.8);
   addEmo("angry", "whatever ugh pissed", 0.6);
   addEmo("angry", "unfair jealous", 0.9);
   addEmo("anxious", "scary awkward freaking panicky shaky", 0.8);
@@ -172,6 +172,10 @@
       let w = squeeze(core);
       if (LAUGH.test(w)) { out.push("haha"); continue; }
       if (w === "y" && /^(lev|lvl|=|-?\d|coord|axis|value|is|of)/.test(raw[ri + 1] || "")) { out.push("y"); continue; }
+      // "ya" is usually "yeah" ("ya ok", "ya kinda"), but "see ya" / "love ya" means "you"
+      if (w === "ya") { out.push(/^(see|love|thank|thanks|got|miss|bet|meet|hear|catch|told|tell|call|text|help|beat|want|need|like|hate|gotcha)$/.test(raw[ri - 1] || "") || /^(know|are|were|doing|think|want|like|got|have|wanna|gonna)$/.test(raw[ri + 1] || "") ? "you" : "yeah"); continue; }
+      if (w === "imma" || w === "ima") { out.push("i", "am", "going", "to"); continue; }
+      if (w === "aight" || w === "ight") { out.push("alright"); continue; }
       if (SLANG[w] !== undefined) { out.push(...SLANG[w].split(" ")); continue; }
       if (opts.spell !== false && /^[a-z]+$/.test(w)) {
         const fixed = correctWord(w);
@@ -212,6 +216,9 @@
       if (!e) continue;
       // "my best friend" / "have fun at school" style phrases are not feelings
       if (tokens[i] === "best" && /^(friends?|part|thing|way|mate|buddy)$/.test(tokens[i + 1] || "")) continue;
+      // "I'm afraid I don't play" is politeness, and "not very good with computers" is modesty
+      if (tokens[i] === "afraid" && tokens[i - 1] === "am" && (!tokens[i + 1] || /^(that|i|not|so|we|it|you|there|this)$/.test(tokens[i + 1]))) continue;
+      if (tokens[i] === "good" && /^(with|at)$/.test(tokens[i + 1] || "")) continue;
       let w = e.w;
       let neg = false;
       // "not happy" is negated, but in "I don't know, it's fun" the "not" belongs to "know"

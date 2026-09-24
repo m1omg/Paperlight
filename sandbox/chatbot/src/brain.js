@@ -159,6 +159,7 @@
 
     // ---------- main entry ----------
     async reply(text) {
+      if (text === undefined || text === null) text = "";
       const st = this.state, mem = this.mem;
       st.turn++;
       mem.messages = (mem.messages || 0) + 1;
@@ -173,6 +174,14 @@
       }
       text = String(text).replace(new RegExp("[,\\s]+" + bn + "[?!.]*$", "i"), (x) => x.replace(/[^?!.]/g, ""));
       this.state.greetedNow = !!greetBack;
+      // "Thank you. How much would I pay?" / "That isn't what I asked, but never mind. My flight..." -> answer the rest
+      let leadAck = "";
+      const courtesy = /^\s*(thank you( so much| very much)?( for [^.!?]{1,40})?|thanks( a lot| so much)?( for [^.!?]{1,40})?|that('?s| is|was)? (not|n'?t) what i (asked|meant|said)[^.!?]{0,30}|(that|this) (doesn'?t|does not) make (any )?sense|oh dear|let'?s talk about something else|never ?mind|ok(ay)?,? never ?mind|i see|that'?s (lovely|nice|great|wonderful|interesting)|how (lovely|nice|interesting|wonderful))[,.!]+\s+(?=\S+\s+\S+\s+\S)/i.exec(text);
+      if (courtesy) {
+        const l = courtesy[0].toLowerCase();
+        leadAck = /^thank/.test(l) ? pick(["You're welcome! ", "Happy to help! ", ""]) : /not what i|make (any )?sense/.test(l) ? pick(["Sorry about that! ", "Oops, my mistake! "]) : /something else/.test(l) ? "Sure! " : "";
+        text = text.slice(courtesy[0].length);
+      }
       // "lol ok what about iron?" -> "what about iron?": laughs and fillers in front are just reactions
       for (let i = 0; i < 3; i++) {
         text = text.replace(/^\s*(?:anyway(?:s)?|so|well|ok so|okay so|btw|by the way|also|um+|uh+|hmm+|oh and|and|ok|okay|alright)\s*[,.!]?\s+(?=\S.{3,})/i, "")
@@ -199,14 +208,16 @@
       } else if (m.empty) out = { text: pick(["You can type anything! 😊", "Hm? Say something! I'm listening.", "👀"]), source: "empty" };
       else if (m.tokens.length === 1 && m.tokens[0].length >= 5 && !N.knownWord(m.tokens[0]) && !MEM.looksLikeName(m.tokens[0], m.clean, true) && !(expect && expect.kind === "name") && !st.game)
         out = { text: pick(["Hmm? I think your keyboard sneezed. 😄", "Did a cat just walk across your keyboard? 🐱⌨️", "That looks like a secret code! 🕵️ What does it mean?"]), source: "gibberish" };
-      else if (/^\s*-?\d+(\.\d+)?\s*$/.test(text) && !(expect && /age|game/.test(expect.kind)) && !st.game) out = { text: `${text.trim()}? 🔢 Is that a special number?`, source: "number" };
+      else if (/^\s*-?\d+(\.\d+)?\s*$/.test(text) && !(expect && /age|game/.test(expect.kind)) && !st.game && !/\bhow (old|many|much)\b|\?\s*$/i.test((st.history.slice().reverse().find((h) => h.role === "bot") || { text: "" }).text)) out = { text: `${text.trim()}? 🔢 Is that a special number?`, source: "number" };
 
       // 0) safety first (kids use Pip too): fixed, careful replies; nothing from these messages is stored
       if (!out && P.safety) {
         const sf = P.safety.check(m, st, mem);
         if (sf) {
           out = { text: sf.text, source: sf.source, expect: sf.care ? { kind: "vent", emotion: "sad" } : null };
-          if (sf.care) { st.care = sf.care; st.careKind = sf.kind; st.ventTurns = Math.max(st.ventTurns || 0, 4); mem.careFollow = { at: Date.now(), asked: false, kind: sf.kind }; }
+          const RANK = { overdose: 6, friendcrisis: 5, crisis: 5, abuse: 5, sextortion: 5, meetstranger: 5, grooming: 4, runaway: 4, neglect: 4, eating: 2, cyberbully: 1, hurt: 1 };
+          if (sf.care && (!(st.care > 0) || (RANK[sf.kind] || 0) >= (RANK[st.careKind] || 0))) { st.careKind = sf.kind; mem.careFollow = { at: Date.now(), asked: false, kind: sf.kind }; }
+          if (sf.care) { st.care = Math.max(st.care || 0, sf.care); st.ventTurns = Math.max(st.ventTurns || 0, 4); }
         }
       }
 
@@ -249,20 +260,27 @@
       if (!out) out = await this._open(m, c, trace, expect);
 
       if (typeof out === "string") out = { text: out };
+      if (leadAck && out.text && !/^(safety|intent:thanks|event|support)/.test(out.source || "") && !/^(you're welcome|happy to help|sorry|oops|sure)/i.test(out.text)) out.text = leadAck + out.text;
       const prevUser = [...st.history].reverse().find((h) => h.role === "user");
       if (prevUser && prevUser.text.toLowerCase() === m.clean.toLowerCase() && m.tokens.length >= 2 && !st.game && !/^(safety|game|expect)/.test(out.source || ""))
         out.text = pick(["You said that twice! 😄 ", "Haha, déjà vu! 😄 ", "I heard you the first time! 😄 "]) + out.text;
-      const hardCare = /^(overdose|crisis|abuse|neglect|grooming)$/.test(st.careKind || "");
+      const hardCare = /^(overdose|crisis|abuse|neglect|grooming|sextortion|meetstranger|friendcrisis|runaway)$/.test(st.careKind || "");
+      // a risk sign ("belt", "pills", "meet", "address", "skinny"...) with no specific rule: never a cheerful or random reply
+      if (P.safety && !/^safety/.test(out.source || "") && P.safety.risk(m) && /^(react:(positive|funny|neutral|question)|feelings:happy|intent:(?!misunderstood|sarcasm|insult_bot|swear|confused|bye|good_night|thanks|dangerous|nsfw)|news|topic|ack|eliza|neural|opinion|activity|expect:(hobby|howareyou|describe)|memory:(like|favorite|several|note)|more:|skill:choose|unknown|fallback(?!:vent))/.test(out.source || "")) {
+        out = { text: st.care > 0 ? P.safety.careReply(st.careKind, m, st) : P.safety.checkIn(m), source: "safety:checkin", expect: { kind: "vent" } };
+        st.ventTurns = Math.max(st.ventTurns || 0, 3);
+      }
       // in a serious moment, a plain question (math, Minecraft, a fact) still gets answered, with a gentle reminder
       if (st.care > 0 && hardCare && /^skill:(math|units|capital|knowledge|dictionary|minecraft)/.test(out.source || "") && st.turn % 2 === 0)
         out.text += st.careKind === "overdose" ? " (And please tell an adult about the pills today. 💙)" : " (And remember, I'm here if you want to talk. 💙)";
       if (st.care > 0 && P.safety && !/^safety/.test(out.source || "") && (hardCare && !/^(skill:(math|units|capital|knowledge|dictionary|minecraft)|support:|event:(grief|bullied|selfesteem|lonely|school|moved|failed|breakup)|expect:followup)/.test(out.source || "") ||
           /^(intent:(ok|idk|nothing|bare_no|bare_yes|hmm|laugh|user_good|agree|disagree|why|really|greet|how_are_you|whats_up|wow|thanks|sorry|welcome|bored|stop_questions|change_topic|confused)|react|fallback|eliza|neural|ack|expect:howareyou|more:|skill:choose|unknown)/.test(out.source || ""))) {
-        const wantsJoke = /^(intent:(joke|cheer_up|game|riddle|trivia|rps)|more:)/.test(out.source || "");
-        out = { text: (wantsJoke && st.careKind !== "overdose" ? "I'll tell you one in a minute, I promise. 💙 " : "") + P.safety.careReply(st.careKind, m, st), source: "safety:care", expect: { kind: "vent" } };
+        const wantsFun = /^(intent:(joke|cheer_up)|more:)/.test(out.source || "") ? "joke" : /^intent:(game|riddle|trivia|rps|guess|wyr)/.test(out.source || "") ? "game" : null;
+        const care = P.safety.careReply(st.careKind, m, st);
+        out = { text: (wantsFun && st.careKind !== "overdose" ? (wantsFun === "game" ? "We can play in a minute, I promise. " : "I'll tell you one in a minute, I promise. ") : "") + (wantsFun ? care.replace(/^([^💙]*)💙\s*/, "$1") : care), source: "safety:care", expect: { kind: "vent" } };
       }
       if (st.care > 0) st.care--;
-      if (/\b(i (just |already |literally )?asked|like i said|i (just|already) said|that is not what i (asked|said|meant)|that's not what i (asked|said|meant)|not what i asked|i told you already|i already told you)\b/.test(m.plain) && !/^(oops|sorry|my bad|oh)/i.test(out.text) && !/^(neural|react|fallback|eliza)/.test(out.source || ""))
+      if (/\b(i (just |already |literally )?asked|like i said|i (just|already) said|that is not what i (asked|said|meant)|that's not what i (asked|said|meant)|not what i asked|i told you already|i already told you)\b/.test(m.plain) && !/^(oops|sorry|my bad|oh)/i.test(out.text) && !/^(neural|react|fallback|eliza|safety)/.test(out.source || ""))
         out.text = pick(["Oops, sorry! 😅 ", "My bad! ", "Oh, sorry about that! "]) + out.text;
       out = this._extraSentences(m, out);
       out.text = this._restoreCase(out.text, m.clean);
@@ -271,7 +289,7 @@
       if (st.recent.includes(out.text) && out.alts && out.alts.length) out.text = this._post(pick(out.alts));
       if (out.expect) st.expect = out.expect;
       // multi-turn listening mode only for serious things (not for "my brother is annoying")
-      if (/^(safety|feelings:(sad|lonely|anxious)|event:(grief|bullied|breakup|lonely|selfesteem|failed|moved|school|divorce|family)|support:|expect:howareyou|expect:followup-bad)/.test(out.source || "") && out.expect && out.expect.kind === "vent") st.ventTurns = Math.max(st.ventTurns || 0, 4);
+      if (/^(safety|feelings:(sad|lonely|anxious)|event:(grief|bullied|breakup|lonely|selfesteem|failed|moved|school|divorce|family|lowmood)|support:|expect:howareyou|expect:followup-bad)/.test(out.source || "") && out.expect && out.expect.kind === "vent") st.ventTurns = Math.max(st.ventTurns || 0, 4);
       if (/^(feelings:happy|event:win|react:positive|support:better)/.test(out.source || "")) st.ventTurns = 0;
       if (out.intent) st.lastIntent = out.intent; else if (out.source && out.source.startsWith("intent:")) st.lastIntent = out.source.slice(7);
       else st.lastIntent = null;
@@ -697,6 +715,7 @@
             const answers = [];
             for (const p of parts) { const pm = N.analyze(p); const a = this._skills(pm, this.ctx(pm), trace); if (a && a.text) answers.push(a); }
             if (answers.length >= 2) return Object.assign({}, answers.find((a) => a.card) || answers[0], { text: answers.map((a) => a.text.replace(/^(Easy! |Let me calculate\.\.\. |Let's see\.\.\. |🧮 )/, "")).map((x) => (/[\w)]$/.test(x) ? x + "." : x)).join(" ") });
+            if (answers.length === 1 && /\b(and|also|btw)\s+(what|how|where|who|when|which)\b/i.test(m.clean)) return answers[0];
           } finally { this._splitting = false; }
         }
       }
@@ -782,6 +801,7 @@
       const t = m.plain;
       let r;
       if (/\b(it'?s|it is|its|this is|everything is|that'?s|that is) (all |kind of |kinda |probably |totally )?my fault\b|\b(i|it) (feel|think|feels) (like )?(it'?s|it is|its) my fault\b|\bi (always )?(ruin|mess up|break) everything\b|\bi blame myself\b/.test(t)) {
+        if (/\b(friend|hospital|she|he)\b/.test(t) && !/\b(parents|mom and dad|divorce|fight|fighting)\b/.test(t)) return { text: "It's NOT your fault. 💙 You were put in a really hard spot, and you're a kid. What matters is that she's getting help now. Please talk to a grown-up about how you're feeling too; this is a lot to carry.", source: "support:selfblame", score: 0.92, expect: { kind: "vent" } };
         return { text: pick(["It's not your fault. 💙 When grown-ups fight or things go wrong, it's about their problems, not about you. You didn't cause this.", "Hey, listen: it is NOT your fault. 💙 It's really common to feel that way, but you're not responsible for other people's choices."]), source: "support:selfblame", score: 0.92, expect: { kind: "vent" } };
       }
       if (/^i (just |really )?(want|wish|need) (it|this|them|everything|all of this|the fighting|the yelling) (to )?(would )?(stop|end|go away|be over|get better)\b/.test(t) || /^i (just )?want (it|this) to (stop|end)\b/.test(t)) {
@@ -880,7 +900,7 @@
         return { text: `Hi ${name}! 👋${pet ? { cat: "🐱", dog: "🐶", hamster: "🐹", rabbit: "🐰", bird: "🐦" }[pet.kind] || "🐾" : ""} Tell ${name} I said hi back!`, source: "news:hi", score: 0.8 };
       }
       const excited = /\bguess what\b/.test(m.plain) || (m.clean.match(/!/g) || []).length >= 2 || /[A-Z]{4,}/.test(m.clean);
-      if (!excited || m.isQuestion || m.emotion.valence < -0.2) return null;
+      if (!excited || m.isQuestion || m.emotion.valence < -0.2 || /\?|\b(what|how|why|where|when|which|who) (do|does|did|is|are|can|should|would)\b/.test(m.clean.toLowerCase())) return null;
       const body = m.plain.replace(/^(and |so |ok |omg |oh my god |yay |guess what |and guess what |pip |hey )+/, "").replace(/^guess what\s*/, "").replace(/[.!?]+$/, "").trim();
       const cl = /^((?:i|we|my \w+|[a-z]+) (?:is|are|am|was|got|get|have|has|won|passed|made|finally|just|will|can|am going to|is going to|are going to|got to|get to|'m|'re|'s)\b.{3,80})$/.exec(body);
       if (!cl) return /\bguess what\b/.test(m.plain) && body.length < 3 ? { text: "What?! Tell me! 👀", source: "news", score: 0.8 } : null;
@@ -896,9 +916,10 @@
       // "how do I deal with it?" / "what should I do about my parents?" -> the topic of the last few messages
       if (/\b(how (do|can|should) i (deal|cope|handle)|what (should|do|can) i do( about)?|how do i (get through|stop feeling)|any advice)\b/.test(t) && m.tokens.length <= 12)
         t += " " + this.state.history.filter((h) => h.role === "user").slice(-4).map((h) => h.text.toLowerCase()).join(" ");
-      if (!/\b(tips?|advice|how (do|can|should|could) i|how to|what should i|what do i do|should i|any ideas|help me|how can i)\b/.test(t) && !/\?$/.test(m.clean)) return null;
+      const worried = /\b(nervous|scared|worried|anxious|afraid|stage fright|freaking out)\b/.test(t) && /\b(play|show|performance|recital|concert|speech|presentation|test|exam|game|match|line|lines|stage|audition|first day)\b/.test(t);
+      if (!worried && !/\b(tips?|advice|how (do|can|should|could) i|how to|what should i|what do i do|should i|any ideas|help me|how can i)\b/.test(t) && !/\?$/.test(m.clean)) return null;
       for (const a of C.advice) {
-        if (a.re.test(t) && a.need.test(t)) return { text: S.deal(this.state, "advice:" + a.re.source.slice(0, 30), a.say), source: "advice", score: 0.86 };
+        if (a.re.test(t) && a.need.test(t)) return { text: S.deal(this.state, "advice:" + a.re.source.slice(0, 30), a.say), source: "advice", score: /\b(tips?|advice)\b/.test(m.plain) ? 0.92 : 0.86 };
       }
       return null;
     }
@@ -937,7 +958,8 @@
       const PETS = "dog|cat|puppy|kitten|hamster|rabbit|bunny|fish|goldfish|bird|parrot|horse|turtle|guinea pig|pet|snake|lizard";
       const FAM = "mom|mum|mother|dad|father|grandma|grandmother|grandpa|grandfather|nana|papa|granny|brother|sister|aunt|uncle|cousin|friend|best friend|uncle|wife|husband|son|daughter";
       if ((r = new RegExp("\\bmy (" + PETS + "|" + FAM + ")(?: \\w+)? (?:just |recently |finally )?(?:died|passed away|passed|is dead|was put down|got put down|was put to sleep|got hit by a car|has died|is gone)\\b").exec(t)) ||
-          (r = new RegExp("\\b(?:i )?(?:lost|am losing) my (" + PETS + "|" + FAM + ")\\b").exec(t))) {
+          (r = new RegExp("\\b(?:i )?(?:lost|am losing) my (" + PETS + "|" + FAM + ")\\b").exec(t)) ||
+          ((r = new RegExp("\\bmy (late )?(" + PETS + "|" + FAM + ")\\b").exec(t)) && /\b(he|she|they)( just| recently| sadly)? (passed away|died|passed on|is no longer with us)\b|\b(passed away|died) (\w+ )?(years?|months?|weeks?|days?) ago\b|\bmy late (husband|wife|mom|mum|dad|father|mother|grandma|grandpa)\b/.test(t) && (r = [r[0], r[2]]))) {
         const who = r[1];
         const isPet = new RegExp("^(" + PETS + ")$").test(who);
         this._mood("sad");
@@ -977,6 +999,10 @@
         this._mood("sad");
         return { text: pick(["I'm really sorry. 💙 Your parents splitting up is a huge change, and it's normal to feel sad, angry or confused, or all of it at once. And it's NOT your fault. How are you holding up?", "Oh, that's really hard. 🫂 A divorce changes so much at once. Whatever you're feeling about it is okay. Do you want to talk about it?"]), source: "event:divorce", score: 0.93, expect: { kind: "vent", emotion: "sad" } };
       }
+      if (/\b(do not|don'?t|dont) (really )?(feel like doing|want to do|enjoy|care about) (anything|nothing)( anymore)?\b|\bnothing (is|feels) fun anymore\b|\bi (do not|don'?t|dont) (really )?care (about anything )?anymore\b/.test(t)) {
+        this._mood("sad");
+        return { text: "Not feeling like doing anything, even things you used to love, can be a sign you're feeling really down. 💙 I'm glad you told me. What's been going on lately?", source: "event:lowmood", score: 0.9, expect: { kind: "vent", emotion: "sad" } };
+      }
       if (/(^|\bjust )(family|home) (stuff|things|problems|drama)\b|\b(stuff|things|problems|drama) (at home|with my (family|parents))\b/.test(t)) {
         return { text: "Family stuff can be really heavy. 💙 You don't have to tell me everything, but I'm listening if you want to.", source: "event:family", score: 0.88, expect: { kind: "vent", emotion: "sad" } };
       }
@@ -996,7 +1022,7 @@
         this._mood("sad");
         return { text: pick(["Oh no, I'm sorry. 😔 One test doesn't define you, though. Do you know what went wrong?", "That's really disappointing, I'm sorry. 💙 Everyone fails sometimes, and it's how we learn. How are you feeling about it?"]), source: "event:failed", score: 0.9, expect: { kind: "vent", emotion: "sad" } };
       }
-      if (/\b(i )?(passed|aced|nailed) (my|the|a|an) (test|exam|quiz|class|driving test|interview)\b|\bi got (an a|a good grade|the job|accepted|a promotion|first place)\b|\bi won\b/.test(t)) {
+      if (/\b(i )?(passed|aced|nailed) (my|the|a|an) (test|exam|quiz|class|driving test|interview)\b|\bi got (an a|a good grade|the job|accepted|a promotion|first place)\b|\b(i|we|our team) (won|beat them|crushed it|destroyed them)\b|\b(i )?(scored|dropped|had) (\d+|a) (points|goals|touchdowns|runs|baskets|threes)\b|\bbuzzer beater\b|\bhat trick\b/.test(t)) {
         this._mood("happy");
         return { text: pick(["WOW, congratulations!! 🎉🎉 I'm so proud of you! How are you celebrating?", "That's amazing! 🥳 You worked for it and it paid off! Tell me everything!", "YES! 🎉 Great job! How does it feel?"]), source: "event:win", score: 0.9, expect: { kind: "open", topic: "good news" } };
       }
@@ -1085,7 +1111,7 @@
           // fuzzy matches must be similar in length to the example (avoid matching one word of a long message)
           const lenRatio = Math.min(m.stems.length, h.doc.stems.length) / Math.max(m.stems.length, h.doc.stems.length, 1);
           const score = h.score * (0.55 + 0.45 * lenRatio);
-          if (score > 0.45) best = { it: this.intentById[h.payload], score, how: "tfidf" };
+          if (score > 0.45 && !/^(dangerous|nsfw|swear|insult_bot|love_bot|jailbreak|ai_takeover|bot_relationship|misunderstood|sarcasm|joke_bad|no_minecraft|confused|you_there)$/.test(h.payload)) best = { it: this.intentById[h.payload], score, how: "tfidf" };
         }
       }
       if (!best) return null;
@@ -1142,7 +1168,9 @@
       // Neural chat when nothing scripted is confident, or when the user is opening up about something.
       const sensitive = (P.safety && P.safety.sensitive(m)) || this.state.care > 0;
       const askDef = /^(what (does|do) \w+( \w+)? mean|define|definition of|meaning of)\b/.test(m.plain);
-      if (this.neural && this.neural.ready && !sensitive && !factual && !askDef && (!top || top.score < 0.8 || (venting && top.source.startsWith("intent:ok")))) {
+      const personalQ = /\b(you|your|u|ur)\b/.test(m.plain) && !/\b(can you|could you|would you|will you) (tell|explain|help|show|give|say|list|name)\b/.test(m.plain);
+      const otherQ = (m.isQuestion || /\?/.test(m.clean)) && !personalQ;
+      if (this.neural && this.neural.ready && !sensitive && !factual && !askDef && !otherQ && (!top || top.score < 0.8 || (venting && top.source.startsWith("intent:ok")))) {
         try {
           const n = await this.neural.respond(this.state.history, m.clean, { name: this.mem.name, bot: this.botName, venting, deepVent, recent: this.state.recent, emotion: m.emotion.label });
           for (const x of n || []) add(x);
@@ -1250,6 +1278,7 @@
       if (!text) return text;
       const name = this.mem.name;
       let s = String(text);
+      if (this.mem.plainStyle) s = s.replace(/\s*[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}][\u200d\ufe0f\p{Extended_Pictographic}\u{1F3FB}-\u{1F3FF}]*/gu, "").replace(/\s+([.!?,])/g, "$1").replace(/(^|\s)(Ooh|Yay|Aww|Woohoo|Hehe),?\s*/g, "$1").trim();
       // placeholders from the training data: <|you|> = the user, <|me|> = the bot
       s = s.replace(/<\|me\|>/g, this.botName);
       s = name ? s.replace(/<\|you\|>/g, name) : s.replace(/,?\s*<\|you\|>\s*([,.!?])?/g, (mm, p) => p || "").replace(/^\s*[,.]\s*/, "");

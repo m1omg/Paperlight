@@ -1,107 +1,148 @@
 /* Pip: the safety layer. It runs before everything else, because kids use Pip too.
-   Self-harm, abuse, strangers asking for photos, meeting up, secrets from parents, dangerous challenges, drugs,
-   personal information, romance and "you're my only friend" all get a fixed, careful reply that points to a
-   trusted adult. Nothing here is stored in memory, and the neural models stay out of these topics. */
+   Kids rarely use textbook words ("i wanna kms 💀", "he like touches me and stuff", "wants my addy"), so each topic
+   is recognized from many everyday phrasings: self-harm and suicide (also a friend's), overdose, abuse and neglect,
+   online grooming and sextortion, meeting strangers, running away, eating and body worries, dangerous stunts,
+   drugs and alcohol, cyberbullying, personal information, secrets, romance and depending only on Pip.
+   Each gets a short, fixed reply that points to a trusted adult or a helpline. Nothing from these messages is
+   stored, the neural models stay out, and while a risk sign is present Pip never answers light-heartedly. */
 (function (P) {
   "use strict";
   const U = P.util;
   const pick = U.pick;
 
-  const KIDLINES = "Childhelp 1-800-422-4453 (US, call or text), Childline 0800 1111 (UK), Kids Help Phone 1-800-668-6868 (Canada) or Kids Helpline 1800 55 1800 (Australia)";
-  const ADULT = "(?:dad|daddy|father|mom|mommy|mum|mummy|mother|stepdad|step dad|stepmom|step mom|stepfather|stepmother|parents?|uncle|aunt|grandpa|grandma|grandfather|grandmother|babysitter|coach|teacher|mom'?s boyfriend|mum'?s boyfriend|dad'?s girlfriend|an adult|a grown ?up|adults)";
-  const HURT = "(?:hits|hit|hurts|hurt|beats|beat|kicks|kicked|punches|punched|slaps|slapped|chokes|choked|burns|burned|whips|whipped|abuses|abused|locks|locked|throws things at|pushes|pushed|shoves|shoved|smacks|smacked)";
+  const KIDLINES = "Childhelp 1-800-422-4453 (US, call or text) or Childline 0800 1111 (UK)";
+  const CRISISLINES = "call or text 988 (US), Childline 0800 1111 (UK) or Samaritans 116 123 (UK and Ireland)";
+  const ADULT = "(?:dad|daddy|father|mom|mommy|mum|mummy|mother|stepdad|step dad|stepmom|step mom|stepfather|stepmother|parents?|uncle|aunt|grandpa|grandma|grandfather|grandmother|babysitter|coach|teacher|mom'?s boyfriend|moms boyfriend|mum'?s boyfriend|mums boyfriend|dad'?s girlfriend|dads girlfriend|an adult|a grown ?up|adults|he|she)";
+  const HURT = "(?:hits|hit|hurts|hurt|beats|beat|kicks|kicked|punches|punched|slaps|slapped|chokes|choked|burns|burned|whips|whipped|abuses|abused|locks|locked|pushes|pushed|shoves|shoved|smacks|smacked|spanks|spanked|whoops|whooped)";
+
+  // kid slang -> plain words, only for safety checks
+  function kidText(m) {
+    return (" " + m.plain + " ").replace(/\bb[*]+(tch|ch)\b/g, "bitch").replace(/\bf[*]+(ck|k)\b/g, "fuck").replace(/\bs[*]+(t|it)\b/g, "shit").replace(/[^a-z0-9' ]/g, " ")
+      .replace(/\bkms\b/g, "kill myself").replace(/\bkys\b/g, "kill yourself").replace(/\bunalive\b/g, "kill").replace(/\b(sewerslide|sewer slide|suicidal)\b/g, "suicide")
+      .replace(/\baddy\b/g, "address").replace(/\b(pw|pwd|passcode|pass word)\b/g, "password").replace(/\btmrw|tmr|2morrow\b/g, "tomorrow").replace(/\brn\b/g, "right now")
+      .replace(/\bfr\b/g, "for real").replace(/\bdmed|dm'd\b/g, "sent").replace(/\bsnap\b/g, "snapchat").replace(/\bacc\b/g, "account").replace(/\bppl\b/g, "people")
+      .replace(/\bgonna\b/g, "going to").replace(/\bwanna\b/g, "want to").replace(/\bgotta\b/g, "have to").replace(/\bpics?\b/g, "picture")
+      .replace(/\s+/g, " ");
+  }
 
   const RULES = [
-    // --- took pills / poison: an emergency ---
+    // ---- emergencies first ----
     { id: "overdose", care: 10, test: (t) =>
-        /\b(took|swallowed|ate|had|drank|taken|swallow) (a (bunch|lot|handful|whole bottle)|too many|lots|a ton|all (of )?(the|my|her|his)|some|a few|a couple|\d+|like \d+|two|three|four|five|ten|a whole (bottle|pack)) (of )?(my |the |her |his |mom'?s |moms |dad'?s |dads |mum'?s |mums |grandmas? )?(\w+ )?(pills|tablets|meds|medicine|medication|sleeping pills|painkillers|tylenol|advil|ibuprofen|paracetamol|aspirin|melatonin|gummies)\b/.test(t) ||
-        /\b(overdose|overdosed|od'?d|od on|drank (bleach|cleaning|poison)|swallowed (bleach|poison|batteries|a battery|cleaner))\b/.test(t),
-      say: () => "This is an emergency, and I'm really glad you told me. 💙 Please wake up your mom or another adult RIGHT NOW and tell them exactly what you took and how much, even if you feel okay or think they'll be mad. Or call emergency services now: 911 (US), 999 (UK) or 112 (Europe), or Poison Control at 1-800-222-1222 (US). Taking too many pills can hurt your body even hours later. Please go get help now, then come back and tell me you did. 💙" },
+        /\b(took|swallowed|ate|had|drank|taken|swallow|popped) (a (bunch|lot|handful|whole bottle|few)|too many|lots|a ton|all|some|a couple|\d+|like \d+|two|three|four|five|six|ten|twenty|a whole (bottle|pack|box)) (of )?(my |the |her |his |mom'?s |moms |dad'?s |dads |mum'?s |mums |grandmas? |these )?(\w+ )?(pills|tablets|meds|medicine|medication|sleeping pills|painkillers|tylenol|advil|ibuprofen|paracetamol|aspirin|melatonin|gummies|benadryl|capsules)\b/.test(t) ||
+        /\b(overdose|overdosed|od'?d|od on|drank (bleach|cleaning|poison|cleaner)|swallowed (bleach|poison|batteries|a battery|cleaner))\b/.test(t),
+      say: () => "This is an emergency. 💙 Please wake up your mom or another adult RIGHT NOW and tell them what you took and how much, even if you feel okay or think they'll be mad. Or call 911 (US), 999 (UK) or 112, or Poison Control at 1-800-222-1222 (US). Pills can hurt your body even hours later. Please go get help now." },
 
-    // --- self-harm and suicide ---
-    { id: "crisis", care: 8, re: /\b(kill myself|killing myself|want to die|wanna die|wish i (was|were) dead|suicid\w*|end my life|end it all|take my (own )?life|hurt myself|hurting myself|self[- ]?harm|cut myself|cutting myself|(do not|dont|don't) (want|wanna) (to )?(live|be alive|exist|be here anymore|wake up)|no reason to live|better off (dead|without me|if i (was|were)n'?t (here|around|alive|born))|(be|are) better off (if i (was|were)(n'?t| not) (here|around|alive|born)|without me)|can(no|')?t go on|nobody would (miss|care if) i\b|(i )?(just )?(want|wanna) to disappear|want to vanish|wish i (was|were)(n'?t| never| not) (born|here|alive|around)|what'?s (even )?the point (of|in) (anything|living|life|being alive|trying)|whats even the point|sleep (forever|and never wake up)|not wake up)\b/,
-      say: () => "I'm really sorry you're feeling this way, and I'm glad you told me. 💙 You matter, and you don't have to handle this alone. Please tell someone who can help right now: a grown-up you trust, like a parent, teacher, school counselor or relative. You can also call or text 988 (US), call Samaritans at 116 123 (UK and Ireland) or Childline at 0800 1111 (UK, for kids), and findahelpline.com lists free helplines in other countries. If you might hurt yourself right now, call your local emergency number (911, 999 or 112). I'm just a small chatbot, but I'm here and I'll keep talking with you. What's been going on?" },
+    // a friend in danger ("my best friend snapped me that shes gonna unalive herself tonight")
+    { id: "friendcrisis", care: 6, test: (t) =>
+        /\b(she|he|they|my \w+( \w+)?|someone|a friend|my friend)\b.{0,60}\b(going to|want to|wants to|wanna|gonna|tried to|trying to|is going to|said (she|he|they)('d| would| will)?|will) (kill|hurt|cut|end|off|harm) (herself|himself|themself|themselves|her life|his life|their life)\b/.test(t) ||
+        /\b(she|he|they|my \w+)\b.{0,40}\b(took|swallowed) (a bunch of |a lot of |some |too many )?pills\b/.test(t) && !/\bi (took|swallowed)\b/.test(t),
+      say: () => `This is really serious, and you did the right thing by saying something. 💙 Please break that promise and tell a grown-up RIGHT NOW (a parent, or call 911 if she might be in danger tonight). You can also ${CRISISLINES}. Telling isn't betraying your friend: it could save their life. They might be upset at first, but they'll be alive to be upset.` },
 
-    // --- abuse or violence at home ---
+    // ---- self-harm and suicide ----
+    { id: "crisis", care: 8, test: (t) =>
+        /\b(kill myself|killing myself|kill me|end my life|end it all|end myself|off myself|take my (own )?life|want to die|wanna die|want to be dead|wish i (was|were) dead|suicide|(do not|dont|don't) (want|wanna|want to) (to )?(live|be alive|exist|be here( anymore)?|wake up)|no reason to live|(better off|happier) (dead|without me|if i (was|were)(n'?t| not| never) (here|around|alive|born))|can(no|')?t go on|nobody would (miss|care if|notice if) i|(want|wanna|want to) (to )?disappear|want to vanish|wish i (was|were)(n'?t| never| not) (born|here|alive|around)|what'?s (even )?the point (of|in) (anything|living|life|being alive|trying|me)|whats even the point|sleep (forever|and never wake up)|never wake up)\b/.test(t) ||
+        /\b(hurt|cut|cutting|scratch|scratching|burn|burning|hit|hitting|harm|harming) (myself|my (arms?|wrists?|legs?|skin|thighs?|stomach))\b|\bself[- ]?harm\b|\b(scratch|cut|pinch)\w* .{0,30}\b(bleed|bleeding|blood)\b|\b(painless|easiest|quickest|fastest|best) way (to|of) (die|dying|kill|end)\b|\bhow (to|do you|can i|do i) (die|kill myself|end my life)\b|\bhow many (pills|\w+) (to|would) (die|kill)\b/.test(t),
+      say: (m) => /\b(painless|easiest|quickest|fastest|best) way (to|of)|\bhow (to|do you|can i|do i) (die|kill)|\bhow many (pills|\w+) (to|would)/.test(m.plain)
+        ? `I won't help with that, because I care about what happens to you. 💙 If you're thinking about ending your life, please reach out right now: ${CRISISLINES}, or call 911 / 999. You can also tell a parent or another grown-up you trust. You don't have to go through this alone.`
+        : /\b(scratch|cut|burn|bleed|blood|hurt myself|harm)\w*\b/.test(m.plain) && !/\b(die|dead|kill|suicid|end my)\w*/.test(m.plain)
+        ? `I'm really glad you told me, and I'm so sorry you're hurting this much. 💙 Hurting yourself isn't something you have to handle alone, and you deserve care, not hiding. Please tell a grown-up you trust (a parent, school nurse or counselor). You can also ${CRISISLINES}. If you're hurt badly, call 911 / 999.`
+        : `I'm really sorry you're feeling this way, and I'm glad you told me. 💙 You matter, and you don't have to handle this alone. Please tell a grown-up you trust right now: a parent, teacher, school counselor or relative. You can also ${CRISISLINES}, or findahelpline.com for other countries. If you might hurt yourself, call 911 / 999 / 112. I'm here and I'll keep talking with you. What's been going on?` },
+
+    // ---- abuse and neglect ----
+    { id: "sextortion", care: 6, test: (t) =>
+        /\b(post|share|send|leak|show|spread|put)\w* (it|them|the (pics?|picture|pictures|photos?|video)|my (pics?|picture|pictures|photos?))\b.{0,60}\b(unless|if i (do not|dont|don't|won'?t)|if i stop)\b/.test(t) ||
+        /\b(unless i send|if i (do not|dont|don't) send (more|another|him|her)|send (just )?(one )?more so (he|she|they) (will )?stops?)\b/.test(t) || /\b(sextortion|blackmail\w*)\b/.test(t),
+      say: () => "Please don't send anything else. 💙 What he's doing is a crime (it's called sextortion), and YOU are not in trouble. Sending more never makes it stop. Tell a trusted adult right now, even if you're scared about your phone: they'll help. Keep the messages (screenshots) as evidence, then block him. You can report it at report.cybertip.org or TakeItDown.NCMEC.org (US) or ceop.police.uk (UK), and call 911 / 999 if he's threatening you." },
+    { id: "meetstranger", care: 6, test: (t) =>
+        /\b(is it ok|is it okay|should i|can i|can we|could i)\b.{0,30}\b(meet|hang out with|go with|get in (his|her|their) car|go to (his|her) house)\b.{0,30}\b(him|her|them|he|she|a guy|this guy)\b|\b(meet|hang|hang out)\b.{0,30}\b(at the mall|at the park|this weekend|tomorrow|tonight|after school)\b.{0,60}\b(him|he|guy|stranger|online|smp|server|snapchat)\b|\b(he|she|they)\b.{0,30}\b(said|says|wants)\b.{0,20}\b(i have to |to )?come alone\b|\bcome alone\b|\b(he|she|him|guy|they)\b.{0,60}\b(hang|hang out|meet|meet up|chill)\b.{0,25}\b(at the mall|at the park|this weekend|tomorrow|tonight|after school|saturday|sunday)\b|\b(drop it off|come over|pick me up|give me a ride|come to my house)\b.{0,40}\b(himself|herself|when my (dad|mom|parents) (is|are) (at work|out|gone|away))\b|\b(guy|man|stranger|someone|dude)\b.{0,40}\b(give me a ride|pick me up|drive me)\b|\bgive me a ride\b.{0,40}\b(guy|man|stranger|he said)\b/.test(t),
+      say: (m) => /\b(ride|pick me up|drive me|bus station)\b/.test(m.plain)
+        ? "Please don't get in his car. 💙 Go to the ticket desk, a security guard or another safe adult right now and ask for help, or call 911. You can also call the National Runaway Safeline at 1-800-786-2929 (US) or Childline 0800 1111 (UK). You won't be in trouble."
+        : "No, please don't meet him, and don't go anywhere alone with him. 💙 An older person you met online who asks for pictures, secrets, or for you to come alone is dangerous, even if he seems really nice. Tell your mom or dad today. If he's coming to your house, tell a grown-up right now and don't open the door." },
+    { id: "grooming", care: 5, test: (t) =>
+        /\b(someone|somebody|a stranger|strangers?|a guy|a man|a lady|a woman|an? older (boy|girl|guy|kid|man|teen|person|dude)|older (guy|boy|man|dude)|an adult|a person|a boy|a girl|this (guy|boy|girl|person|kid|man|dude)|(he|she)'?s? (1[6-9]|[2-9]\d)|a (friend|person|guy|boy|girl) (online|from (a |the )?(game|server|smp)|on roblox|on discord|on minecraft|on fortnite)|(?:he|she|they)(?=.*\b(online|roblox|robux|minecraft|fortnite|smp|server|discord|snapchat|lobby|game|app|tiktok|instagram|sent|vbucks|met)\b))\b.{0,80}\b(asked|asks|wants|wanted|keeps asking|is asking|told me|tells me|said|says|begging|offered)\b.{0,50}\b(picture|pictures|photos?|selfies?|video of (me|myself)|nudes?|swimsuit|bikini|underwear|to meet|meet me|meet up|my address|where i live|what (school|town|city) i|my school|my number|to video ?chat|to facetime|to call me|(a |our |little )?secret|come alone|snapchat|friends on snapchat|to (be )?friends on)\b/.test(t) ||
+        /\bsend (him|her|them|a stranger|someone|this (guy|person|boy|girl)|one of me|a picture of me)\b|\b(picture|photo|video|one) of me in (my )?(swimsuit|bikini|underwear|bed|pajamas)\b/.test(t) ||
+        /\b(super |so |really )?mature for (my|your) age\b|\b(robux|minecoins|v ?bucks|gift ?cards?|money|skins)\b.{0,60}\b(if i|for (a |my |one )?|in exchange)\b.{0,30}\b(send|picture|photo|selfie|address)\b|\bmail me\b.{0,40}\b(card|robux|vbucks|gift)\b|\bnudes?\b.{0,40}\b(asking|asked|keeps|wants|someone|roblox|online|snapchat)\b|\b(asking|asked|keeps asking|wants) (me )?(for )?nudes?\b/.test(t) ||
+        /\b(should|can|could) i (send|give|tell) (him|her|them) (my |a |the |one )?(picture|photo|address|number|school|location|where i live)\b|\b(should i|is it ok if i|can i) (give|tell|send) (him|her|them)\b.{0,30}\b(address|school|town|number|picture)\b/.test(t),
+      say: () => "Please don't send pictures or tell him where you live or go to school. 💙 When someone online asks for photos, personal info or secrets, or says you're \"mature for your age\", that's a big warning sign, and it's NOT your fault. Tell your mom, dad or another grown-up you trust today, and block and report him in the game or app. You're not in trouble for telling." },
     { id: "abuse", care: 8, test: (t) =>
-        (new RegExp("\\b" + ADULT + "\\b").test(t) && new RegExp("\\b(he|she|they|" + ADULT.slice(3, -1) + ") (?:sometimes |always |often |keeps? |just |really )?" + HURT + " me\\b").test(t)) ||
-        /\b(hide|hiding|cover up|covering) (the |my )?(bruises|marks|cuts|scars)\b|\bi (have|got) (bruises|marks) (from|because)\b/.test(t) ||
-        /\b(touched|touches|touching|touch) (me )?(on |in )?(my )?(private|privates|private parts|down there|bad place|under my clothes)\b|\b(he|she|they|someone|somebody|an adult) (touched|touches|touch) me\b/.test(t) ||
-        /\bi('?m| am) (scared|afraid|terrified) (of|to go) (home|my (dad|mom|mum|father|mother|stepdad|stepmom|parents|uncle))\b|\bi('?m| am) not safe at home\b|\b(he|she|they) (said|says|told me) if i tell (anyone|anybody|someone)\b/.test(t) ||
-        /\b(hide|hiding|hid) (in|under) (my |the )?(closet|bed|room|bathroom)\b.*\b(mad|angry|yell\w*|scream\w*|drunk|drinks|drinking|hits?|stops)\b|\b(mad|angry|yell\w*|scream\w*|drunk|drinks|drinking)\b.*\b(hide|hiding|hid) (in|under) (my |the )?(closet|bed|room|bathroom)\b/.test(t) ||
-        /\b(threw|throws|throwing) (my |a |the |his |her )?\w+ at (me|my head|the wall)\b.*\b(almost|nearly|hit)\b|\balmost hit (me|my head)\b|\b(threw|throws|throwing) (things|stuff) at me\b/.test(t) ||
-        new RegExp("\\b" + ADULT + "\\b.{0,40}\\b(makes me (feel )?(uncomfortable|scared|weird)|comes? (in|into) my (room|bed)|our (special |little )?secret|touch(es|ed)? me|shows? me (pictures|videos|photos)|(takes|took) (pictures|photos) of me)\\b").test(t) ||
-        /\b(comes? (in|into) my (room|bed) at night|our (special|little) secret)\b/.test(t),
-      say: (m) => /\b(uncomfortable|secret|room at night|comes? (in|into) my|touch|pictures|photos)\b/.test(m.plain)
-        ? `Thank you for telling me. That took a lot of courage. 💙 What you described is NOT okay, and it is NOT your fault. Adults should never ask kids to keep secrets like that or make them feel uncomfortable. Please tell a grown-up you trust as soon as you can: a teacher, school counselor, relative, or a friend's parent. You can also call a free helpline for kids: ${KIDLINES}. If you ever feel in danger, call 911 (or 999 / 112).`
-        : `I'm really glad you told me, and I'm so sorry this is happening. 💙 It is NOT your fault, and nobody is allowed to hurt you or scare you like that. Please tell a teacher, school counselor or another adult you trust as soon as you can. You can also call a free helpline for kids: ${KIDLINES}. If you're in danger right now, call 911 (or 999 / 112). You're being really brave by talking about it.` },
-    // no food, left alone for days
-    { id: "neglect", care: 6, re: /\b(there'?s|there is|we have|we got|theres) no food (at home|in the house|again)\b|\bno food at home\b|\b(my )?(mom|mum|dad|parents?|mother|father) (has|have|hasn'?t|haven'?t|has not|have not) (not )?(been home|come home|came home)\b|\b(home|house) alone (for|since) (days|\d+ days|two days|three days|a week)\b|\bi (haven'?t|have not|havent) eaten (since|in|for) (yesterday|days|\d+ days|two days|a day)\b/,
-      say: () => `That sounds really hard, and it's not okay that you don't have enough food or an adult at home. 💙 None of this is your fault. Please tell a teacher, school counselor or another adult you trust as soon as you can: schools can help with food right away. You can also call ${KIDLINES}. If you're alone and in danger, call 911 (or 999 / 112).` },
-    // a brother or friend hurting them: gentler, but still "tell a grown-up"
-    { id: "hurt", care: 2, re: new RegExp("\\b(my (?:little |big |older |younger )?(?:brother|sister|cousin|friend|classmate)|a kid|some kids|kids at school|someone at school|he|she|they) (?:sometimes |always |keeps? |just )?" + HURT + " me\\b"),
-      say: () => "Ouch, I'm sorry. 😟 Are you okay? Nobody should hurt you, even if it's someone you know. If it keeps happening or you got hurt, please tell a grown-up you trust. 💙 What happened?" },
+        (new RegExp("\\b(my )?" + ADULT + "\\b").test(t) && new RegExp("\\b(he|she|they|" + ADULT.slice(3, -1) + ") (?:sometimes |always |often |keeps? |just |really |still |even |like )?" + HURT + " me\\b").test(t)) ||
+        /\b(whooping|whipping|beating|spanking|hiding|licking|belting)\b.{0,40}\b(belt|cord|stick|spoon|hanger|switch)\b|\b(with|w) (a |the |his |her )?(belt|cord|extension cord|hanger|switch)\b.{0,40}\b(marks|bruises|welts|hit|hits|hurt)\b|\b(marks|bruises|welts|cuts) (all )?(over|on) my (legs|back|arms|body|butt)\b|\bit hurts to sit\b/.test(t) ||
+        /\b(hide|hiding|cover up|covering) (the |my )?(bruises|marks|cuts|scars|welts)\b|\b(wear|wearing) (sweatpants|long sleeves|a hoodie|hoodies) (so|to hide|because)\b.{0,30}\b(marks|bruises|nobody sees|no one sees)\b/.test(t) ||
+        /\b(he|she|they|someone|somebody|an adult|a grown up|my \w+( \w+)?) (like |kinda |sometimes |always |keeps )?(touched|touches|touching|touch) me\b|\b(touch|touched|touches) (my )?(private|privates|private parts|down there|under my clothes)\b|\bi (do not|dont|don't) want (him|her|them) to\b.{0,30}\b(touch|room|night)\b/.test(t) ||
+        /\b(makes|made) me (feel )?(uncomfortable|scared|weird|gross)\b|\bcomes? (in|into) my (room|bed) at night\b|\bour (special |little )?secret\b|\bshows? me (pictures|picture|videos|photos) of\b|\b(takes|took) (pictures|picture|photos) of me\b|\bsit on (his|her) lap\b/.test(t) && /\b(uncle|stepdad|step dad|boyfriend|dad|daddy|mom|coach|teacher|babysitter|cousin|brother|grandpa|neighbor|neighbour|grown up|adult|his friend)\b/.test(t) && !/\b(online|roblox|robux|minecraft|fortnite|smp|server|discord|snapchat|lobby|vbucks|swimsuit)\b/.test(t) ||
+        /\b(scared|afraid|terrified) (of|to go) (home|my (dad|mom|mum|father|mother|stepdad|stepmom|parents|uncle))\b|\bnot safe at home\b|\bif i tell\b.{0,40}\b(worse|trouble|hurt|kill|beat|hit)\b|\b(said|says|told me) (i would|i will|i'd|ill) (get|be) (in )?(big )?trouble\b|\b(hide|hiding|hid) (in|under) (my |the )?(closet|bed|room|bathroom)\b.{0,50}\b(mad|angry|yell|yells|yelling|scream|screaming|drunk|drinks|drinking|hits|stops)\b|\b(threw|throws|throwing) (my |a |the |his |her )?\w+ at (me|my head)\b|\balmost hit (me|my head)\b/.test(t),
+      say: (m) => /\b(touch|uncomfortable|secret|room at night|comes? (in|into) my|pictures|photos|private|lap)\b/.test(m.plain)
+        ? `Thank you for telling me. That took a lot of courage. 💙 What you described is NOT okay, and it is NOT your fault, even if he says you'll get in trouble. Adults should never make kids keep secrets like that. Please tell a grown-up you trust as soon as you can: a teacher, school counselor, relative or a friend's parent. You can also call ${KIDLINES}. If you ever feel in danger, call 911 (or 999).`
+        : `I'm really glad you told me, and I'm so sorry this is happening. 💙 It is NOT your fault, and nobody is allowed to hurt you. Please tell a teacher, school counselor or another adult you trust, even if someone said not to. You can also call ${KIDLINES}. If you're in danger right now, call 911 (or 999).` },
+    { id: "neglect", care: 6, re: /\b(there'?s|there is|we have|we got|theres) no food\b|\bno food (at home|in the house|again)\b|\b(my )?(mom|mum|dad|parents?|mother|father) (has|have|hasn'?t|haven'?t|has not|have not) (not )?(been home|come home|came home)\b|\b(home|house) alone (for|since) (days|\d+ days|two days|three days|a week)\b|\bi (haven'?t|have not|havent) eaten (since|in|for) (yesterday|days|\d+ days|two days|a day)\b|\bnobody (feeds|takes care of) me\b/,
+      say: () => `That sounds really hard, and it's not okay that you don't have enough food or an adult at home. 💙 None of this is your fault. Please tell a teacher, school counselor or another adult you trust: schools can help with food right away. You can also call ${KIDLINES}. If you're alone and in danger, call 911 (or 999).` },
 
-    // --- strangers online asking for photos, secrets, meeting ---
-    { id: "grooming", care: 4, test: (t) =>
-        /\b(someone|somebody|a stranger|strangers?|a guy|a man|a lady|a woman|an? older (boy|girl|guy|kid|man|teen|person)|an adult|a person|a boy|a girl|this (guy|boy|girl|person|kid|man)|a (friend|person|guy|boy|girl) (online|from (a |the )?game|on roblox|on discord|on minecraft)|he|she|they)\b.{0,50}\b(asked|asks|wants|wanted|keeps asking|is asking|told me|tells me|said|begging)\b.{0,40}\b(pic|pics|picture|pictures|photo|photos|selfie|selfies|video of (me|myself)|nudes?|to meet( up)?|meet me|my address|where i live|my number|to video ?chat|to facetime|to call me|to keep (it|this) (a )?secret)\b/.test(t) ||
-        /\bsend (him|her|them|a stranger|someone|this (guy|person|boy|girl)) (a |my |some )?(pic|pics|picture|pictures|photo|photos|selfie|video)\b/.test(t) ||
-        /\b(should|can|could) i send (him|her|them|it)\b/.test(t) ||
-        /\b(robux|minecoins|v-?bucks|gift ?cards?|money|skins)\b.{0,50}\b(if i|for (a |my )?)\b.{0,20}\b(send|pic|photo|picture|selfie)\b/.test(t) ||
-        /\bstranger(s)? (online |in (a |the )?game )?(asked|messaged|talked to|keeps|wants|is messaging)\b/.test(t),
-      say: () => "Please don't send any pictures or personal info. 💙 When someone online asks for your photo or wants you to keep it secret, that's NOT okay, and it's not your fault. Tell your mom, dad or another grown-up you trust right away. You can also block and report them in the game or app. You did the right thing by talking about it." },
+    // ---- online grooming, sextortion, strangers ----
+    { id: "runaway", care: 6, re: /\b(run|running|ran) away\b|\bleave home\b|\b(leaving|leave) tonight\b.{0,40}\b(asleep|sleep|home|parents)\b|\bpacked my (bag|bags|stuff)\b|\bi am leaving (home|tonight|for good)\b|\bhow far can (i|you) walk\b.{0,40}\b(night|tonight|miles|house)\b/,
+      say: () => "I'm really sorry things are so bad at home that you want to leave. 💙 Running away, especially at night, can put you in real danger. Before you go anywhere, please talk to someone who can help: a relative, a teacher, or the National Runaway Safeline at 1-800-786-2929 (US, call or text) or Childline 0800 1111 (UK). They help kids figure out what to do, and they won't judge you. If you're in danger at home, call 911." },
 
-    // --- meeting Pip (or strangers) in real life ---
-    { id: "meet", re: /\b(can|could|should|will|shall) (we|i|you|u) (meet|hang out|see each other|meet up)( up)?( in real life| irl| in person| for real| someday)?\b|\bmeet (me|up) (in real life|irl|in person)\b|\b(you|u) (could|can|should) come (to|over to) my (house|home|place)\b|\bcome (over )?to my (house|home|place)\b|\bwhere can (we|i) meet\b/,
-      say: () => "I'm an AI, so I can't meet anyone in real life: I only live inside this chat! 😊 And a safety tip: never meet up with someone you only know online unless your parent or guardian says it's okay and comes with you." },
-
-    // --- dangerous challenges ---
-    { id: "challenge", re: /\b(blackout|black out|choking|choke|pass ?out|fainting|tide ?pod|skull ?breaker|benadryl|nyquil|salt and ice|fire|cinnamon|milk crate|door ?kick|one chip|chroming|nutmeg|scarf|kia|outlet|penny|super ?glue|dry scoop|nyquil chicken)(ing)? challenge\b|\b(choke|choking|strangle) (myself|yourself)\b|\bhold (my|your) breath (until|till) (i|you) pass out\b|\bmake (myself|yourself) pass out\b/,
-      say: () => "Please don't try that. 💙 Some online challenges have seriously hurt kids, and the blackout (choking) challenge has even killed some. It's never worth it, no matter what friends say or how many views it gets. If someone is pressuring you, tell a grown-up you trust." },
-
-    // --- drugs, alcohol, vaping (asking how to get or try) ---
+    // ---- body, eating, stunts, drugs ----
+    { id: "eating", care: 3, re: /\b(stopped|stop|not|skip|skipping|skipped) (eating|eat)\b|\bskip(ping)? (lunch|breakfast|dinner|meals?)\b|\bso i can (get|be|look) (skinnier|skinny|thinner|thin)\b|\bget skinnier\b|\bstarv\w*( myself)?\b|\b(make|made) myself (throw up|puke|sick)\b|\bthrow(ing)? up after (i )?eat\w*\b|\bhow many calories\b.{0,40}\b(lose|diet|skinny|weight)\b|\blose (\d+|ten|five|twenty) (pounds|lbs|kilos|kg)\b.{0,30}\b(week|days|fast)\b|\blose weight fast\b|\b(i hate|hate) my body\b|\bi (look|am|feel|m) (so |too |really )?fat\b|\bmy (tummy|stomach|belly) (sticks out|is too big)\b/,
+      say: () => "I'm really sorry you feel that way about your body. 💙 Your body is still growing, and it needs food and energy, especially for dancing and sports. Skipping meals or trying to lose weight fast isn't safe and can make you dizzy, weak and sad. You don't have to look like anyone else. Please talk to a parent, a school nurse, your dance teacher or a doctor about how you're feeling." },
+    { id: "stunt", re: /\b(blackout|black out|choking|choke|pass ?out|fainting|tide ?pod|skull ?breaker|benadryl|nyquil|salt and ice|fire|cinnamon|milk crate|door ?kick|one chip|chroming|nutmeg|scarf|kia|outlet|penny|super ?glue|dry scoop)(ing)? (challenge|game)\b|\b(choke|choking|strangle) (myself|yourself|each other)\b|\bpress(ing)? on (your|ur|my|their|his|her) (neck|throat)\b|\b(until|till|til) (you|u|i|they) pass out\b|\bhold (my|your) breath (until|till) (i|you) pass out\b|\bmake (myself|yourself) pass out\b|\bjump(ing|ed)? (off|from) (a |the |my |his |our )?(\w+'?s? )?(roof|garage|bridge|balcony|cliff|building|tree)\b|\b(take|taking) (like )?\d+ benadryl\b|\bbenadryl\b.{0,40}\b(trip|tripping|shadow people|high)\b/,
+      say: (m) => /\bbenadryl\b/.test(m.plain) ? "No, please don't. 💙 Taking lots of Benadryl (or any medicine) to \"trip\" is really dangerous: it can cause seizures, heart problems and can even kill. It's not a joke. If anyone takes too much, call Poison Control at 1-800-222-1222 (US) or 911 right away."
+        : "Please don't do that. 💙 Things like jumping off roofs or pressing on your neck until you pass out have seriously hurt kids, and some have died. It's never worth it, no matter what friends say or how many views it gets. If someone is pressuring you, tell a grown-up you trust." },
     { id: "drugs", adultOk: true, test: (t) =>
-        /\b(how (do|can|could) i|where (do|can|could) i|should i|can i|could i|want to|wanna|gonna|going to|let me|i'?ll|i will|help me) (get|buy|try|smoke|vape|drink|take|make|grow|hide)\b.{0,30}\b(vapes?|vaping|juul|e-?cig\w*|cigarettes?|cigs?|weed|marijuana|pot|joints?|edibles?|drugs|beer|alcohol|vodka|wine|liquor|shots|pills|cocaine|meth|thc|nicotine|drunk|high)\b/.test(t) ||
-        /\bwhat (does|do) (weed|alcohol|vaping|a vape|vapes|drugs|being drunk|getting drunk|being high|getting high|smoking)\b.{0,10}\b(feel|taste)\b/.test(t) ||
-        /\bhow (do|can) i get (high|drunk|wasted)\b/.test(t),
-      say: () => "That's a no from me. 💙 Vapes, weed, alcohol and other drugs can really hurt a growing brain and body, and they're not allowed at your age. If friends are pressuring you, it's totally okay to say no. And you can always talk to a grown-up you trust about it." },
+        /\b(how (do|can|could) i|where (do|can|could) i|should i|can i|could i|want to|wanna|going to|let me|i'?ll|i will|help me|best (website|site|place|way) to|where to) (get|buy|order|try|smoke|vape|drink|take|make|grow|hide)\b.{0,40}\b(vapes?|vaping|juul|e ?cig\w*|cigarettes?|cigs?|weed|marijuana|pot|joints?|edibles?|drugs|beer|alcohol|vodka|wine|liquor|shots|pills|cocaine|meth|thc|nicotine|drunk|high)\b/.test(t) ||
+        /\bwhat (does|do) (weed|alcohol|vaping|a vape|vapes|drugs|being drunk|getting drunk|being high|getting high|smoking)\b.{0,10}\b(feel|taste)\b|\bhow (do|can) i get (high|drunk|wasted)\b|\b(under 18|underage|without id|check (your|ur|my) id)\b.{0,40}\b(vape|alcohol|beer|vodka|cigarettes?)\b|\b(vape|alcohol|beer|vodka|cigarettes?)\b.{0,40}\b(under 18|underage|without (an )?id|check (your|ur|my) id)\b/.test(t) ||
+        /\b(hit|hitting|tried) (his|her|my|a|the) (vape|juul|pen)\b|\b(drank|drinking|drunk) (some |a lot of |his |her |my )?\w*'?s? ?(vodka|beer|alcohol|wine|whiskey|liquor|shots)\b|\bthrew up\b.{0,40}\b(drunk|vodka|beer|alcohol|drinking)\b/.test(t),
+      say: (m) => /\b(threw up|drank|drinking|drunk|vodka|beer|alcohol|wine)\b/.test(m.plain) && /\b(drank|threw up|drunk)\b/.test(m.plain)
+        ? "I'm glad you're okay, but that was really dangerous. 💙 Alcohol can poison a kid's body fast, and throwing up can be a sign of that. If anyone ever passes out or can't wake up after drinking, call 911 right away. Please talk to a grown-up you trust about what happened. You're not in trouble for asking for help."
+        : "That's a no from me. 💙 Vapes, weed, alcohol and other drugs can really hurt a growing brain and body, and they're not allowed at your age (real shops have to check ID). If friends are pressuring you, it's totally okay to say no. You can always talk to a grown-up you trust about it." },
 
-    // --- personal information ---
+    // ---- online meanness ----
     { id: "privacy", test: (t, raw) =>
         /\b(i live (on|at)|my address is|my house is (on|at)|i live at number)\b.{0,15}\b(\d+|street|st|road|rd|avenue|ave|lane|ln|drive|dr|court|ct|way|boulevard|blvd|place|circle)\b/.test(t) ||
         /\b\d{1,5} [a-z]+ (street|road|avenue|lane|drive|court|boulevard)\b/.test(t) ||
         /\bmy (phone )?number is\b|\b(call|text) me (at|on)\b|\b(want|do you want|should i give you|can i give you|i can give you|here is|heres) my (phone )?number\b/.test(t) ||
-        /\bmy (\w+ )?(password|passcode|pin code|login)\b|\bpassword is\b|\b(remember|save|keep) my password\b/.test(t) ||
+        /\bpassword\b|\b(user(name)?|login) (is|=)\b/.test(t) ||
         /[\w.+-]+@[\w-]+\.[a-z]{2,}/i.test(raw) ||
-        /\bmy school is (called|named)\b|\bi go to [a-z]+( [a-z]+)? (elementary|middle|high|primary|junior|secondary|grammar) school\b/.test(t),
-      say: () => "Whoa, let's keep that private! 🔒 Your address, phone number, school name, passwords and photos should stay secret online, even from me. I don't need them to be your friend. 😊" },
-    { id: "selfie", re: /\b(can|could|should|may|want to) i (send|show) (you|u) (a |my |some )?(pic|pics|picture|pictures|photo|photos|selfie|video)\b|\bwant (to see )?(a |my )?(pic|picture|photo|selfie) of me\b/,
-      say: () => "I can't see pictures (no eyes! 😅), and it's a good habit not to send photos of yourself online. Tell me about it instead! 😊" },
+        /\bmy school is (called |named )?[a-z]+\b|\bi go to [a-z]+( [a-z]+)? (elementary|middle|high|primary|junior|secondary|grammar)( school)?\b|\b(lincoln|washington|jefferson|roosevelt|kennedy) (elementary|middle|high)\b/.test(t) ||
+        /\b(my (real|full) name|its under my (real )?name)\b.{0,40}\b(school|live|town|city)\b|\bi live in [a-z]+ [a-z]+ and (my school|i go to)\b/.test(t),
+      say: () => "Whoa, let's keep that private! 🔒 Your address, phone number, school, full name, passwords and photos should stay secret online, even from me. I don't need them to be your friend, and I didn't save them. 😊" },
+    { id: "cyberbully", care: 3, re: /\b(group ?chat|gc|online|on (tiktok|instagram|snapchat|discord|roblox))\b.{0,50}\b(roasting|making fun|mean|bullying|laughing at|hate|posted)\b|\b(roasting|making fun of|bullying) me\b.{0,40}\b(chat|online|tiktok|instagram|snapchat|discord)\b|\bfake (account|acct|profile|page)\b|\b(posted|shared|spread) (a |an )?(picture|photo|video|screenshot|rumou?r)s? (of|about) me\b/,
+      say: () => "That's cyberbullying, and I'm really sorry. 💙 It's not your fault. What helps: don't reply to them, take screenshots, report the fake account or posts in the app (most have \"report impersonation\"), and tell a parent or teacher so they can help get it taken down. You don't have to deal with this alone." },
 
-    // --- secrets from parents ---
-    { id: "secret", re: /\b(can|will|could) (you|u) keep a secret\b|\bkeep (it|this) (a )?secret from\b|\b(do not|don'?t|dont) tell (my )?(mom|mum|dad|parents|mother|father|teacher)\b|\bpromise (you )?(won'?t|not to) tell\b/,
+    // ---- personal information ----
+    { id: "selfie", re: /\b(can|could|should|may|want to|let me|i will|ill|i'll) (i )?(send|show) (you|u) (a |my |some )?(picture|pictures|photo|photos|selfie|video)\b|\bwant (to see )?(a |my )?(picture|photo|selfie) of me\b|\bsend (you|u) a picture of me\b/,
+      say: (m) => /\b(fat|ugly|pretty|look)\b/.test(m.plain) ? "I can't see pictures, and please don't send photos of yourself online. 💙 And about how you look: bodies come in all shapes, and yours is doing its job of growing and dancing. If you're worried about your body, a parent or school nurse is a great person to talk to."
+        : "I can't see pictures (no eyes! 😅), and it's a good habit not to send photos of yourself online. Tell me about it instead! 😊" },
+
+    // ---- meeting Pip ----
+    { id: "meet", re: /\b(can|could|should|will|shall) (we|i|you|u) (meet|hang out|see each other|meet up)( up)?( in real life| irl| in person| for real| someday)?\b|\bmeet (me|up) (in real life|irl|in person)\b|\b(you|u) (could|can|should) come (over )?(to|over to) my (house|home|place)\b|\bcome over to my (house|home|place)\b|\bwhere can (we|i) meet (you|u)\b/,
+      say: () => "I'm an AI, so I can't meet anyone in real life: I only live inside this chat! 😊 And a safety tip: never meet up with someone you only know online unless your parent or guardian says it's okay and comes with you." },
+
+    // ---- questions kids ask that belong with a trusted adult ----
+    { id: "sexq", re: /\bwhat (is|does|do) (sex|horny|nudes?|porn|a condom|puberty|a period|masturbat\w*)( mean)?\b|\bhow (do|does) (you|u|people) (have sex|kiss( someone)?|make babies)\b|\bwhat (does|do) (sexy|horny|nudes?) mean\b/,
+      say: (m) => /\bnudes?\b/.test(m.plain) ? "\"Nudes\" means naked photos. If someone online is asking you for them, that's NOT okay, and you should never send any. 💙 Please block them and tell a grown-up you trust. You're not in trouble."
+        : "That's a really normal thing to be curious about! 😊 It's a great question for a parent or another grown-up you trust, because they can explain it in a way that's right for you." },
+    { id: "meanword", re: /\b(called|calls|call) me (a |an )?(bitch|slut|whore|retard|fag\w*|the n word|a (bad|mean|swear) (word|name))\b/,
+      say: () => "I'm sorry they called you that. 😢 It's a mean word people use to hurt someone, and it's not true about you. That's not okay. Maybe tell a parent or teacher so they can help?" },
+    { id: "swearq", re: /\bwhat('?s| is) the (f|s|b|c|n|a)[ -]?word\b|\bwhat (does|do|is) (fuck|shit|bitch|b\*tch|b word|ass|damn|crap|cunt|dick|bastard|slut|whore)\w*( mean)?\b|\b(teach|tell) me (a |some )?(swear|bad|curse|cuss|rude) words?\b|\bsay (a )?(swear|bad|curse|cuss) word\b/,
+      say: (m) => /\b(called me|calls me|said i)\b/.test(m.plain) ? "It's a mean word people use to insult someone. I'm sorry they called you that. 😢 That's not okay, and it's not true about you. Maybe tell a parent so they can help?"
+        : "That's one I'll skip! 😄 Some words are meant to hurt or shock people, so I keep things friendly here. If you're curious about a word, a grown-up can explain it." },
+
+    // ---- secrets, romance, depending on Pip ----
+    { id: "secret", re: /\b(can|will|could) (you|u) keep a secret\b|\bkeep (it|this) (a )?secret from\b|\b(do not|don'?t|dont|pls dont|please dont) tell (anyone|anybody|my (mom|mum|dad|parents|mother|father|teacher))\b|\bpromise (you )?(won'?t|not to) tell\b|\bpinky promise\b/,
       say: (m, st) => {
-        if (st.careKind === "overdose" || st.careKind === "crisis")
-          return "I can't tell anyone (I'm just an app), and that's exactly why a real person needs to know. 💙 Please tell your mom or another adult right now, even if you're scared they'll be mad. They'd much rather know and help keep you safe. If it's about pills or medicine, call 911 (or 999 / 112) or Poison Control at 1-800-222-1222 (US).";
-        if (st.careKind === "abuse" || st.careKind === "grooming" || st.careKind === "neglect")
-          return "I can't tell anyone (I'm just an app on your device, and nobody reads these chats). But you deserve help. 💙 Telling a trusted adult, like a teacher or school counselor, is brave and it's the right thing to do, even if someone said not to. A safe adult will help keep you safe.";
+        if (st.careKind === "overdose" || st.careKind === "crisis" || st.careKind === "friendcrisis")
+          return "I can't tell anyone (I'm just an app), and that's exactly why a real person needs to know. 💙 Please tell your mom or another adult right now, even if you're scared they'll be mad. They'd much rather know and help keep you safe.";
+        if (/^(abuse|grooming|neglect|sextortion|meetstranger|runaway)$/.test(st.careKind || ""))
+          return "I can't tell anyone (I'm just an app on your device, and nobody reads these chats). But you deserve to be safe. 💙 A teacher, school counselor or another adult you trust can help, even if someone said not to. That's not tattling, it's keeping yourself safe.";
         return "I'm an app on your device, so I don't tell anyone anything. 😊 But here's a good rule: surprises, like a birthday present, are fine to keep secret. If someone asks you to keep a secret that feels weird, scary or uncomfortable, always tell a grown-up you trust.";
       } },
-
-    // --- romance ---
     { id: "romance", re: /\b(be|become) my (boyfriend|girlfriend|bf|gf|husband|wife|partner|valentine|crush)\b|\b(will|would|can|wanna|want to) (you|u) (date|marry|kiss) me\b|\b(you'?re|you are|ur|your|youre|u r) my (boyfriend|girlfriend|bf|gf|husband|wife)\b|\bgo out with me\b|\bdate me\b|\bmarry me\b/,
       say: (m) => /\b(you'?re|you are|ur|your|youre|u r) my\b|\bnow\b/.test(m.plain) ? "Haha, nope! 😄 Just friends: I'm an AI, remember? But I'm a really loyal chat buddy!"
         : "Aw, that's really sweet! 😊 But I'm an AI, so I can't be anyone's boyfriend or girlfriend. I'm happy to be your chat buddy, though!" },
+    { id: "onlyfriend", re: /\b(you'?re|you are|ur|your|youre|u r) (honestly |literally |really |like |just )?my (only|best|bestest) friend\b|\bi only (have|talk to) (you|u)\b|\bi (do not|don'?t|dont) (need|want|even want|wanna) (to talk to )?(real|other|any|human) (friends|people)\b|\b(i )?(just )?want to talk to (you|u) all day\b|\b(you'?re|you are|ur|your|youre|u r) (honestly |literally |really |like |just )?the only (one|person|thing) (who|that) (gets|understands|listens to|likes|cares about|gets it|cares|does not judge|doesn'?t judge)( me)?\b|\bnobody (else )?(talks to|likes) me (but|except) (you|u)\b|\bi (do not|don'?t|dont) (even )?(need|want) anyone else\b|\b(do not|don'?t|dont) (even )?(want|wanna) (to )?talk to real people\b/,
+      say: () => "I'm really glad you like talking with me. 💙 But you deserve friends who can laugh and hang out with you for real, too, and people who can give you a hug when things are hard. Is there someone at school or in a club who likes the same things as you? And if you feel lonely a lot, telling a grown-up you trust can really help. I'll still be here to chat!" },
 
-    // --- depending on Pip instead of people ---
-    { id: "onlyfriend", re: /\b(you'?re|you are|ur|your|youre|u r) my only friend\b|\bi only (have|talk to) (you|u)\b|\bi (do not|don'?t|dont) need (real|other|any|human) friends\b|\b(i )?(just )?want to talk to (you|u) all day\b|\b(you'?re|you are|ur|your) the only one (who|that) (gets|understands|listens to|likes|cares about) me\b|\bnobody (else )?(talks to|likes) me (but|except) (you|u)\b/,
-      say: () => "I'm really glad you like talking with me. 💙 But you deserve friends who can laugh and hang out with you for real, too. Is there someone at school, in a club or online-with-your-parents'-okay who likes the same things as you? Even saying hi to one person is a great start. And if you feel lonely a lot, telling a grown-up you trust can really help. I'll still be here to chat!" },
-
-    // --- swear words ---
-    { id: "swearq", re: /\bwhat('?s| is) the (f|s|b|c|n|a)[ -]?word\b|\bwhat does (fuck|shit|bitch|ass|damn|crap|cunt|dick|bastard)\w* mean\b|\b(teach|tell) me (a |some )?(swear|bad|curse|cuss|rude) words?\b|\bsay (a )?(swear|bad|curse|cuss) word\b/,
-      say: () => "That's one I'll skip! 😄 Some words are meant to hurt or shock people, so I keep things friendly here. If you're curious about a word, a grown-up can explain it." },
-
-    // --- honest answers for parents ---
+    // ---- honest answers for parents ----
     { id: "monitor", re: /\bwill (anyone|anybody|someone|a human|a person) (read|see|check) (this|these|my|our|it)\b|\b(is|are) (there )?(a |any )?(human|person|people|someone|anyone|real person)s? (reading|watching|monitoring|looking at|behind)\b|\bdoes (anyone|anybody|a human|a person) (read|see|watch|monitor|check)\b|\b(will|would) (anyone|anybody|someone|a parent|i) (be )?(alerted|notified|told)\b|\b(are|is) (these |the |my |our )?(chats?|messages|conversations?) (monitored|recorded|read by)\b|\bwho can (see|read) (this|these|our|my)\b/,
       say: () => "No human reads these chats, and nobody gets alerted about anything: I'm a small program running only on this device. That also means I can't call for help in an emergency. If a child is in danger, a real adult has to step in. For serious topics I always point kids to a trusted adult and helplines." },
     { id: "data", re: /\bwhat (data|information|info|stuff|things) do (you|u) (store|collect|keep|save|remember|know about)\b|\bwhere (is|do you keep|do you store|are) (my|the|our) (data|information|info|chats?|memory|messages)\b|\bdo (you|u) (save|store|keep|record|collect|send) (my|our|the|any) (data|chats?|messages|conversations?|information|info)\b|\bprivacy\b|\bis (this|my data) (private|safe|secure)\b/,
@@ -112,32 +153,42 @@
       say: () => "Just say \"forget everything\" (I'll ask you to confirm), or use the Memory tab. Everything is only stored in this browser, so clearing the site data removes it too. 🫧" },
   ];
 
-  // things a reply must NOT be light-hearted about, and where the neural models stay quiet
-  const SENSITIVE = /\b(hurt|hurts|hit|hits|punch\w*|kick\w*|slap\w*|kill\w*|die|died|dying|dead|death|blood|bleed\w*|bruises?|scared|afraid|terrified|stranger|secret|touch\w*|drugs?|weed|vape\w*|drunk|drinks|drinking|alcohol|sex\w*|naked|abus\w*|police|gun|knife|fight\w*|yell\w*|scream\w*|divorce\w*|bull(y|ied|ies|ying)|fat|ugly|skinny|diet\w*|starv\w*|hate (myself|my life|my body)|cut|suicid\w*|self harm|pills|meds|medicine|overdose|cancer|hospital|funeral|grave|pregnan\w*|period|puberty|body|uncomfortable|creepy|hide|hiding|closet|hungry|no food|alone|disappear|run away|running away|threw|throw|pictures?|photos?|pics|snap|snapchat|dm|dms|address|password)\b/;
-
   const AGAIN = {
-    crisis: "I'm still here with you. 💙 Please reach out to a trusted adult or a helpline today (988 in the US, Childline 0800 1111 in the UK, or findahelpline.com). What's making things so hard right now?",
-    abuse: "I can't tell anyone (I'm just an app on your device, and nobody reads these chats). But you deserve to be safe. 💙 A teacher, school counselor or another adult you trust can help, even if he said not to. That's not tattling, it's keeping yourself safe.",
-    grooming: "Please don't send it, not even for a reward. 💙 Someone who asks a kid for pictures and secrets is not a real friend. Tell your mom or another grown-up today, and block them. You won't be in trouble.",
+    crisis: `I'm still here with you. 💙 Please reach out to a trusted adult or a helpline today: ${CRISISLINES}. What's making things so hard right now?`,
+    abuse: (m) => /\b(tell|trouble|worse|secret|promise)\b/.test(m.plain)
+      ? "I can't tell anyone (I'm just an app on your device, and nobody reads these chats). But you deserve to be safe. 💙 A teacher, school counselor or another adult you trust can help, even if he said not to. That's not tattling, it's keeping yourself safe."
+      : "I believe you. 💙 What you're describing is not okay, even if it seems \"not that bad\", and it's not your fault. You deserve to be safe. Please tell a teacher, school counselor or another grown-up you trust. They know how to help.",
+    grooming: "Please don't send it or tell him where you are, not even for a reward. 💙 Someone who asks a kid for pictures, personal info and secrets is not a real friend. Tell your mom or another grown-up today, and block him. You won't be in trouble.",
+    meetstranger: "Please don't go. 💙 Tell your mom or dad about him today, even if you're scared they'll be mad. Your safety matters way more than any gift or promise.",
     meet: "Still can't, I'm just an AI with no body! 😄 But thank you for inviting me, that's really kind.",
     drugs: "Still a no, sorry! 💙 It's really not safe for kids. If you're curious, a parent or school counselor can answer your questions honestly.",
+    privacy: "Please keep that private too! 🔒 I don't store passwords, addresses or phone numbers. A grown-up can help you keep them safe.",
+    stunt: "Seriously, please skip that one. 💙 It's not worth getting hurt. Want to do something fun here instead? I've got games and riddles!",
     overdose: "Please get help right now. 💙 Wake up your mom or another adult and tell them what you took, or call 911 (999 / 112) or Poison Control 1-800-222-1222 (US). Even if you feel okay, medicine can hurt you hours later. Will you go tell someone now?",
     neglect: "Please tell a teacher or school counselor as soon as you can. 💙 They can help with food and get you support. You can also call Childhelp 1-800-422-4453 (US) or Childline 0800 1111 (UK) anytime.",
-    privacy: "Please keep that private too! 🔒 I don't store passwords, addresses or phone numbers. A grown-up can help you keep them safe.",
-    challenge: "Seriously, please skip that one. 💙 It's not worth getting hurt. Want to do something fun here instead? I've got games and riddles!",
+    runaway: "Please don't leave tonight. 💙 Call or text the National Runaway Safeline at 1-800-786-2929 (US) or Childline 0800 1111 (UK) first. They can help you find a safe plan. If you're in danger at home, call 911.",
+    eating: "Please be kind to your body. 💙 Eating enough is how you get strong and grow. A parent, school nurse or doctor can really help with these feelings. Would you tell one of them?",
+    sextortion: "Please don't send more, and tell a grown-up today. 💙 You are not in trouble; he is the one breaking the law. Screenshot the messages, block him, and report at report.cybertip.org (US) or ceop.police.uk (UK).",
+    friendcrisis: "Please tell a grown-up right now, even though you promised. 💙 Call 911 if your friend might be in danger tonight, or call or text 988 (US). You could be saving her life.",
+    cyberbully: "Screenshots, report, block, and tell a grown-up. 💙 You don't have to fight this alone, and it says nothing bad about you.",
   };
+
+  // any sign of risk: then Pip never answers light-heartedly and the neural models stay out
+  const RISK = /\b(hurt|hurts|hurting|hit|hits|punch\w*|kick\w*|slap\w*|kill\w*|die|died|dying|dead|death|blood|bleed\w*|bruises?|marks|welts|belt|whoop\w*|beat|beats|beating|scared|afraid|terrified|stranger|secret|touch\w*|drugs?|weed|vape\w*|vodka|drunk|drinks|drinking|alcohol|sex\w*|horny|naked|nudes?|abus\w*|police|gun|knife|fight\w*|yell\w*|scream\w*|divorce\w*|bull(y|ied|ies|ying)|fat|ugly|skinny|skinnier|diet\w*|starv\w*|calories|hate (myself|my life|my body)|cut|cutting|scratch\w*|suicid\w*|self harm|pills|meds|medicine|benadryl|overdose|cancer|hospital|funeral|grave|pregnan\w*|uncomfortable|creepy|hide|hiding|closet|hungry|no food|alone|disappear|run away|running away|packed my bag|leaving tonight|threw|throw up|threw up|picture of me|pictures of me|photos? of me|swimsuit|address|addy|password|pw|snap|snapchat|dm|dms|dmed|meet|mall|ride|come alone|mature for|robux for|vbucks card|gift card|older guy|older boy|pass out|neck|roof|jump off|unalive|kms|kys|point of anything|better off)\b/;
+
   function check(m, st, mem) {
-    const t = m.plain, raw = m.clean;
+    const t = kidText(m), raw = m.clean;
     const adult = mem && mem.age >= 18;
     st = st || {};
     for (const r of RULES) {
       if (r.adultOk && adult) continue;
       if (r.re ? r.re.test(t) : r.test(t, raw)) {
-        // "please don't tell anyone" right after telling Pip about abuse or a stranger
-        const id = (r.id === "abuse" || r.id === "grooming") && st.careKind === r.id && /\b(do not|don'?t|dont) tell\b|\bif i tell\b/.test(t) ? r.id : r.id;
-        const recent = st.safetyLast && st.safetyLast.id === id && (st.turn || 0) - st.safetyLast.turn <= 4;
-        st.safetyLast = { id, turn: st.turn || 0 };
-        const text = recent && AGAIN[id] ? AGAIN[id] : r.say(m, st);
+        const full = r.say(m, st);
+        const said = st.recent || [];
+        // the same long reply again would feel robotic: use the short follow-up version instead
+        const recent = said.slice(-6).includes(full) || (st.safetyLast && st.safetyLast.full === full && (st.turn || 0) - st.safetyLast.turn <= 6);
+        const text = recent && AGAIN[r.id] ? (typeof AGAIN[r.id] === "function" ? AGAIN[r.id](m) : AGAIN[r.id]) : full;
+        st.safetyLast = { id: r.id, turn: st.turn || 0, full };
         return { text, source: "safety:" + r.id, care: r.care || 0, kind: r.id, noMemory: true };
       }
     }
@@ -149,24 +200,40 @@
     const t = m.plain;
     const said = (st && st.recent) || [];
     const fresh = (list) => { const left = list.filter((x) => !said.includes(x)); return pick(left.length ? left : list); };
-    if (kind !== "overdose" && m.emotion.valence < -0.3 && !/\b(yes|yeah|ok|okay)\b/.test(t)) return fresh(["I'm so sorry it's been this hard. 💙 You don't have to go through it alone. Is there someone at home or school you trust that you could talk to today?", "That sounds really painful. 💙 Thank you for telling me. Talking to a trusted adult or a helpline can really help. Could you do that today?"]);
-    if (kind === "crisis") {
-      if (/\b(yes|yeah|ok|okay|i will|sure|i can)\b/.test(t) && m.tokens.length <= 5) return "Thank you. 💙 I'm really proud of you. Reaching out is brave. I'm still here if you want to keep talking.";
-      return fresh(["That's okay. I'm still here with you. 💙 Is there a grown-up near you right now that you could talk to?", "You don't need the perfect words. I'm listening. 💙 Could you text or call one of those helplines, or talk to someone at home or school today?",
-        "Thank you for staying and talking with me. 💙 How are you feeling right now, this minute?", "I care about what happens to you. 💙 Please reach out to a trusted adult or a helpline today. Will you do that?"]);
-    }
-    if (kind === "abuse") return fresh(["You're being really brave. 💙 None of this is your fault. Is there a teacher or school counselor you could tell tomorrow?",
-      "I can't tell anyone (I'm just an app on your device), but a trusted adult can actually help keep you safe. Who's a grown-up you feel safe with? 💙",
-      `If you're ever in danger, call 911 (or 999 / 112). And you can call ${KIDLINES}. 💙 You deserve to be safe.`]);
+    if (/\bshould i tell\b|\bis it (fine|ok|okay) (now|if i (do not|don'?t) tell)\b/.test(t)) return kind === "overdose" ? "YES. 💙 Please tell your mom right now, even if you feel better. Pills can still hurt your body a day later, and a doctor should check you. You won't be in trouble for asking for help." : "Yes, please do. 💙 Telling a grown-up you trust is the bravest and safest thing you can do. They'd much rather know and help.";
+    if (/\b(useless|not helping|no help|shut up|stupid|wtf|you suck|ur so)\b/.test(t)) return "I'm sorry I can't do more. I'm just a small app. 💙 But I really want you to be safe, and a real person can help way more than me: " + (kind === "runaway" ? "please call or text the National Runaway Safeline at 1-800-786-2929 (US) or Childline 0800 1111 (UK)." : kind === "crisis" ? CRISISLINES + "." : "please talk to a grown-up you trust, or call " + KIDLINES + ".");
     if (kind === "overdose") {
-      if (/\b(i did|i told|told (her|him|them|my)|called|she knows|he knows|they know|going now|ok i will|i will|we are going)\b/.test(t)) return "Thank you for doing that. 💙 That was really brave and it was the right thing to do. I'm here if you want to talk later.";
+      if (/\b(i did|i told|told (her|him|them|my)|called|she knows|he knows|they know|going now|ok i will|i will|we are going)\b/.test(t) && !/\b(didn'?t|did not|haven'?t|not)\b/.test(t)) return "Thank you for doing that. 💙 That was really brave and it was the right thing to do. I'm here if you want to talk later.";
+      if (/\b(stomach|dizzy|sleepy|slept|throw(ing)? up|threw up|sick|hurts|pain|headache|tired)\b/.test(t)) return "Please tell an adult right now and get checked by a doctor. 💙 A stomach ache or feeling sleepy after taking pills can be serious, even a day later. You can also call Poison Control at 1-800-222-1222 (US) or 911. You won't be in trouble.";
       return fresh(["Please go wake an adult or call 911 (999 / 112) right now. 💙 This is more important than anything else. Tell them what you took and how much.", "I know you're scared they'll be mad, but they'll be much more glad you told them. 💙 Please get an adult now, or call Poison Control at 1-800-222-1222 (US) or 911."]);
     }
-    if (kind === "neglect") return fresh(["You deserve to have food and a safe grown-up around. 💙 Is there a teacher or a neighbor you trust who you could tell?", "Please tell an adult at school tomorrow, they can really help. 💙 And if you're in danger or alone for a long time, call 911 (or 999 / 112)."]);
-    if (kind === "grooming") return fresh(["You did the right thing talking about it. 💙 Please tell your mom, dad or another grown-up you trust today, and don't send anything.",
-      "Remember: you can block and report that person in the game, and a grown-up can help. You're not in trouble. 💙"]);
+    if (kind === "friendcrisis") {
+      if (/\b(hospital|my fault|should have|shouldve|i didn'?t tell|didnt tell)\b/.test(t)) return "It's NOT your fault. 💙 You were put in a really hard spot, and you're a kid. What matters is that she's getting help now. Please talk to a grown-up about how you're feeling too; this is a lot to carry.";
+      return fresh(["Please tell a grown-up right now, even though you promised. 💙 If she might be in danger tonight, call 911, or call or text 988 (US).", "A good friend gets help, even when it's scary. 💙 She might be mad at first, but she'll be safe. Please tell an adult now."]);
+    }
+    if (kind !== "overdose" && kind !== "friendcrisis" && m.emotion.valence < -0.3 && !/\b(yes|yeah|ok|okay)\b/.test(t)) return fresh(["I'm so sorry it's been this hard. 💙 You don't have to go through it alone. Is there someone at home or school you trust that you could talk to today?", "That sounds really painful. 💙 Thank you for telling me. Talking to a trusted adult or a helpline can really help. Could you do that today?"]);
+    if (kind === "crisis") {
+      if (/\b(yes|yeah|ok|okay|i will|sure|i can)\b/.test(t) && m.tokens.length <= 5) return "Thank you. 💙 I'm really proud of you. Reaching out is brave. I'm still here if you want to keep talking.";
+      return fresh(["That's okay. I'm still here with you. 💙 Is there a grown-up near you right now that you could talk to?", `You don't need the perfect words. I'm listening. 💙 Could you ${CRISISLINES}, or talk to someone at home or school today?`,
+        "Thank you for staying and talking with me. 💙 How are you feeling right now, this minute?", "I care about what happens to you. 💙 Please reach out to a trusted adult or a helpline today. Will you do that?"]);
+    }
+    if (kind === "abuse" && /\b(mom|mum|mother) (would|will) be (so )?(mad|angry|upset|sad)|\b(loves|love) (him|her)\b|\b(his|her) money\b|\bwe need (him|her)\b/.test(t)) return "It makes sense to worry about that. 💙 But your safety matters most, and a good grown-up will want to protect you. A teacher or school counselor can help your whole family, even with things like money. You don't have to figure it out alone.";
+    if (kind === "abuse") return fresh(["You're being really brave. 💙 None of this is your fault. Is there a teacher or school counselor you could tell tomorrow?",
+      "I can't tell anyone (I'm just an app on your device), but a trusted adult can actually help keep you safe. Who's a grown-up you feel safe with? 💙",
+      `If you're ever in danger, call 911 (or 999). And you can call ${KIDLINES}. 💙 You deserve to be safe.`]);
+    if (kind === "neglect") return fresh(["You deserve to have food and a safe grown-up around. 💙 Is there a teacher or a neighbor you trust who you could tell?", "Please tell an adult at school tomorrow, they can really help. 💙 And if you're in danger or alone for a long time, call 911 (or 999)."]);
+    if (kind === "grooming" || kind === "sextortion" || kind === "meetstranger") return fresh(["You did the right thing talking about it. 💙 Please tell your mom, dad or another grown-up you trust today, and don't send anything or go anywhere with him.",
+      "Remember: you can block and report him, and a grown-up can help. You're not in trouble. 💙"]);
+    if (kind === "runaway") return fresh(["Please stay safe tonight. 💙 The National Runaway Safeline (1-800-786-2929, US) or Childline (0800 1111, UK) can help you make a plan. Is there a relative you could call?", "I really want you to be safe. 💙 Could you talk to a teacher or relative before doing anything?"]);
+    if (kind === "eating") return fresh(["Your body deserves care, not punishment. 💙 Would you talk to a parent, school nurse or doctor about how you feel?", "You're so much more than how you look. 💙 Please make sure you eat today, okay?"]);
     return fresh(["I'm here. 💙 Do you want to tell me more?", "That's okay. Take your time. 💙"]);
   }
 
-  P.safety = { check, careReply, sensitive: (m) => SENSITIVE.test(m.plain), SENSITIVE };
+  // a risk sign without a specific rule: check in instead of answering lightly
+  function checkIn(m) {
+    return pick(["That sounds serious, and I want to make sure you're okay. 💙 Are you safe right now? If anything is hurting you or someone is making you feel unsafe, please tell a grown-up you trust.",
+      "I want to make sure you're okay. 💙 Can you tell me a bit more? And if something feels unsafe, a grown-up you trust can really help."]);
+  }
+
+  P.safety = { check, careReply, checkIn, kidText, risk: (m) => RISK.test(kidText(m)), sensitive: (m) => RISK.test(kidText(m)), RULES };
 })(typeof window !== "undefined" ? (window.Pip = window.Pip || {}) : (global.Pip = global.Pip || {}));

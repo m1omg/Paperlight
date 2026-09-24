@@ -484,6 +484,15 @@
     elytra: "Unbreaking III and Mending.",
   };
 
+  // ---------- what each animal eats in Minecraft (feeding = breeding and healing) ----------
+  const feed = {
+    Cow: "wheat", Mooshroom: "wheat", Sheep: "wheat", Goat: "wheat", Pig: "carrots, potatoes or beetroot", Chicken: "seeds (wheat, melon, pumpkin or beetroot seeds)",
+    Wolf: "any meat (and bones to tame it first)", Cat: "raw cod or raw salmon", Ocelot: "raw cod or raw salmon", Axolotl: "a bucket of tropical fish", Horse: "golden carrots or golden apples (wheat, sugar, apples and hay heal them)",
+    Donkey: "golden carrots or golden apples", Rabbit: "dandelions, carrots or golden carrots", Turtle: "seagrass", Panda: "bamboo", Fox: "sweet berries or glow berries",
+    Bee: "any flower", Frog: "slimeballs", Sniffer: "torchflower seeds", Camel: "cactus", Armadillo: "spider eyes", Llama: "hay bales", Parrot: "seeds (NEVER cookies, they're poisonous to parrots!)",
+    Strider: "warped fungus", Hoglin: "crimson fungus", "Polar Bear": "nothing, you can't breed polar bears", Dolphin: "raw cod or salmon (it won't breed, but it'll lead you to treasure!)",
+  };
+
   // ---------- potions ----------
   const potions = [
     ["Healing", "Glistering Melon Slice", "Heals you instantly. Add glowstone for Healing II.", "health|instant health|heal", "g"],
@@ -537,6 +546,32 @@
       a: "Villages spawn in plains, deserts, savannas, taigas and snowy plains. Explore those biomes, or with cheats on use /locate structure minecraft:village_plains. Villages have beds, food and villagers to trade with!" },
     { q: ["how to trade with villagers", "villager trading", "how do villagers work", "how to get a librarian", "villager jobs"],
       a: "Villager trading: right-click a villager with a job to see its trades (you pay with emeralds). Give a jobless villager a workstation to set its job: lectern = librarian (enchanted books!), composter = farmer, blast furnace = armorer, etc. Trade a few times and it levels up with better offers. Curing a zombie villager gives you huge discounts." },
+    { q: ["explain minecraft simply", "what is minecraft", "how do you play minecraft", "explain minecraft for a grandmother", "what do you do in minecraft", "what do you actually do in the game", "what is the point of minecraft", "how does minecraft work"],
+      a: "Minecraft is like digital Lego in a huge world made of blocks. You can dig up any block (dirt, stone, wood) and place it somewhere else, so you can build anything: houses, castles, whole cities. There are two main ways to play: in Survival you collect materials, craft tools and stay safe from monsters at night; in Creative you have every block for free and can fly, so it's pure building. Kids love it because there's no single goal: they explore, build and invent. A lovely question to ask your grandchildren: \"Can you show me something you built?\" 😊" },
+    { q: ["what is the difference between survival and creative", "survival vs creative", "survival or creative", "what is survival mode", "what is creative mode"],
+      a: "Survival mode: you start with nothing, gather wood and stone, craft tools, and have health and hunger, and monsters come out at night. Creative mode: unlimited blocks, you can fly and can't get hurt, so it's all about building. Many kids build in Creative and go on adventures in Survival." },
+    { q: ["what is a mob", "what does mob mean", "what is a mob in minecraft", "what are mobs"],
+      a: "In Minecraft, a \"mob\" is any creature that moves around: animals like cows and sheep, and monsters like zombies and creepers. (It's short for \"mobile\".) Some are friendly, some only fight back if you hit them, and some attack you." },
+    { q: ["what is a creeper", "what are creepers"],
+      a: "A creeper is Minecraft's most famous monster: a green, silent creature that sneaks up on you and explodes! 💥 Kids joke about them a lot. They're scared of cats, and they drop gunpowder." },
+    { q: ["how to build a house", "how do i build a cozy house", "cozy house ideas", "how to make a house in minecraft", "how to build a cherry wood house", "cherry wood house", "how do i make a cherry house", "how do i build a nice house"],
+      a: "Cozy house tips: 🏡 1) Pick a simple shape, like 7×9, and make the frame from logs (stripped cherry logs look great) with planks for the walls. 2) Don't make walls flat: push the windows and doors in or out by one block. 3) Give it a roof with stairs that hangs over the walls by one block. 4) Add a porch, lanterns, flower pots, leaves and a little path. 5) Inside: carpets, bookshelves, a bed and some plants make it cozy!" },
+    { q: ["what blocks go with cherry wood", "what blocks look nice with cherry planks", "cherry wood palette", "what goes with cherry planks", "block palette", "what blocks look good together", "blocks that go together"],
+      a: "Blocks that look great with cherry: 🌸 white or light gray concrete, calcite, birch planks, stripped cherry logs for beams, deepslate tiles or dark oak for contrast, and pink petals and flowering azalea for decoration. For purple: amethyst blocks, purpur, or purple and magenta stained glass look amazing with cherry! 💜" },
+    { q: ["what should i use for the roof", "roof ideas", "how to make a roof", "best roof blocks", "roof for my house"],
+      a: "Roof ideas: use stairs so it slopes (deepslate tile, dark oak or spruce stairs look great), let it hang one block past the walls, and add slabs at the top. For a cherry house, dark oak or deepslate tile makes the pink pop. 🏠" },
+    { q: ["how to make a pool", "how do i make a pool", "how to build a swimming pool", "swimming pool in minecraft", "pool ideas"],
+      a: "Pool time! 🏊 Dig a hole (like 5×8 and 3 deep), line it with smooth quartz, white concrete or prismarine, then fill it with water. Tip: make an infinite water source (2 buckets in a 2×2 hole) so you never run out. Put sea lanterns under the water for a glow, and use slabs or stairs for steps and a diving board!" },
+    { q: ["how to get a blue axolotl", "blue axolotl", "how do i get a blue one axolotl", "rarest axolotl"],
+      a: "Blue axolotls are super rare! 💙 They never spawn in the wild: you have to breed two axolotls (feed each a bucket of tropical fish), and each baby has a 1 in 1200 chance of being blue. So... lots of breeding! Keep the babies in a pen with water so they don't dry out." },
+    { q: ["how to get bees", "how do i get bees", "bee farm", "how to move bees", "how to get honey"],
+      a: "Bees live in bee nests on birch, oak and cherry trees, especially in flower forests, plains and meadows. 🐝 Hold a flower and they'll follow you! To move a nest, mine it with a Silk Touch tool while the bees are inside (at night). For honey: put a campfire under the nest so they stay calm, then use a glass bottle (honey) or shears (honeycomb)." },
+    { q: ["how to make a map", "how to use a map", "how do maps work"],
+      a: "Craft a map with 8 paper around a compass (or 9 paper for an empty map in newer versions), hold it and right-click to start drawing the area around you. 🗺️ Combine it with more paper on a cartography table to zoom out!" },
+    { q: ["what is the rarest thing in minecraft", "rarest item", "rarest block", "rarest mob", "what is the rarest"],
+      a: "Some of the rarest things in Minecraft: 💎 a blue axolotl (1 in 1200 when breeding), a brown panda, a pink sheep (0.164% of sheep), a skeleton horse trap, the dragon egg (only one per world!), enchanted golden apples, and heavy cores from ominous vaults (for the mace)." },
+    { q: ["how to breed animals", "how do you breed animals", "breeding animals", "how to make baby animals"],
+      a: "Breeding: feed two adult animals of the same kind their favorite food and they'll make hearts and a baby! 💕 Cows, sheep and goats: wheat. Pigs: carrots, potatoes or beetroot. Chickens: seeds. Horses: golden carrots. Cats: raw fish. Wolves: meat. Rabbits: dandelions or carrots. Axolotls: buckets of tropical fish. Then wait 5 minutes before breeding them again." },
     { q: ["how to hide from mobs", "best way to hide in minecraft", "hide from mobs", "how do i stay safe at night in minecraft", "how to not get attacked by mobs"],
       a: "Hiding from mobs: dig into a hillside and block the entrance behind you (mobs can't dig), light everything up with torches (mobs don't spawn in bright light), use doors (zombies can only break them on Hard), and sleep in a bed to skip the night. Sneaking also makes the Warden and sculk sensors not hear you. 🏠" },
     { q: ["is herobrine real", "herobrine", "who is herobrine"],
@@ -629,6 +664,14 @@
       a: "Seeds change between versions, so I can't promise a specific one! Tip: any text works as a seed, so try a word you like (your name, 'glacier', 'axolotl'...). Sites like chunkbase let you preview a seed's villages and biomes before you play." },
     { q: ["how to make a redstone clock", "redstone clock", "observer clock"],
       a: "Easiest redstone clock: put two observers facing each other; they keep triggering each other, super fast. For a slower clock, make a loop of redstone dust with a couple of repeaters (more delay = slower) and start it with one button press." },
+    { q: ["explain minecraft simply", "what is minecraft", "how do you play minecraft", "explain minecraft for a grandmother", "what do you do in minecraft", "what do you actually do in the game", "what is the point of minecraft", "how does minecraft work"],
+      a: "Minecraft is like digital Lego in a huge world made of blocks. You can dig up any block (dirt, stone, wood) and place it somewhere else, so you can build anything: houses, castles, whole cities. There are two main ways to play: in Survival you collect materials, craft tools and stay safe from monsters at night; in Creative you have every block for free and can fly, so it's pure building. Kids love it because there's no single goal: they explore, build and invent. A lovely question to ask your grandchildren: \"Can you show me something you built?\" 😊" },
+    { q: ["what is the difference between survival and creative", "survival vs creative", "survival or creative", "what is survival mode", "what is creative mode"],
+      a: "Survival mode: you start with nothing, gather wood and stone, craft tools, and have health and hunger, and monsters come out at night. Creative mode: unlimited blocks, you can fly and can't get hurt, so it's all about building. Many kids build in Creative and go on adventures in Survival." },
+    { q: ["what is a mob", "what does mob mean", "what is a mob in minecraft", "what are mobs"],
+      a: "In Minecraft, a \"mob\" is any creature that moves around: animals like cows and sheep, and monsters like zombies and creepers. (It's short for \"mobile\".) Some are friendly, some only fight back if you hit them, and some attack you." },
+    { q: ["what is a creeper", "what are creepers"],
+      a: "A creeper is Minecraft's most famous monster: a green, silent creature that sneaks up on you and explodes! 💥 Kids joke about them a lot. They're scared of cats, and they drop gunpowder." },
     { q: ["how to build a house", "house ideas", "how do i build a good house", "building tips", "how to build better"],
       a: "Building tips: start with a simple rectangle, frame the corners with logs, fill walls with planks or stone bricks, and make a roof with stairs that overhangs by one block. Set walls back one block from the pillars for depth, mix 2-3 materials, add glass panes, flower pots, lanterns and a path. Light it up so mobs can't spawn!" },
     { q: ["what is the best enchantment", "best enchantment", "most useful enchantment"],
@@ -640,5 +683,5 @@
     { q: ["what is the rarest thing in minecraft", "rarest item", "rarest mob"], a: "Some of the rarest things: a blue axolotl (1 in 1200 when breeding), a pink sheep (0.164% natural spawn), the dragon egg (only one per world), and enchanted golden apples." },
   ];
 
-  P.mcdata = { items, mobs, enchants, bestEnchants, potions, ores, guides };
+  P.mcdata = { items, mobs, feed, enchants, bestEnchants, potions, ores, guides };
 })(typeof window !== "undefined" ? (window.Pip = window.Pip || {}) : (global.Pip = global.Pip || {}));

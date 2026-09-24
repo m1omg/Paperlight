@@ -194,6 +194,12 @@
     return recipeAnswer(it);
   }
 
+  // what the real animals eat (for "what do axolotls eat?" outside a Minecraft chat)
+  const REAL_DIET = { Axolotl: "worms, insects and small fish 🦎", Cat: "meat: cat food made for cats (never chocolate, onions or grapes) 🐱", Wolf: "meat, like deer and rabbits 🐺", Horse: "hay, grass and oats, plus the occasional apple or carrot as a treat 🐴",
+    Cow: "grass and hay 🐄", Pig: "almost anything, but farm pigs mostly eat grains and vegetables 🐷", Chicken: "seeds, grains and bugs 🐔", Rabbit: "mostly hay and leafy greens (carrots are only an occasional treat!) 🐰", Sheep: "grass and hay 🐑",
+    Goat: "grass, leaves and hay 🐐", Panda: "bamboo, up to 12-38 kg a day! 🐼", Fox: "small animals, bugs, berries and fruit 🦊", Bee: "nectar and pollen from flowers 🐝", Frog: "insects like flies and crickets 🐸",
+    Turtle: "it depends on the kind: sea turtles eat seagrass, jellyfish or crabs 🐢", Parrot: "seeds, fruit, nuts and veggies (never chocolate or avocado!) 🦜", Dolphin: "fish and squid 🐬", "Polar Bear": "mostly seals 🐻‍❄️", Camel: "desert plants, even thorny ones 🐪", Llama: "grass and hay 🦙", Armadillo: "insects like ants and beetles" };
+
   function mobAnswer(mob, want) {
     if (want === "drops") {
       const subj = mob.type === "boss" ? "The " + mob.name : U.capitalizeFirst(an(mob.name)) + " " + mob.name;
@@ -246,7 +252,9 @@
       /\b(y level|y-level|y lvl|what level|which level|what lvl|which lvl|what height|best level|best lvl|how deep|what layer)\b/.test(text) ? "ylevel" :
       /\b(brew|brewing|potion|potions)\b/.test(text) ? "brew" :
       /\benchant(ment|ments|ing)?s?\b/.test(text) && !/\benchant(ing|ment)? table\b/.test(text) ? "enchant" :
-      /\b(tame|taming|breed|breeding|ride|riding)\b/.test(text) ? "tame" :
+      /\bwhat (do|does|did|can|should) (i )?(a |an |the )?\w+( \w+)? (eat|like to eat)\b|\bwhat (to|should i|do i) feed\b|\b(favorite|favourite) food\b|\bfeed (a |an |the |my )?\w+\b/.test(text) ? "feed" :
+      /\b(breed|breeding)\b/.test(text) ? "breed" :
+      /\b(tame|taming|ride|riding)\b/.test(text) ? "tame" :
       /\bwhat (does|do|did|will|would) .{1,30}\b(drop|drops)\b/.test(text) ? "drops" :
       /\b(kill|beat|defeat|fight|fighting|survive|deal with|avoid)\b/.test(text) ? "kill" :
       /\b(health|hp|how many hearts|how strong)\b/.test(text) ? "health" :
@@ -256,6 +264,8 @@
       /\b(get|find|obtain|collect|farm|found|locate|mine|where|spawn|spawns)\b/.test(text) ? "obtain" :
       /\b(what is|what are|what does|tell me about|explain|use for|used for|good for|info|use (it|them|this|that|one) for|what is it for|what s it for|what does (it|that|this) do|what do (they|those) do)\b/.test(text) ? "info" : null;
 
+    if (/\b(stop|quit|enough|no more|don'?t|do not) (talking|talk|telling|going on|asking) (about|me about)\b|\b(real|actual) (recipe|life|world)\b|\bnot (a |the )?game\b/.test(text)) return null;
+    if (/\b(grams?|millilit\w*|ml|cups?|tablespoons?|tbsp|teaspoons?|tsp|ounces?|oz|oven|bake|baking|baked|scones?|flour|butter|sugar|dough|batter|cake tin|recipe serves|serves \d|degrees|celsius|fahrenheit|gas mark)\b/.test(text) && !/\b(minecraft|mc|craft|crafting|crafted)\b/.test(text)) return null;
     // "how many bones are in the human body?", "forget it. when did ww2 end?": real-world questions, not the game
     if (/\b(human|humans|real life|irl|in real life|human body|world war|ww1|ww2|wwii|history|biology|chemistry|physics|in science|in math|president|country|countries|planet|solar system|in the ocean)\b/.test(text) && !/\b(minecraft|mc|in the game|in game)\b/.test(text)) return null;
     // "what's your favorite mob?" / "do you like creepers?" are about Pip, and "I know what a creeper is" isn't a question
@@ -422,7 +432,7 @@
     // a game-only answer to a question that didn't mention the game gets a "Minecraft" label
     const label = (a) => (mcWords || recentMC ? a : "If you mean in Minecraft: " + a);
     const craftable = want === "recipe" && mentions.some((x) => x.hits.some((h) => h.kind === "item" && (h.ref.grid || h.ref.shapeless || h.ref.smithing)));
-    if (guide && guideScore > 0.75 && !craftable && !(want === "drops" && mentions.some((x) => x.hits[0].kind === "mob")) && !(want === "recipe" && mentions.length && !guide.q.some((q) => mentions.some((x) => q.includes(x.phrase))))) {
+    if (guide && guideScore > 0.75 && !craftable && !(/^(drops|feed|breed)$/.test(want || "") && mentions.some((x) => x.hits.some((h) => h.kind === "mob"))) && !(want === "recipe" && mentions.length && !guide.q.some((q) => mentions.some((x) => q.includes(x.phrase))))) {
       const top1 = mentions.find((x) => guide.q.some((q) => q.includes(x.phrase)));
       return done(state, { text: label(guide.a), kind: "guide" }, top1 ? { kind: top1.hits[0].kind, ref: top1.hits[0].ref } : null);
     }
@@ -439,7 +449,7 @@
       let s = mt.len * 2 + (mt.fuzzy ? -1 : 0);
       if (want === "ylevel" && h.kind === "ore") s += 4;
       if (want === "obtain" && h.kind === "ore") s += 2;
-      if ((want === "kill" || want === "tame" || want === "health" || want === "drops") && h.kind === "mob") s += 4;
+      if ((want === "kill" || want === "tame" || want === "health" || want === "drops" || want === "feed" || want === "breed") && h.kind === "mob") s += 4;
       if (want === "brew" && h.kind === "potion") s += 4;
       if (want === "enchant" && h.kind === "ench") s += 4;
       if ((want === "recipe" || want === "smelt") && h.kind === "item") s += 3;
@@ -456,7 +466,7 @@
     if (generic && !inContext) {
       // "how do I make a cake?" could be real life. Answer the Minecraft way only for recipe-ish questions, flagged,
       // or for verbs that only make sense in the game ("tame an axolotl", "brew", "enchant", "y level").
-      const gameVerb = /^(tame|brew|enchant|ylevel|drops|health)$/.test(want || "");
+      const gameVerb = /^(tame|brew|enchant|ylevel|drops|health|feed|breed)$/.test(want || "");
       if (!(want === "recipe" && h.kind === "item") && !gameVerb) return null;
       if (guide) return null;
     }
@@ -479,6 +489,18 @@
         } else res = recipeAnswer(ref, generic && !inContext);
         break;
       case "mob":
+        if (want === "feed" || want === "breed") {
+          const food = D.feed[ref.name];
+          const real = REAL_DIET[ref.name];
+          const plural = ref.name.toLowerCase().replace(/(sh|ch|x)$/, "$1e").replace(/y$/, "ie") + "s";
+          const noBreed = /^(Parrot|Dolphin|Polar Bear)$/.test(ref.name);
+          const emo = (real || "").match(/\s*(\p{Extended_Pictographic}[\u200d\ufe0f\p{Extended_Pictographic}]*)\s*$/u);
+          const realText = real ? real.replace(/\s*\p{Extended_Pictographic}[\u200d\ufe0f\p{Extended_Pictographic}]*\s*$/u, "") : null;
+          if (want === "breed") res = { text: noBreed ? `${U.capitalizeFirst(plural)} can't be bred in Minecraft.${food && ref.name === "Parrot" ? " You can tame them with seeds, though!" : ""}` : food ? `To breed ${plural}, feed two of them ${food}. Hearts appear and a baby pops out! 💕 Then wait 5 minutes before breeding them again.` : `Hmm, I don't think ${plural} can be bred in Minecraft.`, kind: "mob" };
+          else if (!inContext && real) res = { text: `Real ${plural} eat ${realText}.${food ? ` (In Minecraft, you feed them ${food}.)` : ""}${emo ? " " + emo[1] : ""}`, kind: "mob" };
+          else if (food) res = { text: `In Minecraft, ${plural} eat ${food}.${noBreed ? "" : " Feeding two of them makes a baby! 💕"}`, kind: "mob" };
+          if (res) break;
+        }
         if (want === "recipe" || want === "obtain") {
           const it = D.items.find((x) => x.name === ref.name);
           if (it) { res = recipeAnswer(it); break; }
