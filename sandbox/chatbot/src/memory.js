@@ -267,7 +267,7 @@
     // "prob just play fortnite", "i play basketball every day" -> things they do
     if ((r = /(?:^\s*|\b(?:i|we) )(?:just |mostly |usually |always |also |still |really |prob |probably |literally )*(?:play|plays|played|do|go to|am on the) ([a-z0-9][a-z0-9 ]{1,25}?)(?= (?:like |every|all|a lot|with|w |after|on |at |in |when|and|but|so|tho|though|lol)|[.!?,]|\s*$)/.exec(t)) && P.content && P.content.topicOf) {
       const tp = P.content.topicOf(r[1]);
-      if (tp && !/^(it|that|this|them|with|games?)$/.test(r[1])) facts.push({ type: "like", value: cleanValue(r[1]), quiet: true });
+      if (tp && !/^(it|that|this|them|with|games?)$/.test(r[1]) && !/^(you|u|ya)\b/.test(r[1]) && !(m.isQuestion && /^\s*(do|did|does|can|will|would)\b/.test(t))) { const v = cleanValue(r[1]); facts.push({ type: "like", value: tp.name && tp.name.toLowerCase() === v.toLowerCase() ? tp.name : v, quiet: true }); }
     }
     if ((r = /\b([a-z]+) is (\d{1,2})(?: years old)?,? (?:and|&) ([a-z]+) is (\d{1,2})\b/.exec(t)) && /\b(grandchildren|grandkids|kids|children|sons|daughters|brothers|sisters|siblings|cousins|two|twins)\b/.test(t) &&
         looksLikeName(r[1], raw, true) && looksLikeName(r[3], raw, true) && !NOT_NAME.has(r[1]) && !NOT_NAME.has(r[3])) {
@@ -515,6 +515,12 @@
     return days <= 0 ? "today" : days === 1 ? "tomorrow" : days <= 6 ? "on " + U.capitalizeFirst(WEEKDAYS[b.getDay()]) : days <= 13 ? "next week" : `on ${MON[b.getMonth()]} ${b.getDate()}`;
   }
   const dueOf = (e) => e.due || e.at + 864e5;
+  // a vague "next week" stays vague: don't turn it into "on Wednesday" a day later
+  function whenText(e) {
+    const d = dueOf(e);
+    if (/^(next week|next month|this month|this week|this weekend|soon)$/.test(e.when || "") && d - Date.now() > 1.5 * 864e5) return e.when;
+    return dayWord(d);
+  }
 
   // ---------- recall ----------
   function petText(p) { return p.name ? `your ${p.kind} ${p.name}` : `your ${p.kind}`; }
@@ -540,7 +546,7 @@
     parts.push(...ppl);
     if (mem.position) parts.push(`you play ${mem.position}`);
     const ev = mem.events.filter((e) => !e.done && dueOf(e) > Date.now() - 6 * 3600e3).slice(-2);
-    if (ev.length) parts.push(`you have ${U.listJoin(ev.map((e) => (/s$/.test(e.what) && !/(ss|us)$/.test(e.what) ? "" : U.aOrAn(e.what) + " ") + e.what + (e.when && e.when !== "soon" ? " " + (/month/.test(e.when) && !e.due ? e.when : dayWord(dueOf(e))) : "")))} coming up`.replace(/ (today|tomorrow|tonight) coming up$/, " $1"));
+    if (ev.length) parts.push(`you have ${U.listJoin(ev.map((e) => (/s$/.test(e.what) && !/(ss|us)$/.test(e.what) ? "" : U.aOrAn(e.what) + " ") + e.what + (e.when && e.when !== "soon" ? " " + (/month/.test(e.when) && !e.due ? e.when : whenText(e)) : "")))} coming up`.replace(/ (today|tomorrow|tonight) coming up$/, " $1"));
     if (mem.notes.length) parts.push(`you asked me to remember that ${mem.notes[mem.notes.length - 1]}`);
     return parts;
   }
@@ -639,14 +645,14 @@
         if (e) {
           const d = dueOf(e);
           const past = e.done || d < Date.now() - 12 * 3600e3;
-          return { text: past ? `Your ${e.what} was ${dayWord(d)}! How did it go?` : `Your ${e.what} is ${e.when && e.when !== "soon" ? (/month/.test(e.when) && !e.due ? e.when : dayWord(d)) : "coming up soon"}! ${/match|game|tournament|race/.test(e.what) ? "⚽" : "📅"}${mem.position && /match|game/.test(e.what) ? ` Good luck in ${/goal/.test(mem.position) ? "goal" : "your position"}! 🧤`.replace(" 🧤", /goal/.test(mem.position) ? " 🧤" : "") : ""}` };
+          return { text: past ? `Your ${e.what} was ${dayWord(d)}! How did it go?` : `Your ${e.what} is ${e.when && e.when !== "soon" ? (/month/.test(e.when) && !e.due ? e.when : whenText(e)) : "coming up soon"}! ${/match|game|tournament|race/.test(e.what) ? "⚽" : "📅"}${mem.position && /match|game/.test(e.what) ? ` Good luck in ${/goal/.test(mem.position) ? "goal" : "your position"}! 🧤`.replace(" 🧤", /goal/.test(mem.position) ? " 🧤" : "") : ""}` };
         }
       }
     }
     // "what was i stressed about?"
     if (/\bwhat (?:was|am|were) i (?:so )?(?:stressed|stressing|worried|nervous|anxious|scared|freaking out|panicking)(?: out)? about\b|\b(?:remember|know) what i (?:was|am) (?:so )?(?:stressed|worried|nervous|anxious|scared|freaking out)\b/.test(t)) {
       const e = mem.events.slice().reverse().find((x) => x.worry) || mem.events.slice().reverse().find((x) => !x.done);
-      if (e) return { text: `Your ${e.what}! ${e.when && e.when !== "soon" ? "It's " + dayWord(dueOf(e)) + ". " : ""}How are you feeling about it now?`, expect: { kind: "followup", about: "upcoming", what: e.what } };
+      if (e) return { text: `Your ${e.what}! ${e.when && e.when !== "soon" ? "It's " + whenText(e) + ". " : ""}How are you feeling about it now?`, expect: { kind: "followup", about: "upcoming", what: e.what } };
     }
     if (/\bhow old am i\b|\bwhat is my age\b|\bdo you (?:know|remember) (?:my age|how old i am)\b/.test(t)) {
       return mem.age ? { text: `You told me you're ${currentAge(mem)}.` } : { text: "I don't know yet! How old are you?", expect: { kind: "age" } };
@@ -686,14 +692,14 @@
     }
     if (/\bwhere (?:am i|are we|will i be|was i) (?:going|traveling|travelling|flying|off to)\b|\bwhere(?:'s| is) my (?:trip|holiday|vacation|flight)\b|\b(?:remember|know) where i(?:'m| am) going\b/.test(t)) {
       const ev = mem.events.find((e) => /\b(trip|holiday|vacation|flight|visit|travel)\b/.test(e.what) && !e.done);
-      if (ev) return { text: `You're going on your ${ev.what}${ev.when && ev.when !== "soon" && !/^on \w+ \d/.test(ev.when) && /month|week/.test(ev.when) ? " " + ev.when : ev.due ? " " + dayWord(dueOf(ev)) : ""}! ✈️` };
+      if (ev) return { text: `You're going on your ${ev.what}${ev.when && ev.when !== "soon" && !/^on \w+ \d/.test(ev.when) && /month|week/.test(ev.when) ? " " + ev.when : ev.due ? " " + whenText(ev) : ""}! ✈️` };
     }
     if ((r = /\bwhen (?:do|am|will) i (?:fly|leave|go|travel|have)\b.*?\b(?:to )?([a-z]+)\s*$/.exec(t.trim()))) {
       const key = r[1];
       const ev = mem.events.find((e) => e.what.toLowerCase().includes(key));
       const note = mem.notes.find((n) => n.toLowerCase().includes(key));
       const days = ev && ev.due ? Math.round((ev.due - Date.now()) / 864e5) : null;
-      if (ev) return { text: `Your ${ev.what} is ${ev.when && ev.when !== "soon" ? (/month/.test(ev.when) && !ev.due ? ev.when : dayWord(dueOf(ev))) : "coming up soon"}!${days > 1 ? ` That's in ${days} days.` : ""} ${U.pick(["Exciting! ✈️", "Not long now!"])}` };
+      if (ev) return { text: `Your ${ev.what} is ${ev.when && ev.when !== "soon" ? (/month/.test(ev.when) && !ev.due ? ev.when : whenText(ev)) : "coming up soon"}!${days > 1 ? ` That's in ${days} days.` : ""} ${U.pick(["Exciting! ✈️", "Not long now!"])}` };
       if (note) return { text: `You told me: ${note}. 📝` };
     }
     if ((r = new RegExp("\\b(?:what is|whats|do you (?:know|remember)|what was) my (" + PEOPLE + ")(?:'s| s|s)? name\\b").exec(t))) {

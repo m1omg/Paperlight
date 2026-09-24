@@ -105,14 +105,17 @@ forward pass with a key/value cache, and nucleus sampling.
 |---|---|---|
 | Architecture | 2-layer bidirectional transformer, d=256, two 128-d heads ("dual encoder") | 8-layer decoder-only transformer, d=256, 4 heads, 256-token context |
 | Parameters | 2.8M | 7.4M |
-| Trained on | 2.1M (context → reply) pairs, contrastive loss with in-batch negatives | ~60M tokens of dialogue, next-token prediction |
-| Job | scores how well a reply fits the conversation; finds the best of ~60,000 human-written lines | writes new replies; 4 samples per turn, judged by the retrieval network |
-| Size in the browser | 3 MB + 10 MB reply bank | 10 MB (int8 weights) |
+| Trained on | 2.1M (context → reply) pairs, contrastive loss with in-batch negatives | ~60M tokens of dialogue, next-token prediction, then a persona fine-tune on listener-style replies |
+| Job | scores how well a reply fits the conversation; finds the best of ~58,000 human-written lines | writes new replies; 4 samples per turn, judged by the retrieval network |
+| How good | picks the real human reply out of 10 candidates 55% of the time (random: 10%) | validation loss 1.91 (perplexity ≈ 6.8) after pretraining |
+| Size in the browser | 4 MB + 18 MB reply bank | 10 MB (int8 weights) |
 
 Human-written replies were filtered so Pip doesn't claim a human life ("my wife", "I'm a nurse", "last weekend I..."):
 it's an AI friend and says so.
 
-Training ran on a 4-core CPU with no GPU: about 45 minutes for the retrieval network and 5 hours for PipGPT.
+Training ran on a 4-core CPU with no GPU: about 4.5 hours for the retrieval network, 5 hours of pretraining for
+PipGPT and 40 minutes of persona fine-tuning. Scoring a reply combines the retrieval network with PipGPT's PMI
+score; together they pick the real reply 57.5% of the time.
 A tip if you retrain on CPU: `torch.set_flush_denormal(True)`. Without it, tiny gradient values made the matrix
 multiplications about 150× slower on this machine.
 
@@ -124,10 +127,11 @@ pip install torch numpy pyarrow tokenizers requests
 python3 download_data.py      # public datasets only, ~870 MB (not committed)
 python3 prepare.py            # clean + merge into data/dialogs.jsonl
 python3 tokenize_corpus.py    # train the BPE tokenizer, encode the corpus
-python3 train_encoder.py --hours 0.75 --threads 4
+python3 train_encoder.py --hours 0.75 --threads 4   # then --resume --hours 3.8 for the longer run
 python3 train_gpt.py --hours 5
+python3 finetune_gpt.py --minutes 40                 # persona fine-tune -> runs/gpt/persona.pt
 python3 export_words.py
-python3 export.py tokenizer && python3 export.py encoder && python3 export.py gpt
+python3 export.py tokenizer && python3 export.py encoder && python3 export.py gpt runs/gpt/persona.pt
 ```
 
 ### Training data
