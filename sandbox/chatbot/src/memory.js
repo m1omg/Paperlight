@@ -216,14 +216,15 @@
     // upcoming events worth asking about later
     {
       const NOUN = "tests?|exams?|quiz|quizzes|interview|game|match|recital|appointment|date|presentation|party|sleepover|trip|surgery|operation|competition|tournament|concert|audition|meeting|finals|midterms?|essay|project|race|performance|show|tryouts?|practice|lesson|vacation|holiday|flight|wedding|funeral|checkup|check up|playdate|camp|first day|big day|debate|speech|sats?|hike|play|school play|recital|dance|prom|graduation|birthday party|sleepover";
-      const WHEN = "tomorrow|today|tonight|later today|next week|next month|this month|this weekend|this week|on the weekend|over the weekend|in (?:a|two|three|\\d+) weeks?|(?:on|next|this) (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|soon|in \\w+ days?";
+      const WHEN = "tomorrow|today|tonight|later today|this (?:afternoon|evening|morning)|in (?:like )?(?:an|a few|\\d+|one|two|three) hours?|next week|next month|this month|this weekend|this week|on the weekend|over the weekend|in (?:a|two|three|\\d+) weeks?|(?:on|next|this) (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|monday|tuesday|wednesday|thursday|friday|saturday|sunday|soon|in \\w+ days?";
       const PLACE = { dentist: "dentist appointment", doctor: "doctor's appointment", doctors: "doctor's appointment", zoo: "trip to the zoo", beach: "beach trip", museum: "museum trip", movies: "movie night", movie: "movie night", "amusement park": "amusement park trip", "theme park": "theme park trip", "water park": "water park trip" };
       const clean = (pre, noun) => {
         const words = (pre || "").trim().split(/\s+/).filter((w) => w && !/^(of|lot|lots|bunch|really|very|so|super|kind|pretty|such|some|kinda|sorta|the|a|an|my|our|this|that|another|couple|few|going|gonna|to|hard|easy|difficult|scary|stupid|boring|dumb|annoying)$/.test(w));
         return (words.join(" ") + " " + noun).trim();
       };
-      const whenOf = (w) => (w ? w.replace(/^later today$/, "today").replace(/^(on|over) the weekend$/, "this weekend").replace(/^this (\w+day)$/, "on $1") : "soon");
-      if ((r = new RegExp("\\b(?:i|we) (?:have|got|have got|will have|am having|are having|have to do|need to do) (?:a |an |my |our |the |this |that |some |another )?((?:[a-z]+ ){0,3}?)(" + NOUN + ")\\b(?:.*?\\b(" + WHEN + ")\\b)?").exec(t)) ||
+      const whenOf = (w) => (w ? w.replace(/^(later today|this (afternoon|evening|morning)|in (like )?(an|a few|\d+|one|two|three) hours?)$/, "today").replace(/^(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/, "on $1").replace(/^(on|over) the weekend$/, "this weekend").replace(/^this (\w+day)$/, "on $1") : "soon");
+      const ROUTINE = /^(practice|lesson|class|training|rehearsal|homework)$/;
+      if ((r = new RegExp("\\b(?:i|we) (?:have|got|have got|will have|am having|are having|have to do|need to do) (?:a |an |my |our |the |this |that |some |another )?((?:[a-z]+ ){0,3}?)(" + NOUN + ")\\b(?:.*?\\b(" + WHEN + ")\\b)?").exec(t)) && !(ROUTINE.test(r[2]) && !/\b(big|important|first|last|final)\b/.test(r[1] || "")) ||
           (r = new RegExp("\\bmy ((?:[a-z]+ ){0,3}?)(" + NOUN + ") is (?:on |)(" + WHEN + ")\\b").exec(t))) {
         facts.push({ type: "event", what: clean(r[1], r[2]), when: whenOf(r[3]) });
       } else if ((r = new RegExp("\\b(?:i am|we are|were|im) (?:going|goin|heading) (?:to|on) (?:a |an |the |my |our )?((?:[a-z]+ ){0,2}?)(" + NOUN + "|dentist|doctors?|zoo|beach|museum|movies?|amusement park|theme park|water park)\\b(?:.*?\\b(" + WHEN + ")\\b)?").exec(t)) && r[3]) {

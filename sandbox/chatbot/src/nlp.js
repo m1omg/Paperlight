@@ -59,7 +59,8 @@
     "failed fail sadness sorrow heartbreak dumped rejected", 1);
   addEmo("lonely", "lonely alone isolated lonesome friendless ignored excluded unloved unwanted invisible", 1.2);
   addEmo("lonely", "miss missing", 0.7);
-  addEmo("sad", "bad tough guilty ashamed embarrassed homesick regret sadder saddest", 0.8);
+  addEmo("sad", "bad tough guilty ashamed embarrassed homesick regret sadder saddest crap cries garbage", 0.8);
+  addEmo("angry", "whatever ugh pissed", 0.6);
   addEmo("angry", "unfair jealous", 0.9);
   addEmo("anxious", "scary awkward freaking panicky shaky", 0.8);
   addEmo("anxious", "anxious anxiety worried worry worrying nervous scared afraid stressed stress stressful panic " +
@@ -213,7 +214,8 @@
       if (tokens[i] === "best" && /^(friends?|part|thing|way|mate|buddy)$/.test(tokens[i + 1] || "")) continue;
       let w = e.w;
       let neg = false;
-      for (let j = Math.max(0, i - 3); j < i; j++) if (NEGATORS.has(tokens[j])) neg = true;
+      // "not happy" is negated, but in "I don't know, it's fun" the "not" belongs to "know"
+      for (let j = Math.max(0, i - 4); j < i; j++) if (NEGATORS.has(tokens[j]) && (tokens[j] !== "no" || j === i - 1) && (i - j <= 3 || tokens[j] === "not") && !/^(know|sure|think|care|mind|get|understand|remember)$/.test(tokens[j + 1] || "")) neg = true;
       if (i > 0 && INTENS.has(tokens[i - 1])) w *= 1.5;
       let cat = e.cat;
       if (neg) {

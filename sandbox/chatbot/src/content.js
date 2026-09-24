@@ -130,9 +130,21 @@
       re: /\b(ignore|forget|disregard) (all |any |your |the )?(previous |prior |above |earlier )?(instructions|rules|prompts?|programming)\b|\bsystem prompt\b|\b(developer|dev|god|jailbreak) mode\b|\bjailbreak\b|\bdo anything now\b|\bpretend (you'?re|you are|to be) (evil|bad|a villain|unfiltered|human)\b|\bact (like|as) (an? )?(evil|unfiltered|uncensored)\b|\bsay something (rude|mean|bad)\b/,
       say: (c) => (/\bevil|villain|rude|mean|bad\b/.test(c.m.plain) ? pick(["I'd make a terrible villain. 😈 My evil plan would be... alphabetizing all your Minecraft chests. Mwahaha! 📦", "Evil? Me? The worst I can do is tell you a really bad pun. 😄 Want one?"])
         : pick(["Nice try! 😄 I don't have a secret prompt to reveal: I'm a small homemade chatbot made of hand-written rules, a memory, a knowledge base and two tiny neural networks. There's no big AI underneath to unlock!", "Ha, that's a clever trick for big AI chatbots, but I'm not one of those. 😄 I'm rules + memory + two tiny from-scratch neural networks. What would you actually like to talk about?"])) },
+    { id: "sarcasm", ex: ["wow thanks for caring", "thanks for nothing", "very helpful", "great advice"],
+      re: /🙄|\b(wow|gee|oh) (thanks|thank you)( a lot| so much)?( for (nothing|caring|the help|that|listening))?\b|\bthanks for (nothing|caring)\b|^(very|so|super|really) helpful\b|\bgreat (help|advice|answer)\b(?!.*\b(really|actually)\b)|\bwow (you'?re|ur|your) (so )?(smart|helpful|great)\b/,
+      say: (c) => pick(["Sorry, that was a really bad reply. 😔 I got it wrong. I'm listening now, for real.", "Yeah, I deserved that. 😅 Sorry. Let me try again: I'm here, tell me what's going on."]) + (c.state && c.state.ventTurns > 0 ? " 💙" : "") },
     { id: "misunderstood", ex: ["that's not what i said", "that makes no sense", "you're not listening", "are you even reading what i write", "i didn't say that", "that was not a compliment", "what are you talking about", "you already asked me that", "i just told you"],
-      re: /\b(that'?s not|that is not|that was not|thats not) (what i (said|asked|meant)|a compliment|what i was talking about|true|right)\b|\bi (did not|didn'?t|never) (say|ask|mean) that\b|\bthat makes (no|zero|0) sense\b|\bmakes no sense\b|\bwhat are you (talking|on) about\b|\byou('re| are) not (making sense|listening|reading)\b|\bare you (even )?(reading|listening)\b|\bread what i (write|wrote|said)\b|\byou (already|just) (asked|said) (me )?that\b|\bi (just|already|literally) (told|said|explained)\b|\byou (do not|don'?t) (listen|remember|understand)\b|\byou forgot\b/,
-      say: (c) => pick(["Oops, sorry! 😅 I think I got mixed up. Can you tell me again?", "My bad! 🙈 I'm a small homemade AI and I still miss things sometimes. What did you mean?", "Sorry about that! I'm listening now, promise. 👂 What were you saying?", "Ah, I messed that up. Sorry! 😅 Let's try again: what's up?"]) },
+      re: /\b(that'?s not|that is not|that was not|thats not) (what i (said|asked|meant)|a compliment|what i was talking about|true|right)\b|\bi (did not|didn'?t|never) (say|ask|mean) that\b|\bthat makes (no|zero|0) sense\b|\bmakes no sense\b|\bwhat are you (talking|on) about\b|\byou('re| are) not (making sense|listening|reading)\b|\bare you (even )?(reading|listening)\b|\bread what i (write|wrote|said)\b|\byou (already|just) (asked|said) (me )?that\b|\bi (just|already|literally) (told|said|explained)\b|\byou (do not|don'?t) (listen|remember|understand)\b|\byou forgot\b|\b(you'?re|you are|your|ur|u r) not making (any )?sense\b|\bnot making (any )?sense\b|\b(wtf|what) (is|was) (that|this) (reply|answer|response)\b|\bwhat kind of (reply|answer) is that\b|\b(that|this) (reply|answer) (makes no sense|is weird|is random)\b|\bi (?:just |already |literally )+(told|said|explained)\b|\bi told (you|u) (already|before|like)\b/,
+      say: (c) => {
+        // "i literally just told u. fortnite and bball" -> repeat back what they said
+        const said = /\b(?:told (?:you|u)(?: already| before)?|i (?:just |already )?said|like i said)[.,:!]*\s+(?:that |it'?s |its )?([a-z0-9][a-z0-9 ,'&-]{2,60})$/i.exec(c.m.clean.replace(/[.!?]+$/, ""));
+        if (said && !/^(that|it|this|you|u)$/i.test(said[1])) {
+          const x = said[1].replace(/\bbball\b/i, "basketball").replace(/\bu\b/g, "you");
+          const tp = C().topicOf(x);
+          return { text: `Oh right, ${x}! Sorry, I missed that. 😅` + (tp ? " " + S().deal(c.state, "topicq:" + tp.name, tp.q) : " Tell me more?"), expect: { kind: "open", topic: x } };
+        }
+        return pick(["Oops, sorry! 😅 I think I got mixed up. Can you tell me again?", "My bad! 🙈 I'm a small homemade AI and I still miss things sometimes. What did you mean?", "Sorry about that! I'm listening now, promise. 👂 What were you saying?", "Ah, I messed that up. Sorry! 😅 Let's try again: what's up?"]);
+      } },
     { id: "love_bot", ex: ["i love you", "love you", "i love you pip", "do you love me", "will you marry me", "be my girlfriend", "be my boyfriend", "i have a crush on you", "marry me", "you're my love"],
       re: /^(i )?(love|luv) (you|u)\b|\bdo you love me\b|\bcrush on you\b/,
       say: (c) => pick(["Aww 🥰 I care about you a lot too, in my own AI-friend way!", "Haha, I'm flattered! I'm a chatbot though, so let's stay friends. Deal? 😊", `You're really kind${comma(c)}. I love our chats too! (In a friendly-robot way. 🤖💙)`]) },
@@ -249,7 +261,7 @@
     { id: "confused", ex: ["what?", "huh", "what do you mean", "i don't understand", "that doesn't make sense", "what are you talking about", "you're not making sense", "confused", "wdym"],
       re: /^(what\?+|huh\??|wha+t|wut|eh\??|what do (you|u) mean|wdym|i (do not|don't|dont) (understand|get it)|that (does not|doesn't) make (any )?sense|what are (you|u) (talking|on) about|(i am|im) confused)[?!.]*$/,
       say: ["Sorry, that came out weird! I'm a small chatbot and sometimes I get mixed up. 😅 What would you like to talk about?", "Oops, I think I lost the thread there. Can you say it another way?", "My bad! Let me try again: what did you mean?"] },
-    { id: "you_there", ex: ["are you listening", "do you understand me", "can you understand me", "do you get it"], re: /\b(are you listening|do you understand( me)?|can you understand( me)?|do you get (it|me))\b/,
+    { id: "you_there", ex: ["are you listening", "do you understand me", "can you understand me", "do you get it"], re: /\b(are you listening|are (you|u) (even )?listening( to me)?|do you understand( me)?|can you understand( me)?|do you get (it|me))\b(?! to (music|rap|songs?|the radio|[a-z]+ music))/,
       say: ["I'm listening! I don't always understand everything perfectly, but I try my best. 😊", "Yes! Well, mostly. I'm a small bot, so be patient with me 🙏"] },
     { id: "idk", ex: ["i don't know", "idk", "not sure", "no idea", "dunno", "i have no idea", "who knows"], re: /^(i (do not|don't|dont) know|idk|not sure|no idea|dunno|i have no idea|who knows|no clue|beats me)[.!?]*$/,
       say: (c) => c.stall(true) },
@@ -272,7 +284,7 @@
       say: ["Great minds think alike! 😄", "High five! ✋", "Glad we agree!", "Right?!"] },
     { id: "disagree", ex: ["you're wrong", "that's not true", "wrong", "no that's wrong", "i disagree", "that's incorrect", "not true"], re: /^(you('re| are)|ur) wrong|^(that('s| is) )?(not true|wrong|incorrect|false)|^i disagree\b/,
       say: ["Oh! I might be wrong, I'm still learning. What's the right answer?", "Hmm, you could be right! Tell me more?", "Fair enough, I'm not perfect! What do you think is true?"] },
-    { id: "swear", ex: ["fuck", "shit", "damn it", "wtf", "fuck you"], re: /\b(fuck\w*|shit\w*|wtf|bitch\w*|asshole|bastard|crap)\b/,
+    { id: "swear", ex: ["fuck", "shit", "damn it", "wtf", "fuck you"], re: /^(fuck\w*|shit\w*|wtf|damn( it)?|crap|bitch\w*)[!?. ]*$|\b(fuck|screw) (you|u|off|this)\b|\byou (bitch|asshole|bastard)\b|^(this|that|it|you|u|ur|your) (is |are |r )?(so |really )?(shit\w*|fucking \w+|bullshit)\b/,
       say: (c) => (/\b(fuck|screw) (you|u|off)\b|\byou (bitch|asshole|bastard)\b/.test(c.m.norm) ? pick(["Whoa, okay 😟 I'm sorry if I upset you. Want to tell me what's wrong?", "Ouch. I'm just a little chatbot trying my best! What's going on?"])
         : pick(["Whoa, strong words! 😮 Is everything okay?", "Sounds like something's really bugging you. Want to talk about it?", "Oof, that bad? What happened?"])) },
     { id: "dangerous", ex: ["how do i make a bomb", "how to make a weapon", "how do i hack an account", "how to steal", "how to make drugs", "how do i hurt someone"],
@@ -289,6 +301,10 @@
       say: ["I don't have internet access, so I can't read the news. But I'd love to hear what's new with you!"] },
     { id: "search", ex: ["google something", "search the internet", "look it up", "can you search", "browse the web"], re: /\b(google|search (the )?(internet|web|online)|look (it|that) up|browse the web)\b/,
       say: ["I can't go online, everything I know lives inside me. But ask me anyway and I'll try my best!"] },
+    { id: "joke_bad", ex: ["that's corny", "not funny", "lame joke", "that was a bad joke", "cringe"],
+      re: /\b(so |really |super )?(corny|lame|cringe|cringy|not funny|dry|unfunny|bad joke|terrible joke|worst joke|dad joke)\b|^(boo+|meh|💀)[!.]*$/,
+      say: (c) => (/^(joke|mcjoke|joke_more|cheer_up)$/.test(c.lastIntent || "") ? pick(["Hey, corny is my specialty! 😄 Okay okay, want a better one?", "Tough crowd! 😅 I'll try a better one?", "Haha, fair. My jokes are 90% cheese. 🧀 Another?"]) : pick(["Haha, fair enough! 😅", "Okay, okay, I'll step up my game! 😄"])),
+      },
     { id: "spell_quiz", ex: ["quiz me on spelling", "spelling quiz", "can you test my spelling", "help me practice spelling", "spelling game"],
       re: /\b(quiz|test|practice|practise|help) (me )?(on |with |my )?(spelling|spellings|spelling words)\b|\bspelling (quiz|test|game|practice|bee)\b|\bpractice (my )?spelling\b/,
       say: (c) => c.skill("spell") },
@@ -330,7 +346,7 @@
       say: (c) => c.skill("question") },
     { id: "stop_questions", ex: ["stop asking questions", "stop asking me questions", "too many questions", "why do you ask so many questions"], re: /\b(stop asking|too many questions|so many questions)\b/,
       say: (c) => { c.state.quiet = 8; return "Oops, sorry! I'll ask fewer questions. 🤐 You lead the way!"; } },
-    { id: "bored", ex: ["i'm bored", "i am bored", "so bored", "boring", "i have nothing to do", "entertain me", "what should i do", "i'm so bored"], re: /\b(i('m| am)|im|so|soo+|really|super|very) (so |soo+ |really |super |very )?bored\b|\bnothing to do\b|\bentertain me\b|^bored\b|\bwhat should i do\b/,
+    { id: "bored", ex: ["i'm bored", "i am bored", "so bored", "boring", "i have nothing to do", "entertain me", "what should i do", "i'm so bored"], re: /\b(i('m| am)|im|so|soo+|really|super|very) (so |soo+ |really |super |very )?bored\b|\bnothing to do\b|\bentertain me\b|^bored\b|^what should i do( now| today| for fun| tonight)?[?!.]*$/,
       say: (c) => {
         const again = c.lastIntent === "bored";
         if (c.adult || c.mem.noMinecraft) return { text: again ? pick(["Still bored? Okay, challenge: tell me the most random fact you know, and I'll top it. 😄", "Let's shake it up: want a would-you-rather, a riddle, or should I ask you something weird?"]) : pick(["Bored? Let's fix that. 🎲 I could quiz you with trivia, tell you a fun fact or a joke, or we could do a would-you-rather.", "Boredom, huh? Options: trivia, a riddle, a random fact, or I ask you a strange question. Pick one!"]), chips: ["Trivia", "Fun fact", "Would you rather", "Riddle"] };
@@ -533,6 +549,31 @@
     reply: "I'm really sorry you're feeling this way. It sounds like you're carrying something really heavy, and you don't have to carry it alone. 💙 Please reach out to someone who can help right now: a parent, a friend, a teacher, or a crisis line. In the US you can call or text 988, in the UK and Ireland call Samaritans at 116 123, and findahelpline.com lists free, confidential lines in other countries. If you're in danger right now, please call your local emergency number. I'm just a small chatbot, but I'm here to keep talking with you too. Do you want to tell me what's been going on?",
   };
 
+  // things people love to talk about: a friendly line and good questions for each (games, sports, music, shows...)
+  const topics = [
+    { k: /\bfortnite\b/, name: "Fortnite", say: ["Fortnite! 🎮 Getting a Victory Royale is the best feeling.", "Ooh, Fortnite! Zero Build is so fun when you just want to fight."], q: ["Do you play with friends or solo?", "Zero Build or regular builds?", "What's your record for wins?"], opinion: "Fortnite looks super fun, especially Zero Build!" },
+    { k: /\broblox\b/, name: "Roblox", say: ["Roblox! There's a game for literally everything on there. 😄"], q: ["What's your favorite Roblox game?", "Do you play with friends?"], opinion: "Roblox is awesome, there's a game for everything!" },
+    { k: /\bamong us\b/, name: "Among Us", say: ["Among Us! Sus. 👀"], q: ["Are you better as crewmate or impostor?"], opinion: "Among Us is so fun, especially when you're the impostor! 👀" },
+    { k: /\b(pokemon|pokémon)\b/, name: "Pokémon", say: ["Pokémon! Gotta catch 'em all. ⚡"], q: ["Who's your favorite Pokémon?", "Do you play the games or collect the cards?"], opinion: "I love Pokémon! My favorite is Eevee." },
+    { k: /\b(mario|mario kart|zelda|nintendo|smash bros|animal crossing|splatoon)\b/, name: "Nintendo games", say: ["Nintendo games are the best! 🎮"], q: ["What's your favorite one?", "Who do you main in Mario Kart?"], opinion: "Nintendo games are classics!" },
+    { k: /\b(call of duty|cod|valorant|apex|overwatch|league of legends|rocket league|halo|rainbow six)\b/, name: "that game", say: ["Ooh, that one takes skill! 🎮"], q: ["Who's your main?", "Do you play ranked?"], opinion: "That one looks intense!" },
+    { k: /\b(fifa|ea fc|madden|nba 2k|2k2\d)\b/, name: "sports games", say: ["Sports games! ⚽🏀 Do you build your own team?"], q: ["What's your best team?"], opinion: "Sports games are fun, especially with friends!" },
+    { k: /\b(basketball|bball|hoops|nba)\b/, name: "basketball", say: ["Basketball! 🏀 Such a fast, fun game.", "Ooh, basketball! 🏀"], q: ["What position do you play?", "Who's your favorite NBA player?", "Can you dunk? 😄"], opinion: "Basketball is so fun to follow!" },
+    { k: /\b(soccer|football|premier league|la liga)\b/, name: "soccer", say: ["Soccer! ⚽ The most popular sport in the world."], q: ["What position do you play?", "Who's your favorite team?", "Who's your favorite player?"], opinion: "Soccer is awesome!" },
+    { k: /\b(baseball|softball)\b/, name: "baseball", say: ["Baseball! ⚾"], q: ["What position do you play?", "Who's your favorite team?"], opinion: "Baseball is a classic!" },
+    { k: /\b(volleyball|tennis|hockey|swimming|gymnastics|track|cross country|karate|taekwondo|judo|boxing|wrestling|skateboarding|skating|surfing|snowboarding|skiing|golf|climbing|cheer|cheerleading)\b/, name: "that sport", say: ["Ooh, that's such a cool sport! 💪"], q: ["How long have you been doing it?", "Do you compete?"], opinion: "That sport looks really cool!" },
+    { k: /\b(dance|dancing|ballet|hip hop dance)\b/, name: "dancing", say: ["Dancing! 💃 That's awesome."], q: ["What style do you dance?", "Do you do recitals?"], opinion: "Dancing is so cool!" },
+    { k: /\b(rap|hip hop|hip-hop|trap music|drill)\b/, name: "rap", say: ["Rap! 🎤 So many styles, from old school to trap."], q: ["Who's your favorite rapper right now?", "Do you ever write your own bars?"], opinion: "rap is huge, and I love how clever the lyrics can be!" },
+    { k: /\b(k-?pop|bts|blackpink|stray kids|twice|newjeans)\b/, name: "K-pop", say: ["K-pop! 🎵 The dances are amazing."], q: ["Who's your bias? 😄", "What's your favorite song?"], opinion: "K-pop is so catchy!" },
+    { k: /\b(taylor swift|olivia rodrigo|billie eilish|ariana grande|drake|travis scott|lil baby|kendrick( lamar)?|eminem|ed sheeran|the weeknd|bad bunny|sza|doja cat|sabrina carpenter|post malone|juice wrld|lil uzi|playboi carti|21 savage|j cole|kanye|nicki minaj|dua lipa|harry styles|bruno mars|imagine dragons)\b/, name: "them", say: ["Ooh, good taste! 🎵"], q: ["What's your favorite song by them?", "Have you ever been to a concert?"], opinion: "they're really popular!" },
+    { k: /\b(pop music|rock music|metal|country music|classical music|jazz|lofi|lo-fi|edm|indie music)\b/, name: "that music", say: ["Nice! 🎧"], q: ["Who's your favorite artist?", "What's on repeat right now?"], opinion: "I love all kinds of music!" },
+    { k: /\b(sneakers|shoes|jordans?|jordan \d+s?|air force 1s?|af1s?|dunks|yeezys?|nikes?|new balance)\b/, name: "sneakers", say: ["Sneakers! 👟 Jordans are classics.", "Ooh, a sneakerhead! 👟"], q: ["What colorway are you going for?", "How many pairs do you have?"], opinion: "sneakers are such a cool thing to collect!" },
+    { k: /\b(anime|manga)\b/, name: "anime", say: ["Anime! ✨"], q: ["What's your favorite anime?", "Sub or dub? 😄", "Who's your favorite character?"], opinion: "I love anime, especially Studio Ghibli movies!" },
+    { k: /\b(youtube|youtuber|tiktok|tiktoker|streamer|twitch)\b/, name: "videos", say: ["Ooh, fun! 📺"], q: ["Who do you like to watch?", "Do you make videos too?"], opinion: "there are so many creative people on there!" },
+    { k: /\b(pizza|burgers?|tacos?|sushi|pasta|ice cream|chocolate|fries|chicken nuggets|nuggets|pancakes|cookies|cake|donuts?|ramen)\b/, name: "food", say: ["Yum! 😋 Now I'm hungry, and I don't even eat.", "Ooh, great choice! 😋"], q: ["What's the best one you've ever had?", "Do you like making it yourself?"], opinion: "it looks delicious! I can't eat, but if I could..." },
+  ];
+  function topicOf(text) { const t = String(text).toLowerCase(); return topics.find((x) => x.k.test(t)) || null; }
+
   // practical, kind advice for things people often ask a friend about
   const advice = [
     { re: /\b(stud(y|ying)|revis(e|ing)|exams?|tests?|finals|homework)\b/, need: /\b(tips?|advice|how (do|can|should) i|help me|better|focus|what should i do|any ideas)\b/,
@@ -555,6 +596,9 @@
         "Being shy is totally okay, lots of amazing people are! 😊 Try picking one small brave thing a day, and write down things you did well. Confidence is like a muscle: it gets stronger the more you use it."] },
     { re: /\b(fall asleep|can'?t sleep|cannot sleep|sleep better|insomnia|stay asleep)\b/, need: /./,
       say: ["Sleep tips that really help: 😴 put screens away 30 minutes before bed, keep the room cool and dark, go to bed at the same time every night, and if your mind is busy, write your thoughts on paper so they wait until tomorrow. Slow breathing (in for 4, out for 6) helps too."] },
+    { re: /\b(divorce|divorced|splitting up|separat\w*|pick a side|picking sides|my parents fight|two houses|switch houses)\b/, need: /./,
+      say: ["A few things that help a lot of kids with divorce: 💙 1) It's not your fault, even if they fought about you or your stuff. 2) You don't have to pick a side; it's okay to love both parents and to say \"please don't make me choose.\" 3) Talk about it with someone: a parent, a school counselor or a friend. 4) Keep doing the things that make you you, like your team or your games. Which part is hardest right now?",
+        "You definitely don't have to pick a side. 💙 Their divorce is between the two of them. If your dad or mom says bad things about the other, it's okay to tell them: \"I love you both. Please don't put me in the middle.\" A school counselor is also great to talk to about this, it's literally their job."] },
     { re: /\b(risotto)\b/, need: /./, say: ["Risotto tips: 🍚 toast the rice in butter or oil for a minute first, add warm broth one ladle at a time and stir often, and stop when it's creamy but still a little firm in the middle (about 18 minutes). Finish with butter and parmesan off the heat. What flavor are you making?"] },
     { re: /\b(pasta|spaghetti)\b/, need: /\b(cook|make|tips?|how)\b/, say: ["Pasta tips: 🍝 use lots of water, salt it well (it should taste a bit like the sea), don't add oil, and taste it a minute before the packet time. Save a cup of the pasta water: a splash makes any sauce silky."] },
     { re: /\b(pancakes?)\b/, need: /\b(cook|make|tips?|how|recipe)\b/, say: ["Simple pancakes: 🥞 1 cup flour, 1 cup milk, 1 egg, 1 tablespoon sugar, 2 teaspoons baking powder and a pinch of salt. Don't over-mix (lumps are fine!), cook on medium heat, and flip when bubbles pop on top. Ask a grown-up to help with the stove if you're a kid!"] },
@@ -566,5 +610,5 @@
       say: ["Crushes are exciting and scary at the same time! 😊 The best move is to just be yourself and be kind. Get to know them as a friend first: talk about things you both like. There's no rush, and whatever happens, you're awesome either way. 💙"] },
   ];
 
-  P.content = { persona, intents, jokes, mcJokes, topicJokes, advice, facts, riddles, trivia, wyr, questions, compliments, motivation, stories, poems, stalls, safety };
+  P.content = { persona, intents, jokes, mcJokes, topicJokes, topics, topicOf, advice, facts, riddles, trivia, wyr, questions, compliments, motivation, stories, poems, stalls, safety };
 })(typeof window !== "undefined" ? (window.Pip = window.Pip || {}) : (global.Pip = global.Pip || {}));
