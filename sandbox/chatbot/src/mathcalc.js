@@ -280,7 +280,10 @@
     const wantFraction = /\b(as a fraction|in fraction form|as fractions?|in fractions?)\b/.test(s);
     s = s.replace(/[,\s]*\b(as a fraction|in fraction form|as fractions?|in fractions?|as a decimal|in decimals?|exactly|precisely|roughly|approximately|please|pls)\b[?.!]*$/g, "").replace(/\$\s*(?=\d)/g, "").replace(/(\d)\s*(dollars|bucks|euros?|pounds sterling|usd|eur)\b/g, "$1");
     // "what's a 20% tip on $45?", "15% off 80", "8% tax on 25"
+    s = s.replace(/[£€]\s*(?=\d)/g, "");
     let pm = /(\d+(?:\.\d+)?)\s*(?:%|percent)\s*(tip|tax|discount|off|interest|vat|service charge)?\s*(?:on|of|for|from|off)\s*(\d+(?:\.\d+)?)\b/.exec(s);
+    const rev = !pm && /(\d+(?:\.\d+)?)\b[^%\d]{0,50}?\b(?:with|and it has|and there'?s|and it'?s|at|minus|less)\s+(?:a |an )?(\d+(?:\.\d+)?)\s*(?:%|percent)\s*(off|discount|tip|tax|vat)\b/.exec(s);
+    if (rev) pm = [rev[0], rev[2], rev[3], rev[1]];
     if (pm && (pm[2] || /\b(tip|tax|discount|off|sale|interest)\b/.test(s))) {
       const kind = pm[2] || (/\btip\b/.test(s) ? "tip" : /\btax|vat\b/.test(s) ? "tax" : /\bdiscount|off|sale\b/.test(s) ? "discount" : "interest");
       const p = Q.parse(pm[1]), x = Q.parse(pm[3]);
@@ -321,7 +324,7 @@
   }
   function prettyExpr(e) {
     e = e.replace(/\bsqrt\s*/g, "√").replace(/\bcbrt\s*/g, "∛").replace(/(\d)\s+%/g, "$1%");
-    return e.replace(/\s*\*\s*/g, " × ").replace(/\s*\/\s*/g, " ÷ ").replace(/\s*([+^])\s*/g, " $1 ").replace(/(\d|\))\s*-\s*/g, "$1 − ")
+    return e.replace(/\*\*/g, "^").replace(/\s*\*\s*/g, " × ").replace(/\s*\/\s*/g, " ÷ ").replace(/\s*([+^])\s*/g, " $1 ").replace(/(\d|\))\s*-\s*/g, "$1 − ")
       .replace(/\s+/g, " ").replace(/\^ /g, "^").replace(/ \^/g, "^").trim();
   }
 
@@ -423,6 +426,11 @@
       const g = Math.round(+r[1] * per * DENSITY[ing]);
       return { text: `${r[1]} ${r[2]} of ${ing} is about ${g} g. (It depends a bit on how you fill the cup, so weigh it if you can!)` };
     }
+    r = /\b(?:grams?|g)\b.*?(\d+(?:\.\d+)?)\s*(cups?|tablespoons?|tbsp|teaspoons?|tsp)\b/.exec(s);
+    if (r && !/(\d+(?:\.\d+)?)\s*(grams?|g)\b/.test(s)) {
+      const per = /^cup/.test(r[2]) ? 1 : /^(tablespoon|tbsp)/.test(r[2]) ? 1 / 16 : 1 / 48;
+      return { text: `${r[1]} ${r[2]} of ${ing} is about ${Math.round(+r[1] * per * DENSITY[ing])} g. (It depends a bit on how you fill the cup, so weigh it if you can!)` };
+    }
     r = /(\d+(?:\.\d+)?)\s*(grams?|g)\b.*\b(cups?)\b/.exec(s);
     if (r) {
       const c = +r[1] / DENSITY[ing];
@@ -435,7 +443,9 @@
     // "2 and a quarter cups", "2 1/4 cups", "one and a half"
     s = s.replace(/\b(\d+) and (a|one) (half|quarter|third)\b/g, (x, n, a, f) => String(+n + { half: 0.5, quarter: 0.25, third: 0.3333 }[f]))
       .replace(/\b(\d+) (\d)\/(\d)\b/g, (x, n, a, b) => String(+n + +a / +b)).replace(/\b(a|one) half\b/g, "0.5").replace(/\ba quarter\b/g, "0.25")
-      .replace(/(\d+(?:\.\d+)?)\s*(?:degrees?\s*)?°\s*/g, "$1 ");
+      .replace(/(\d+(?:\.\d+)?)\s*(?:degrees?\s*)?°\s*/g, "$1 ")
+      .replace(/\b(ounces?|oz|grams?|kilograms?|kg|pounds?|lbs?|millilit(?:re|er)s?|ml|lit(?:re|er)s?|pints?|quarts?|gallons?|tablespoons?|tbsp|teaspoons?|tsp)\s+of\s+(?:[a-z]+\s+){0,2}?(?=(?:in|to|into|as)\s)/g, "$1 ");
+    const wantExact = /\b(exact|exactly|precise|precisely)\b/.test(s);
     const gm = gasMark(s); if (gm) return gm;
     if (/\b(cups?|tablespoons?|tbsp|teaspoons?|tsp)\b/.test(s) && /\b(grams?|g)\b/.test(s)) { const cg = cupsToGrams(s); if (cg) return cg; }
     // 6 feet 2 inches / 5'11" -> inches
@@ -461,7 +471,7 @@
     if (TEMPS[from] && TEMPS[to]) {
       if (toC(v, TEMPS[from]).sub(Q.parse("-273.15")).sign() < 0) return { error: `${withCommas(v.toDecimal())}${TNAME[TEMPS[from]]} is colder than absolute zero (-273.15°C), the coldest possible temperature! 🥶` };
       const r = fromC(toC(v, TEMPS[from]), TEMPS[to]);
-      const f = format(r, 4);
+      const f = format(r, wantExact ? 4 : 2);
       return { text: `${withCommas(v.toDecimal())}${TNAME[TEMPS[from]]} ${f.exact ? "=" : "≈"} ${f.text}${TNAME[TEMPS[to]]}`, value: r };
     }
     const a = UNITS[from], b = UNITS[to];
@@ -477,10 +487,44 @@
       extra = ` (that's ${ft} ft ${format(inches, 1).text} in)`;
     }
     let ft = f.text, eq = f.exact ? "=" : "≈", exactNote = "";
-    if (f.exact && /\.\d{5,}/.test(ft)) { exactNote = ` (exactly ${f.text})`; ft = withCommas(String(Math.round(r.toNumber() * 100) / 100)); eq = "≈"; }
+    if (/\.\d{3,}/.test(ft)) { if (wantExact && f.exact) exactNote = ` (exactly ${f.text})`; ft = withCommas(String(Math.round(r.toNumber() * 100) / 100)); eq = "≈"; }
     return { text: `${label || withCommas(v.toDecimal()) + " " + (one ? singular(a.name) : a.name)} ${eq} ${ft} ${r.n === r.d ? singular(b.name) : b.name}${exactNote}${extra}`, value: r };
+  }
+  // recipes: "one and a half times: 225 g flour, 55 g butter and 150 ml milk", "it serves 4 but I need 6"
+  const ING = /(\d+(?:\.\d+)?(?:\s+\d\/\d)?|\d\/\d)\s*(grams?|g|kg|kilograms?|ml|millilit(?:re|er)s?|l|lit(?:re|er)s?|cups?|tablespoons?|tbsp|teaspoons?|tsp|ounces?|oz|pounds?|lbs?|eggs?|pinch(?:es)?|cloves?|slices?)\b(?:\s+of)?\s+(?:the\s+)?([a-z]+(?:\s+(?!and\b|or\b|of\b|to\b|for\b|in\b)[a-z]+)?)/g;
+  function recipeFactor(s) {
+    let r;
+    if ((r = /\b(\d+(?:\.\d+)?|one and a half|1 1\/2|two and a half|2 1\/2) times\b/.exec(s))) return { f: { "one and a half": "1.5", "1 1/2": "1.5", "two and a half": "2.5", "2 1/2": "2.5" }[r[1]] || r[1] };
+    if (/\b(double|twice)\b/.test(s)) return { f: "2" };
+    if (/\b(triple|three times)\b/.test(s)) return { f: "3" };
+    if (/\b(half|halve|halving)\b/.test(s) && !/\band a half\b/.test(s)) return { f: "0.5" };
+    if ((r = /\bserves? (\d+)\b.*?\b(?:serve|feed|for|make it for|cook for|cooking for|to feed)\s+(\d+)\b/.exec(s)) && +r[1] > 0) return { f: Q.parse(r[2]).div(Q.parse(r[1])), from: r[1], to: r[2] };
+    return null;
+  }
+  function scaleRecipe(text, last) {
+    const s = text.toLowerCase().replace(/[£€$]/g, "");
+    if (!/\b(recipe|times|double|triple|half|halve|serves?|serving|each|ingredients?|that|it)\b/.test(s)) return null;
+    const fac = recipeFactor(s);
+    if (!fac) return null;
+    const f = typeof fac.f === "string" ? Q.parse(fac.f) : fac.f;
+    const fText = format(f, 3).text;
+    const items = [];
+    let r; ING.lastIndex = 0;
+    while ((r = ING.exec(s))) items.push({ q: r[1], unit: r[2], what: r[3].replace(/\s+(please|thanks)$/, "") });
+    const list = items.length ? items : (last && /\b(that|it|this|those|them|the recipe)\b/.test(s) ? last : []);
+    if (!list.length) {
+      if (fac.from) return { text: `Multiply everything by ${fText} (${fac.to} ÷ ${fac.from} = ${fText}). 🥧 So 200 g of something becomes ${format(Q.parse("200").mul(f), 2).text} g.`, items: null };
+      return null;
+    }
+    const scaled = list.map((it) => {
+      const q = /\d \d\/\d/.test(it.q) ? Q.parse(it.q.split(" ")[0]).add(Q.parse(it.q.split(" ")[1].split("/")[0]).div(Q.parse(it.q.split("/")[1]))) : /\//.test(it.q) ? Q.parse(it.q.split("/")[0]).div(Q.parse(it.q.split("/")[1])) : Q.parse(it.q);
+      const v = format(q.mul(f), 2).text;
+      const unit = /^(g|grams?)$/.test(it.unit) ? "g" : /^(ml|millilit)/.test(it.unit) ? "ml" : it.unit;
+      return `${v} ${v === "1" ? unit.replace(/(egg|clove|slice|cup|pinche|pound|ounce)s$/, (x) => x.replace(/s$/, "").replace(/pinche$/, "pinch")) : unit} ${it.what}`.replace(/ (eggs?) (\w+)/, " $1");
+    });
+    return { text: `For ${fText === "2" ? "double" : fText === "0.5" ? "half" : fText + " times"} the recipe: ${scaled.length > 1 ? scaled.slice(0, -1).join(", ") + " and " + scaled[scaled.length - 1] : scaled[0]}. 🧁`, items: list.map((it) => it) };
   }
   function singular(n) { return n.replace(/(inche|foot|feet)s?$/, (x) => (x.startsWith("inch") ? "inch" : "foot")).replace(/ies$/, "y").replace(/s$/, ""); }
 
-  P.math = { Q, evaluate, solve, convert, compare, format, toExpression, CalcError };
+  P.math = { Q, evaluate, solve, convert, compare, format, toExpression, CalcError, scaleRecipe };
 })(typeof window !== "undefined" ? (window.Pip = window.Pip || {}) : (global.Pip = global.Pip || {}));

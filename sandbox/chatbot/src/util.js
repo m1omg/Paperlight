@@ -59,7 +59,8 @@
     return items.slice(0, -1).join(", ") + " " + word + " " + items[items.length - 1];
   }
 
-  function aOrAn(word) { return /^[aeiou]/i.test(word) && !/^(uni|use|eu|one)/i.test(word) ? "an" : "a"; }
+  // "a ewer", "a unicorn", "a one-off", but "an hour", "an honest", "an MRI"
+  function aOrAn(word) { return (/^[aeiou]/i.test(word) && !/^(uni|use|usu|uti|ure|eu|ewe|ewer|one|once|uk\b|us\b)/i.test(word)) || /^(hour|honest|honou?r|heir)/i.test(word) ? "an" : "a"; }
 
   function plural(n, word, pluralWord) { return n + " " + (n === 1 ? word : pluralWord || word + "s"); }
 

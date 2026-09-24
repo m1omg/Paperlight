@@ -247,6 +247,7 @@
       if (!out) out = this._more(m, c);
       if (!out) { const r = MEM.recall(mem, m); if (r) out = Object.assign(r, { source: "memory" }); }
       if (!out) out = this._eventNow(m);
+      if (!out) out = this._line(m);
       // 5) facts just learned get a warm acknowledgement
       const loud = facts.filter((f) => !f.quiet);
 
@@ -347,6 +348,23 @@
       const low = m.clean.toLowerCase();
       const isYes = (YES.test(t) || YES.test(low)) && m.tokens.length <= 5, isNo = (NO.test(t) || NO.test(low)) && m.tokens.length <= 6;
       switch (ex.kind) {
+        case "linetell": {
+          if (m.isQuestion || m.tokens.length < 2 || this._strongRequest(m)) break;
+          const line = U.capitalizeFirst(m.clean.replace(/^(?:it'?s|its|my line is)\s*[:,-]?\s*/i, "").replace(/["“”]/g, "").replace(/[\p{Extended_Pictographic}‍️]/gu, "").trim()).replace(/([^.!?])$/, "$1.");
+          this.mem.line = line;
+          return { text: `Great line! 🎭 "${line}" Say it out loud 3 times, then type it to me from memory and I'll check it!`, source: "skill:line", expect: { kind: "linecheck", tries: 0 } };
+        }
+        case "linecheck": {
+          const L = this.mem.line;
+          if (!L || this._strongRequest(m) || (m.isQuestion && !/\?\s*$/.test(L))) break;
+          const words = (x) => x.toLowerCase().replace(/[^a-z0-9' ]/g, " ").split(/\s+/).filter(Boolean);
+          const want = words(L), got = words(m.clean);
+          if (got.length < Math.max(2, want.length * 0.5)) break;
+          const missing = want.filter((w) => !got.includes(w)), extra = got.filter((w) => !want.includes(w));
+          if (!missing.length && !extra.length) return { text: pick(["Perfect, word for word! 🌟 You've totally got it. Say it once more before bed and once in the morning, and you'll be ready!", "YES! 100% correct! 🎉 You know your line. The audience is going to love it!"]), source: "skill:line" };
+          if (ex.tries >= 2) return { text: `So close! Here it is once more: "${L}" 🎭 Keep practicing a few times a day and it'll stick. You've got this! 💪`, source: "skill:line" };
+          return { text: `Almost! 😊 ${missing.length ? `You missed "${missing.slice(0, 3).join(" ")}". ` : ""}${extra.length ? `And "${extra.slice(0, 3).join(" ")}" isn't in it. ` : ""}The line is: "${L}" Try again?`, source: "skill:line", expect: { kind: "linecheck", tries: (ex.tries || 0) + 1 } };
+        }
         case "needs": {
           const hist = this.state.history.filter((h) => h.role === "user").slice(-7, -1).map((h) => h.text.toLowerCase()).reverse().join(" ");
           if (/\b(ideas?|advice|tips?|help|what to do|suggestions?|both)\b/.test(t)) return this._adviceFor(hist) || { text: "Okay! Tell me in one or two sentences what's going on, and I'll give you my best ideas. 💡", source: "expect:needs", expect: { kind: "vent" } };
@@ -563,6 +581,27 @@
       return null;
     }
 
+    // practicing a line for a play: "can u help me practice my line? its the wind is whispering through my leaves"
+    _line(m) {
+      const raw = m.clean.replace(/[\p{Extended_Pictographic}‍️]/gu, "").trim();
+      const ask = /\b(help me |can (you|u) help me |let'?s |i (want|need) to |wanna )?(practice|practise|rehearse|learn|memori[sz]e) (my |the )?(line|lines|part|speech|poem)\b/i.test(raw);
+      const talkedLine = this.state.history.slice(-8).some((h) => /\b(line|lines|play|stage)\b/i.test(h.text));
+      let r = /\b(?:my line is|the line is|my line's|my line goes|my part is)\s*[:,-]?\s*["“']?(.{6,120}?)["”']?\s*[.!]*$/i.exec(raw) ||
+        ((ask || talkedLine) && /\b(?:it'?s|its|it is)\s*[:,-]?\s*["“]([^"”]{6,120})["”]/i.exec(raw)) ||
+        (ask && /\b(?:it'?s|its|it is)\s*[:,-]?\s*(.{6,120}?)\s*[.!]*$/i.exec(raw.split(/\?\s*/).pop()));
+      if (r && !/\b(what|how|help|practice)\b/i.test(r[1].split(" ").slice(0, 2).join(" "))) {
+        const line = U.capitalizeFirst(r[1].replace(/["“”]/g, "").trim()).replace(/([^.!?])$/, "$1.");
+        this.mem.line = line;
+        return { text: `What a lovely line! 🎭 "${line}" Let's practice: say it out loud 3 ways, once in a whisper, once normal, and once loud and proud! Then type it to me from memory, and I'll check it. 😊`, source: "skill:line", expect: { kind: "linecheck", tries: 0 } };
+      }
+      if (ask) {
+        if (this.mem.line) return { text: `Yes, let's practice! 🎭 Your line is: "${this.mem.line}" Read it once, then type it to me from memory!`, source: "skill:line", expect: { kind: "linecheck", tries: 0 } };
+        return { text: "I'd love to help you practice! 🎭 What's your line? Type it for me.", source: "skill:line", expect: { kind: "linetell" } };
+      }
+      if (/\bwhat(?:'s| is|s) my line\b/i.test(raw) && this.mem.line) return { text: `Your line is: "${this.mem.line}" 🎭 Want to practice it?`, source: "skill:line", expect: { kind: "yesno", yesText: "Okay! Type it from memory and I'll check it. 🎭", then: { kind: "linecheck", tries: 0 } } };
+      return null;
+    }
+
     // "i gtg eat dinner 🍝 bye pip!! wish me luck for the play" -> a goodbye that heard all of it
     _byeText(m, base) {
       const t = m.plain, now = Date.now();
@@ -619,6 +658,13 @@
           // "why do hamsters do that?" after "he stuffs his cheeks with seeds": the question needs the sentence before it
           if (!r && pass && k > 0) { const both = N.analyze(analyzed[k - 1].x.replace(/[.!?]*$/, "") + " " + x); const f = S.faq(both); if (f) r = { text: f, source: "skill:knowledge" }; }
           if (!r && pass) { const adv = this._advice(sm); if (adv && adv.score >= 0.86) r = adv; }
+          const hm = pass && k > 0 && /^how many (\w+) (?:is|are|would be|does) (?:that|this|it)\b/i.exec(x.trim());
+          if (!r && hm) { const q = /(\d+(?:\.\d+)?)\s*(ounces?|oz|grams?|g|pounds?|lbs?|kilograms?|kg|cups?|ml|millilit\w+|lit\w+|feet|foot|ft|meters?|metres?|miles?|km|kilometers?|inches|inch|cm)\b/i.exec(analyzed[k - 1].x); if (q) { const cv = P.math.convert(`${q[1]} ${q[2]} to ${hm[1]}`); if (cv && !cv.error) r = { text: cv.text + " 📏", source: "skill:units" }; } }
+          if (!r && pass && k > 0 && /^(what|how much)(?:'s| is| does| do)? (that|it|this)( come to| make| equal| work out to)?\??$/i.test(x.trim())) {
+            const ex = /(-?\d+(?:\.\d+)?(?:\s*(?:[-+*/x×÷^]|plus|minus|times|divided by|multiplied by|over|to the power of)\s*-?\d+(?:\.\d+)?)+)/.exec(analyzed[k - 1].x);
+            const mt = ex && P.math.solve(ex[1]);
+            if (mt && !mt.error) r = { text: `${mt.exact ? `${mt.expr} = ${mt.result}` : `${mt.expr} ≈ ${mt.result}`}`, source: "skill:math" };
+          }
           if (!r && analyzed.length > 1) r = this._strongIntent(sm);
           if (r) return r;
         }
@@ -827,10 +873,17 @@
       const li = this.state.lastIntent;
       const MORE = { joke: "joke", mcjoke: "mcjoke", joke_more: "joke", fact: "fact", riddle: "riddle", story: "story", poem: "poem", compliment: "compliment", motivate: "motivate", trivia: "trivia", wyr: "wyr", question: "question", ask_me: "question" };
       if (!li || !MORE[li]) return null;
-      const t = m.plain.replace(/^(lol|lmao|haha+|hehe+|ha+|ok|okay|yes|yeah|ya|sure|pls|please)\s+/, "");
-      if (!/^(another|one more|more|again|next|next one|gimme another|give me another|tell me another|do another|one more time|another one|more please|keep going|continue)\b/.test(t) || m.tokens.length > 10) return null;
+      if (/joke/.test(MORE[li]) && /\b(i )?(don'?t|do not|dont) get it\b|\bi said (a )?(minecraft|mc)\b|\bnot (a )?minecraft\b.*\bjoke\b/.test(m.plain)) {
+        const mcWanted = /\b(minecraft|mc)\b/.test(m.plain) && !/\bnot (a )?minecraft\b/.test(m.plain);
+        const r = S.start(mcWanted ? "mcjoke" : "joke", c);
+        return r ? Object.assign(r, { text: pick(["Sorry, that one was a bit of a stretch! 😅 ", "Haha, fair, that one was weird. 😅 "]) + (mcWanted ? "Here's a real Minecraft one: " : "Try this one: ") + r.text, source: "more:" + (mcWanted ? "mcjoke" : "joke"), intent: mcWanted ? "mcjoke" : "joke" }) : null;
+      }
+      // "HAHAHA a fsh i get it. another one!! a minecraft one": the request can come after a reaction
+      const at = m.plain.search(/\b(another one|one more|gimme another|give me another|tell me another|do another|another)\b/);
+      const t = (at > 0 && m.tokens.length > 4 ? m.plain.slice(at) : m.plain).replace(/^(lol|lmao|haha+|hehe+|ha+|ok|okay|yes|yeah|ya|sure|pls|please)\s+/, "");
+      if (!/^(another|one more|more|again|next|next one|gimme another|give me another|tell me another|do another|one more time|another one|more please|keep going|continue)\b/.test(t) || t.split(/\s+/).length > 10) return null;
       let kind = MORE[li];
-      if (/\b(minecraft|mc|creeper)\b/.test(t) && /joke/.test(kind)) kind = "mcjoke";
+      if (/\b(minecraft|mc|creeper)\b/.test(m.plain) && /joke/.test(kind)) kind = "mcjoke";
       else if (kind === "mcjoke" && /\b(normal|regular|other|different|not minecraft)\b/.test(t)) kind = "joke";
       const r = S.start(kind, c);
       return r ? Object.assign(r, { source: "more:" + kind, intent: r.intent || li }) : null;
@@ -852,9 +905,11 @@
           } finally { this._splitting = false; }
         }
       }
-      // math and units
+      // recipes, math and units
+      const rs = P.math.scaleRecipe(m.clean, this.state.lastRecipe);
+      if (rs) { if (rs.items) this.state.lastRecipe = rs.items; return { text: rs.text, source: "skill:recipe" }; }
       r = P.math.convert(m.clean) || P.math.convert(m.plain);
-      if (r) return { text: r.error || pick(["", "Let's see... ", "Easy! "]) + r.text + (r.error ? "" : " 📏"), source: "skill:units" };
+      if (r) return { text: r.error || this._flair(["", "Let's see... ", "Easy! "]) + r.text + (r.error ? "" : " 📏"), source: "skill:units" };
       r = P.math.compare(m.clean);
       if (r) return { text: r.text, source: "skill:math" };
       // "no, that's wrong, it's 231" right after an exact answer: check again and stand by it
@@ -877,18 +932,23 @@
           if (why) return { text: `${r.expr}: ${why}`, source: "skill:math" };
           return null;
         }
-        const cur = /\$/.test(m.clean) ? "$" : "";
-        const ex = cur ? r.expr.replace(/\bof (\d)/, "of $$$1") : r.expr;
+        const cur = (/[$£€]/.exec(m.clean) || [""])[0];
+        const ex = cur ? r.expr.replace(/\bof (\d)/, "of " + cur + "$1") : r.expr;
         let s = r.exact ? `${ex} = ${cur}${r.result}` : `${ex} ≈ ${cur}${r.result}`;
         if (r.fraction && !r.exact) s += ` (exactly ${r.fraction})`;
         if (r.extra) s += r.extra.replace(/(total is|you pay) /, "$1 " + cur);
         this.state.lastMath = { expr: r.expr, result: r.result, turn: this.state.turn };
         if (r.notes.includes("negpow")) s += ". Heads up: the power comes before the minus sign, so -2^2 means -(2^2). (-2)^2 would be positive.";
         if (r.notes.includes("pct")) s += " (the % is taken of the first number, like on a calculator)";
-        return { text: pick(["", "", "Easy! ", "Let me calculate... ", "🧮 "]) + s + (/[.)]$/.test(s) ? "" : ""), source: "skill:math" };
+        return { text: this._flair(["", "", "Easy! ", "Let me calculate... ", "🧮 "]) + s, source: "skill:math" };
       }
       // "how tall is it in feet?" right after Pip gave a measurement
-      const unitAsk = /\b(?:in|to|into|as) (feet|foot|ft|meters?|metres?|m|km|kilometers?|miles?|inches|cm|centimeters?|kg|kilograms?|pounds?|lbs|celsius|fahrenheit|c|f)\??$/.exec(m.plain.replace(/[?!.]+$/, ""));
+      if (/\bgas mark\b/.test(m.plain) && /\b(that|this|it)\b/.test(m.plain) && c.lastBot) {
+        const tm = /(-?\d+(?:\.\d+)?)\s*°\s*([CF])\b/.exec(c.lastBot);
+        if (tm) { const g = P.math.convert(`${tm[1]} ${tm[2].toLowerCase()} to gas mark`); if (g && !g.error) return { text: g.text + " 📏", source: "skill:units" }; }
+      }
+      const unitAsk = /\b(?:in|to|into|as) (feet|foot|ft|meters?|metres?|m|km|kilometers?|miles?|inches|cm|centimeters?|kg|kilograms?|pounds?|lbs|celsius|fahrenheit|c|f)\??$/.exec(m.plain.replace(/[?!.]+$/, "")) ||
+        /^how many (grams|ounces|pounds|kilograms|kg|ml|millilit(?:re|er)s|litres|liters|cups|feet|meters|metres|miles|kilometers|inches|centimeters|cm)\b.*\b(?:is|are|would be|does) (?:that|this|it)\b/.exec(m.plain.replace(/[?!.]+$/, ""));
       if (unitAsk && (/\b(it|that|this|those)\b/.test(m.plain) || /^(what about|how about|and|in|now|what is it|what's it)\b/.test(m.plain)) && c.lastBot) {
         const mm = /(-?\d[\d,]*(?:\.\d+)?)\s*(km|m|ft|feet|miles|meters|metres|kg|pounds|lbs|°C|°F|cm|inches)\b/i.exec(c.lastBot);
         if (mm) { const cv = P.math.convert(`${mm[1].replace(/,/g, "")} ${mm[2].replace("°", "").toLowerCase()} to ${unitAsk[1]}`); if (cv && !cv.error) return { text: cv.text + " 📏", source: "skill:units" }; }
@@ -910,6 +970,8 @@
       r = S.faq(m); if (r) return { text: r, source: "skill:knowledge" };
       return null;
     }
+
+    _flair(list) { return this.mem.plainStyle || this._isAdult() ? "" : pick(list); }
 
     _mood(label) {
       if (this.state.care > 0) return;
@@ -1202,7 +1264,9 @@
         const slot = MEM.SLOTS[w.join(" ")] || MEM.SLOTS[w[w.length - 1]] || MEM.SLOTS[w[0]] || (C.persona.favorites[w[w.length - 1]] ? w[w.length - 1] : w[0]);
         const fav = C.persona.favorites[slot];
         const theirs = this.mem.favorites[slot];
-        if (fav) return { text: `My favorite ${slot} is ${fav}! ${theirs ? `And yours is ${theirs}, right? 😊` : "What's yours?"}`, source: "opinion:favorite", expect: theirs ? null : { kind: "favorite", slot }, score: 0.9 };
+        const said = /\b(?:mine is|mine's|mines|my (?:favorite|fav|favourite|fave) is|i like|i love) ([a-z][a-z ]{1,30}?)(?=[.!?,]|\s+(?:i|but|and|my|because|cuz)\b|\s*$)/.exec(m.plain);
+        if (said) MEM.apply(this.mem, { type: "favorite", slot, value: said[1].trim() });
+        if (fav) return { text: `My favorite ${slot} is ${fav}! ${said ? `And ${said[1].trim()} ${/s$/.test(said[1].trim()) ? "are" : "is"} a great pick! 😊` : theirs ? `And yours is ${theirs}, right? 😊` : "What's yours?"}`, source: "opinion:favorite", expect: theirs || said ? null : { kind: "favorite", slot }, score: 0.9 };
         return { text: `Hmm, I don't think I have a favorite ${slot} yet! What's yours? Maybe you can help me choose. 😊`, source: "opinion:favorite", expect: { kind: "favorite", slot }, score: 0.85 };
       }
       if ((r = /\bwhat (?:kind of |kinds of |type of |types of |sort of )?(music|songs?|games?|video games|movies?|films?|books?|food|foods|sports?|animals?|shows?|tv shows|anime|colors?) do (?:you|u) (?:like|love|enjoy|listen to|play|watch|read|eat)\b/.exec(t))) {

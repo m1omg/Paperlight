@@ -189,8 +189,12 @@
         const [a, b] = g.q;
         const na = norm(a), nb = norm(b);
         const tt = norm(m.clean);
-        const hitA = /\b(first|1|one|former|option a)\b/.test(tt) || na.split(" ").filter((w) => w.length > 3).some((w) => tt.includes(w));
-        const hitB = /\b(second|2|two|latter|option b)\b/.test(tt) || nb.split(" ").filter((w) => w.length > 3).some((w) => tt.includes(w));
+        // only the words that differ count: "never feel cold" vs "never feel tired" -> "cold" / "tired"
+        const wa = na.split(" "), wb = nb.split(" ");
+        const onlyA = wa.filter((w) => w.length >= 3 && !wb.includes(w)), onlyB = wb.filter((w) => w.length >= 3 && !wa.includes(w));
+        const has = (w) => new RegExp("\\b" + w.replace(/[^a-z0-9]/g, "") + "\\b").test(tt);
+        const hitA = /\b(first|1|one|former|option a)\b/.test(tt) || onlyA.some(has);
+        const hitB = /\b(second|2|two|latter|option b)\b/.test(tt) || onlyB.some(has);
         if (hitA === hitB && !/\b(both|neither)\b/.test(tt)) return idle(g, st);
         st.game = null;
         const choice = /\bboth\b/.test(tt) ? "both" : /\bneither\b/.test(tt) ? "neither" : hitA ? a : b;
@@ -328,6 +332,9 @@
   const fmtClock = (mins) => { mins = ((mins % 1440) + 1440) % 1440; let h = Math.floor(mins / 60); const m = Math.round(mins % 60); const ap = h >= 12 ? "PM" : "AM"; h = h % 12 || 12; return `${h}:${String(m).padStart(2, "0")} ${ap}`; };
   function timeMath(t) {
     let r;
+    // "10:45 in the morning", "1:20 in the afternoon", "noon"
+    t = t.replace(/\b(\d{1,2}(?::\d{2})?)\s*(?:o'?clock\s*)?in the (morning)\b/g, "$1 am").replace(/\b(\d{1,2}(?::\d{2})?)\s*(?:o'?clock\s*)?(?:in the (?:afternoon|evening)|at night|tonight)\b/g, "$1 pm")
+      .replace(/\bnoon\b/g, "12:00 pm").replace(/\bmidnight\b/g, "12:00 am");
     const TIME = "(\\d{1,2})(?::(\\d{2}))?\\s*(a\\.?m\\.?|p\\.?m\\.?)?";
     // "leaves at 10:45am and lands at 1:20pm, how long is the flight?"
     if ((r = new RegExp("\\b(?:at |from )?" + TIME + "\\b.*?\\b(?:at |to |until |till |and )" + TIME + "\\b").exec(t)) && /\b(how long|how many (hours|minutes)|duration|flight time|difference|between)\b/.test(t) && (r[2] || r[3] || r[5] || r[6])) {
