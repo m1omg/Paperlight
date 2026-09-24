@@ -295,6 +295,19 @@
     }
     // word problems: "if I have 3 apples and eat one, how many are left?"
     const w = " " + wordsToNumbers(" " + s + " ").replace(/\s+/g, " ") + " ";
+    // "sara has 24 stickers and gives them equally to 4 friends. how many does each friend get?"
+    let dv = /\b(?:has|have|had|got|there (?:are|were)|bought|baked|made|collected|picked) (\d+(?:\.\d+)?) ([a-z]+)\b.*?\b(?:gives?|gave|shares?|shared|splits?|divides?|divided|puts?|put|hands? out|handed out|deals?|dealt)\b.*?\b(?:equally )?(?:to|among|between|into|with) (\d+(?:\.\d+)?) ([a-z]+)\b.*\b(?:how many|how much)\b/.exec(w);
+    if (dv && +dv[3] > 0) {
+      const a = Q.parse(dv[1]), b = Q.parse(dv[3]), r = a.div(b);
+      const whole = r.isInt();
+      return { expr: `${dv[1]} ÷ ${dv[3]}`, result: whole ? withCommas(r.toDecimal()) : format(r, 2).text, exact: whole, notes: ["word", "each"], value: r, thing: dv[2], each: dv[4].replace(/s$/, ""), rem: whole ? null : String(Number(a.toDecimal()) % Number(b.toDecimal())) };
+    }
+    // "there are 6 bags with 4 apples in each, how many apples are there?"
+    const ml = /\b(\d+(?:\.\d+)?) ([a-z]+)\b(?: with| of| that have| each with| and each has| each has)? (\d+(?:\.\d+)?) ([a-z]+)\b(?: in each| each| in every one)?.*\bhow many (?:\3 )?([a-z]+)\b/.exec(w);
+    if (ml && /\b(each|every|per|in each)\b/.test(w) && ml[4].replace(/s$/, "") === ml[5].replace(/s$/, "")) {
+      const r = Q.parse(ml[1]).mul(Q.parse(ml[3]));
+      return { expr: `${ml[1]} × ${ml[3]}`, result: withCommas(r.toDecimal()), exact: true, notes: ["word", "total"], value: r, thing: ml[4] };
+    }
     const wp = /\b(?:have|had|got|there (?:are|were)|bought|buy|start with|started with) (\d+(?:\.\d+)?) ([a-z]+)\b.*?\b(eat|ate|eats|give away|gave away|give|gave|lose|lost|loses|sell|sold|use|used|drop|dropped|throw away|threw away|take away|took away|spend|spent|break|broke|get|got|buy|bought|find|found|receive|received|win|won|add|added|pick|picked|catch|caught)(?: away)? (\d+(?:\.\d+)?)\b.*\bhow many\b/.exec(w);
     if (wp) {
       const a = Q.parse(wp[1]), b = Q.parse(wp[4]);

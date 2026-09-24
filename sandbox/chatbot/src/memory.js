@@ -351,6 +351,9 @@
       const ROUTINE = /^(practice|lesson|class|training|rehearsal|homework)$/;
       if ((r = new RegExp("\\b(?:i|we) (?:have|got|have got|will have|am having|are having|have to do|need to do) (?:a |an |my |our |the |this |that |some |another )?((?:[a-z]+ ){0,3}?)(" + NOUN + ")\\b(?:.*?\\b(" + WHEN + ")\\b)?").exec(t)) && !(ROUTINE.test(r[2]) && !/\b(big|important|first|last|final)\b/.test(r[1] || "")) && !/\bgot (?:my|the|our|a|an) (?:[a-z]+ ){0,3}(?:tests?|exams?|quiz|quizzes|essay|project|report card|grades?|results?)s? (?:back|results?|marked|graded)\b/.test(t) ||
           (r = new RegExp("\\bmy ((?:[a-z]+ ){0,3}?)(" + NOUN + ") is (?:on |)(" + WHEN + ")\\b").exec(t))) {
+        // "a dance recital": take the longer name when two event words follow each other
+        const next = new RegExp("\\b" + r[2] + " (" + NOUN + ")\\b").exec(t);
+        if (next && next[1] !== r[2]) r[2] = r[2] + " " + next[1];
         facts.push({ type: "event", what: clean(r[1], r[2]), when: whenOf(r[3]), worry: /\b(nervous|stressed|stressing|freaking out|freaked|scared|worried|anxious|dreading|panicking|terrified)\b/.test(t) });
       } else if ((r = new RegExp("\\b(?:(?:i am|we are|were|im) (?:going|goin|heading)|(?:i|we) (?:have|need|got) to go|(?:i|we) gotta go) (?:to|on) (?:a |an |the |my |our )?((?:[a-z]+ ){0,2}?)(" + NOUN + "|dentist|doctors?|zoo|beach|museum|movies?|amusement park|theme park|water park)\\b(?:.*?\\b(" + WHEN + ")\\b)?").exec(t)) && r[3]) {
         let what = PLACE[r[2]] || clean(r[1], r[2]);

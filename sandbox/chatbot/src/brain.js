@@ -620,6 +620,8 @@
           if (m.tokens.length > 12 || (m.isQuestion && !askBack)) break;
           // "my parents are getting divorced" / "my dog died" is news, not a mood: the event replies know it better
           if (/\b(divorc\w*|died|passed away|moved|moving|broke up|dumped|hospital|sick|surgery|funeral|fired|lost my|new (puppy|dog|cat|kitten|baby|brother|sister)|got a (puppy|dog|cat|kitten))\b/.test(t)) break;
+          // "i have a dance recital on saturday and im really nervous": the event says more than the mood
+          if (facts.some((f) => f.type === "event" && f.worry)) { const ack = this._ackFacts(facts.filter((f) => !f.quiet), m, c); if (ack) return ack; }
           if (facts.some((f) => !f.quiet && /^(age|name|pet|event|job|location|school)$/.test(f.type)) && e.valence > -0.5) {
             const ack = this._ackFacts(facts.filter((f) => !f.quiet), m, c);
             if (ack) return Object.assign(ack, { text: (e.valence > 0.2 || /\b(good|great|fine|ok|okay)\b/.test(t) ? pick(["Glad your day's going well! 😊 ", "Nice! 😊 "]) : "") + ack.text });
@@ -943,7 +945,9 @@
           const mine = P0.favorites[f.slot];
           const same = mine && mine.toLowerCase().startsWith(f.value.toLowerCase());
           const praise = pick([`${U.capitalizeFirst(f.value)}? Great choice!`, `Ooh, ${f.value}! Nice.`, `${U.capitalizeFirst(f.value)}! I like that.`]);
-          return { text: same ? `No way, ${f.value} is my favorite too! 🤝` : mine ? `${praise} Mine is ${mine}.` : `${praise} I'll remember that! 😊`, source: "memory:favorite" };
+          const justSaid = mine && (c.lastBot || "").toLowerCase().includes(mine.toLowerCase().slice(0, 12));
+          const catLover = /^cats?$/.test(f.value.toLowerCase()) && this.mem.pets.some((p) => /cat|kitten/.test(p.kind));
+          return { text: same ? `No way, ${f.value} is my favorite too! 🤝` : catLover ? `Cats! 🐱 Of course, with ${this.mem.pets.find((p) => /cat|kitten/.test(p.kind)).name || "your kitty"} around!` : mine && !justSaid ? `${praise} Mine is ${mine}.` : `${praise} I'll remember that! 😊`, source: "memory:favorite" };
         }
         case "pet": {
           const who = f.name || "them";
@@ -1069,12 +1073,29 @@
       if (r) return { text: r.text, source: "skill:math" };
       // "no, that's wrong, it's 231" right after an exact answer: check again and stand by it
       const lm = this.state.lastMath;
-      if (lm && this.state.turn - lm.turn <= 2 && /\b(wrong|incorrect|not right|not correct|mistake|nope|no it is|no its|it should be|actually it is|you are wrong|thats not|that is not)\b/.test(m.plain)) {
+      if (lm && this.state.turn - lm.turn <= 2 && /\b(wrong|incorrect|not right|not correct|mistake|nope|no it is|no its|it should be|actually it is|you are wrong|thats not|that is not)\b/.test(m.plain) && (/\d/.test(m.plain) || /\b(wrong|incorrect|not right|not correct|mistake)\b/.test(m.plain)) && !/\b(homework|help me|help with|my question|can you help)\b/.test(m.plain)) {
         const num = /(-?\d[\d,]*(?:\.\d+)?)/.exec(m.clean);
         const said = num ? num[1].replace(/,/g, "") : null;
         if (said && said !== lm.result.replace(/,/g, "")) return { text: `I double-checked: ${lm.expr} = ${lm.result}. I'm sure about this one, because I do exact math, not guesses! 🧮 (${said} isn't right, but I like that you check!)`, source: "skill:math" };
         if (said) return { text: `Yep, ${said} is what I got too: ${lm.expr} = ${lm.result}. ✅`, source: "skill:math" };
         return { text: `Hmm, I checked again: ${lm.expr} = ${lm.result}. I'm pretty confident! 🧮 Which part looks wrong to you?`, source: "skill:math" };
+      }
+      // "is there a trick to remember that one" right after a times-table answer
+      if (lm && this.state.turn - lm.turn <= 3 && /\b(trick|tip|way to remember|remember (it|that|this)|how do i remember|easy way)\b/.test(m.plain)) {
+        const mm = /^(\d+) × (\d+)$/.exec(lm.expr || "");
+        if (mm) {
+          const [a, b] = [+mm[1], +mm[2]].sort((x, y) => x - y), p = a * b;
+          const T = { "7x8": "5, 6, 7, 8: 56 = 7 × 8! The numbers go in order. 🎵", "6x8": "\"Six and eight went out on a date, and came back as forty-eight!\" 💃", "6x7": "\"Six times seven is forty-two\" rhymes a bit with \"tie your shoe\"... or remember 6 × 7 = 42 is the answer to everything in a famous book! 😄", "8x8": "\"Eight times eight fell on the floor, pick it up, it's sixty-four!\" 🎵", "7x7": "7 × 7 = 49: \"seven sevens, forty-nine, looking fine!\"", "6x6": "\"Six times six is thirty-six, pick up sticks!\"", "4x8": "4 × 8 = 32: double 4 × 4 (16) to get 32!", "3x4": "12 = 3 × 4: count 1, 2, 3, 4... the numbers 1, 2 = 3 × 4! (12 = 3 × 4)" };
+          if (a === 9 || b === 9) {
+            const o = a === 9 ? b : a;
+            return { text: `The 9s have a finger trick! ✋ Hold up 10 fingers and fold down finger number ${o}. The fingers on the left (${o - 1}) are the tens and the ones on the right (${10 - o}) are the ones: ${o - 1}${10 - o} = 9 × ${o}. Also, the digits of any 9s answer add up to 9 (${String(p).split("").join(" + ")} = 9)!`, source: "skill:math" };
+          }
+          const key = a + "x" + b;
+          if (T[key]) return { text: `Yes! ${T[key]}`, source: "skill:math" };
+          if (a === 5 || b === 5) return { text: `Fives are easy: it's half of 10 times the number. ${a === 5 ? b : a} × 10 = ${(a === 5 ? b : a) * 10}, half of that is ${p}! ✋`, source: "skill:math" };
+          if (a === 2 || b === 2 || a === 4 || b === 4) return { text: `Use doubling! ${a === 2 || b === 2 ? "× 2 is just doubling" : "× 4 is double, then double again"}: ${a === 4 || b === 4 ? `${a === 4 ? b : a} → ${(a === 4 ? b : a) * 2} → ${p}` : p}. 💪`, source: "skill:math" };
+          return { text: `A trick that works for any of them: split it up! ${a} × ${b} = ${a} × ${b - 2} + ${a} × 2 = ${a * (b - 2)} + ${a * 2} = ${p}. Break the big one into two easy ones! 💪`, source: "skill:math" };
+        }
       }
       const lin = P.math.linear(m.clean);
       if (lin) return { text: lin.text, source: "skill:math" };
@@ -1111,6 +1132,14 @@
         }
       }
       r = P.math.solve(m.clean) || P.math.solve(m.plain);
+      if (r && r.notes && r.notes.includes("each")) {
+        this.state.lastMath = { expr: r.expr, result: r.result, turn: this.state.turn };
+        return { text: r.rem !== null && r.rem !== "0" && /^\d+$/.test(String(r.rem)) && !/\./.test(r.expr) ? `${r.expr} = ${Math.floor(+r.value.toNumber())} with ${r.rem} left over, so each ${r.each} gets ${Math.floor(+r.value.toNumber())} ${r.thing} and ${r.rem} ${+r.rem === 1 ? "is" : "are"} left. 🧮` : `${r.expr} = ${r.result}, so each ${r.each} gets ${r.result} ${+r.result === 1 ? r.thing.replace(/s$/, "") : r.thing}! 🧮`, source: "skill:math" };
+      }
+      if (r && r.notes && r.notes.includes("total")) {
+        this.state.lastMath = { expr: r.expr, result: r.result, turn: this.state.turn };
+        return { text: `${r.expr} = ${r.result}, so there are ${r.result} ${r.thing} altogether! 🧮`, source: "skill:math" };
+      }
       if (r && r.notes && r.notes.includes("word")) {
         const n = +r.result.replace(/,/g, "");
         return { text: `${r.left ? "You'd have" : "That makes"} ${r.result} ${n === 1 ? r.thing.replace(/s$/, "") : r.thing}${r.left ? " left" : ""}! (${r.expr} = ${r.result}) 🧮`, source: "skill:math" };
@@ -1210,7 +1239,7 @@
       if (venting && (r = /^(?:she|he|they|my \w+) (?:said|says|told me) (?:that )?(?:i )?(?:could|can|should|would) (.{3,60})$/.exec(t))) {
         return { text: pick(["That sounds like it could really help. 💙 How do you feel about it?", "That's kind of them. Do you think it'll help?"]), source: "support:offer", score: 0.86, expect: { kind: "vent" } };
       }
-      if (/\b(i (do not|don't|dont) know what to do|i (do not|don't|dont) know anymore|what (should|do) i do)\b/.test(t) && venting) {
+      if (/\b(i (do not|don't|dont) know what to do|i (do not|don't|dont) know anymore|what (should|do) i do)\b/.test(t) && venting && !this._advice(m)) {
         return { text: "That's a really hard spot to be in. 💙 You don't have to figure it all out right now. What feels like the hardest part?", source: "support:lost", score: 0.88, expect: { kind: "vent" } };
       }
       if (/\bi (feel|am|m|'m|am feeling|'m feeling) (a (little |bit |lot )?|so much |much |kind of |kinda )?(better|calmer|a bit better|less (sad|stressed|worried)|okay now|ok now|fine now)\b|\b(that|it|you) (really )?helped\b|\bthat (made|makes) me feel better\b/.test(t)) {
@@ -1461,9 +1490,10 @@
       if (/\b(how (do|can|should) i (deal|cope|handle)|what (should|do|can) i do( about)?|how do i (get through|stop feeling)|any advice)\b/.test(t) && m.tokens.length <= 12)
         t += " " + this.state.history.filter((h) => h.role === "user").slice(-4).map((h) => h.text.toLowerCase()).join(" ");
       const worried = /\b(nervous|scared|worried|anxious|afraid|stage fright|freaking out)\b/.test(t) && /\b(play|show|performance|recital|concert|speech|presentation|test|exam|game|match|line|lines|stage|audition|first day)\b/.test(t);
-      if (!worried && !/\b(tips?|advice|how (do|can|should|could) i|how to|what should i|what do i do|should i|any ideas|help me|how can i|why|any idea|do you know|what if|what do i (say|tell)|what to (tell|say)|keeps asking|do (you|u) think|gets? (easier|better))\b|\b(tummy|stomach) (feels|is|feeling)|butterflies/.test(t) && !/\?/.test(m.clean)) return null;
+      const asking = worried || /\b(tips?|advice|how (do|can|should|could) i|how to|what should i|what do i do|should i|any ideas|help me|how can i|why|any idea|do you know|what if|what do i (say|tell)|what to (tell|say)|keeps asking|do (you|u) think|gets? (easier|better))\b|\b(tummy|stomach) (feels|is|feeling)|butterflies/.test(t) || /\?/.test(m.clean);
       const adult = this._isAdult();
       for (const a of C.advice) {
+        if (!asking && !a.stmt) continue;
         // tips written for children (divorce seen from a kid's side) aren't for grown-ups
         if (adult && !a.forAdults && a.say.some((x) => /kids with divorce|pick a side|Mom and Dad aren't going to|you're a kid|School counselor|school counselor/.test(x))) continue;
         if (!adult && a.forAdults && !/\b(my (son|daughter|kid|child)|as (his|her) (dad|mom|mum|parent))\b/.test(t)) continue;
@@ -1692,6 +1722,13 @@
       if (/\bhide (and|n|&) seek\b/.test(t) && /\b(hid|hiding|found|nobody|no one|won)\b/.test(t)) {
         const spot = /\bhid (?:in|under|behind|inside|on top of) (?:the |a |my )?([a-z]+(?: [a-z]+)?)/.exec(t);
         return { text: pick([`${spot ? "The " + spot[1].replace(/ (under|and|for|with).*$/, "") + "?! 😂 " : ""}That's a legendary hiding spot! Nobody finding you is the best feeling.`, `Haha, sneaky! 🕵️ ${spot ? "The " + spot[1].replace(/ (under|and|for|with).*$/, "") + " is genius. " : ""}Did they ever find you?`]), source: "event:fun", score: 0.88, expect: { kind: "open", topic: "fun" } };
+      }
+      // "my little brother theo keeps trying to play on my account", "he scribbled on my drawing"
+      if (/\bmy (little |big |baby |younger |older )?(sister|brother)\b.{0,30}\b(keeps?|always) (trying to )?(play|playing|use|using|go|going|log|logging) (on|in|into|onto) my (account|switch|ipad|tablet|phone|game|computer|minecraft|roblox)\b/.test(t))
+        return { text: pick(["Little siblings always want to play what you play! 😅 Maybe a grown-up could help set up his own account, or you could let him watch for 5 minutes?", "Haha, he wants to be just like you! 😄 Annoying, though. Does he mess up your stuff?"]).replace(/\bhis\b|\bhim\b|\bhe\b/g, (x) => /sister/.test(t) ? { his: "her", him: "her", he: "she" }[x] : x), source: "event:sibling", score: 0.9, expect: { kind: "open", topic: "family" } };
+      if (/\b(he|she|they|my (little |big |baby )?(brother|sister|cousin|dog|cat))\b.{0,20}\b(scribbled|drew|colored|coloured|ripped|spilled \w+|tore) (on|all over|up)? ?my (drawing|picture|painting|homework|book|art|project|poster)\b/.test(t)) {
+        const what = /my (drawing|picture|painting|homework|book|art|project|poster)( of \w+)?/.exec(t);
+        return { text: pick([`Oh no, ${what ? "your " + what[1] + (what[2] || "") : "your work"}! 😣 That's so frustrating after all that work. Could you fix it, or maybe turn the scribbles into something new?`, `Nooo! 😖 ${what ? "Your " + what[1] + (what[2] || "") : "Your work"}! I'd be upset too. Is it fixable?`]), source: "event:broken", score: 0.9, expect: { kind: "vent", emotion: "angry" } };
       }
       // "my little brother keeps coming into my room without knocking"
       if (/\bmy (little |big |baby |younger |older )?(sister|brother)\b.{0,40}\b(coming into my room|comes into my room|come into my room|coming in my room|barg\w* in|without knocking|won'?t knock|doesn'?t knock|going through my|reads? my (diary|texts|phone))\b/.test(t)) {
@@ -1971,6 +2008,8 @@
     }
     _restoreCase(s, raw) {
       const pn = this._properNouns();
+      for (const p of this.mem.pets || []) if (p.name) pn.set(p.name.toLowerCase(), p.name);
+      for (const v of Object.values(this.mem.people || {})) for (const n of String(v || "").split(/ and |, /)) if (/^[A-Z][a-z]+$/.test(n)) pn.set(n.toLowerCase(), n);
       // names the user capitalized in the middle of a sentence ("my friend Jess"); a capital at the start of a
       // sentence ("Will anyone...", "Not sure") or on a common word is just typing, not a name
       const COMMON = /^(not|will|now|fine|wow|your|you|really|very|just|like|good|bad|great|yes|no|okay|ok|please|thanks|thank|sorry|maybe|never|always|well|oh|omg|lol|haha|all|any|every|today|tomorrow|yesterday|what|how|why|when|where|who|and|but|the|this|that|it|is|are|was|were|do|does|did|can|could|would|should|have|has|had|so|too|also|then|than|there|here|nice|cool|awesome|love|hate|sure|right|wrong|true|false|more|most|less|much|many|some|one|two|three|first|last|next|new|old|big|small|best|worst|hello|hi|hey|bye)$/i;
