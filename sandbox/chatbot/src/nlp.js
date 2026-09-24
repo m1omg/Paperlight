@@ -231,7 +231,8 @@
       let w = e.w;
       let neg = false;
       // "not happy" is negated, but in "I don't know, it's fun" the "not" belongs to "know"
-      for (let j = Math.max(0, i - 4); j < i; j++) if (NEGATORS.has(tokens[j]) && (tokens[j] !== "no" || j === i - 1) && (i - j <= 3 || tokens[j] === "not") && !/^(know|sure|think|care|mind|get|understand|remember)$/.test(tokens[j + 1] || "")) neg = true;
+      for (let j = Math.max(0, i - 4); j < i; j++) if (NEGATORS.has(tokens[j]) && (tokens[j] !== "no" || j === i - 1) && (i - j <= 3 || tokens[j] === "not") && !/^(know|sure|think|care|mind|get|understand|remember)$/.test(tokens[j + 1] || "") &&
+          !tokens.slice(j + 2, i).some((x, k, arr) => /^(but|and|so|because|cuz|its|it's)$/.test(x) || (x === "it" && arr[k + 1] === "is"))) neg = true;
       if (i > 0 && INTENS.has(tokens[i - 1])) w *= 1.5;
       let cat = e.cat;
       if (neg) {
@@ -246,6 +247,7 @@
     const joined = " " + tokens.join(" ") + " ";
     if (/ (by myself|on my own|no one to|nobody to|(do not|don't|dont) (really |even )?have (anyone|anybody|any friends)|no friends|have nobody|have no one|nobody to talk to|sit alone|eat alone|(nobody|no one|noone) (listens|cares|does|understands|gets it|likes me|loves me|wants me|talks to me|plays with me|wants to play with me|sits with me|wants to be my friend)|no one (listens|cares|understands)|(does not|doesn't|doesnt|do not|don't|dont) (even )?listen) /.test(joined)) scores.lonely = (scores.lonely || 0) + 1.2;
     if (/ (feel|feels|feeling|felt|am|was|been|im) (so |a bit |a little |kind of |kinda |pretty |really )?blue( today| lately| again)? /.test(joined)) scores.sad = (scores.sad || 0) + 1;
+    if (/ (was|is|are|were|being|been) (so |really |super |very )?mean( to me| to us)? | (laughed at|made fun of|picked on) (me|us) /.test(joined)) scores.sad = (scores.sad || 0) + 1;
     return finishEmotion(scores);
   }
   function finishEmotion(scores) {

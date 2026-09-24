@@ -174,6 +174,7 @@
         text = lead[2];
       }
       text = String(text).replace(new RegExp("[,\\s]+" + bn + "[?!.]*$", "i"), (x) => x.replace(/[^?!.]/g, ""));
+      if (bn.length > 1) text = text.replace(new RegExp("^\\s*(?:(?:hey|hi|ok|okay|so|um|omg|yo)\\s+)?" + bn + "\\s+(?=(?:what|whats|what's|who|how|why|where|when|do|does|did|can|could|are|is|will|would|tell|guess|remember)\\b)", "i"), "");
       this.state.greetedNow = !!greetBack;
       // "Thank you. How much would I pay?" / "That isn't what I asked, but never mind. My flight..." -> answer the rest
       let leadAck = "";
@@ -224,9 +225,19 @@
 
       // 1) memory facts ("my name is...", "I have a dog", "my favorite color is...") and threads to follow up on
       const facts = out ? [] : MEM.extract(mem, m, expect);
-      if (!out && !(st.care > 0) && !(P.safety && P.safety.sensitive(m))) { MEM.noteThread(mem, m); MEM.noteDiary(mem, m); }
-      else if (!out && (st.care > 0 || (P.safety && P.safety.sensitive(m)))) mem.careFollow = Object.assign({ kind: /\b(died|passed away|funeral|death)\b/.test(m.plain) ? "grief" : "soft" }, mem.careFollow, { at: Date.now(), asked: false });
+      if (!out && !(st.care > 0) && !(P.safety && P.safety.sensitive(m))) MEM.noteThread(mem, m);
+      // the diary may keep "my parents are getting divorced" (so Pip can remember it), never anything from a safety moment
+      if (!out && !(st.care > 0 && /^(overdose|crisis|abuse|neglect|grooming|sextortion|meetstranger|friendcrisis|runaway)$/.test(st.careKind || ""))) MEM.noteDiary(mem, m);
+      if (!out && (st.care > 0 || (P.safety && P.safety.sensitive(m)))) mem.careFollow = Object.assign({ kind: /\b(died|passed away|funeral|death)\b/.test(m.plain) ? "grief" : "soft" }, mem.careFollow, { at: Date.now(), asked: false });
 
+      // "i gtg eat dinner 🍝 bye pip!! wish me luck" / "I'll say goodbye for now and talk to you tomorrow": a goodbye, whatever else is in it
+      if (!out && m.tokens.length > 2 && m.tokens.length <= 30 && !/\?\s*$/.test(m.clean) &&
+          (/\b(bye+|byee+|goodbye|good bye|bye bye|see (you|ya)( later| soon| tomorrow)?|cya|ttyl|gtg|g2g|peace out|say goodbye|talk to (you|u) (later|tomorrow|soon|another time)|logging off|heading out)\b/.test(m.plain) || /\b(gotta go|got to go|have to go|need to go|must go|gotta run)(?! to (?!bed|sleep)\w)\b/.test(m.plain)) &&
+          !/\b(say (bye|goodbye) (to|in)|said (bye|goodbye)|goodbye in|bye in|how (do|to) (you )?say|didn'?t (even )?say (bye|goodbye)|never said (bye|goodbye))\b/.test(m.plain)) {
+        const bye = C.intents.find((x) => x.id === "bye");
+        const r = typeof bye.say === "function" ? bye.say(c) : pick(bye.say);
+        out = { text: this._byeText(m, typeof r === "string" ? r : r.text), source: "intent:bye", byeDone: true };
+      }
       // 2) whatever Pip was waiting for
       if (!out && expect) out = this._onExpect(expect, m, c, facts);
       // 3) a running game
@@ -235,14 +246,12 @@
       if (!out) out = this._commands(m, c);
       if (!out) out = this._more(m, c);
       if (!out) { const r = MEM.recall(mem, m); if (r) out = Object.assign(r, { source: "memory" }); }
+      if (!out) out = this._eventNow(m);
       // 5) facts just learned get a warm acknowledgement
       const loud = facts.filter((f) => !f.quiet);
-      if (!out && m.tokens.length > 2 && (/\b(bye+|goodbye|bye bye|see (you|ya)( later| soon| tomorrow)?|cya|ttyl|gtg|g2g|gotta go|have to go( now)?|peace out)( pip| now| for now| everyone)?[.! ]*$/.test(m.plain) || (m.tokens.length <= 9 && /\b(gtg|g2g|gotta go|got to go|have to go|i need to go|i must go)\b/.test(m.plain)))) {
-        const bye = C.intents.find((x) => x.id === "bye");
-        const r = typeof bye.say === "function" ? bye.say(c) : pick(bye.say);
-        out = { text: (typeof r === "string" ? r : r.text), source: "intent:bye" };
-      }
-      if (!out && loud.length) out = this._ackFacts(loud, m, c);
+
+      const asks = /\?/.test(m.clean) || m.isQuestion;
+      if (!out && loud.length && !(asks && loud.every((f) => /^(person|like|favorite|dislike|note)$/.test(f.type)))) out = this._ackFacts(loud, m, c);
       // 6) exact skills
       if (!out) out = this._skills(m, c, trace);
       // "It's not tricky. 80 + 10%" / "Never mind the tomatoes. Could you tell me what 'ephemeral' means?" /
@@ -252,6 +261,7 @@
       if (!out) out = await this._open(m, c, trace, expect);
 
       if (typeof out === "string") out = { text: out };
+      if (out.source === "intent:bye" && !out.byeDone) out.text = this._byeText(m, out.text);
       if (leadAck && out.text && !/^(safety|intent:thanks|event|support)/.test(out.source || "") && !/^(you're welcome|happy to help|sorry|oops|sure)/i.test(out.text)) out.text = leadAck + out.text;
       const prevUser = [...st.history].reverse().find((h) => h.role === "user");
       if (prevUser && prevUser.text.toLowerCase() === m.clean.toLowerCase() && m.tokens.length >= 2 && !st.game && !/^(safety|game|expect)/.test(out.source || ""))
@@ -346,7 +356,7 @@
         }
         case "name": {
           const f = facts.find((x) => x.type === "name");
-          if (f && facts.filter((x) => !x.quiet).length >= 3) return null; // several facts: _ackFacts answers them together
+          if (f && facts.filter((x) => !x.quiet || x.type === "age").length >= 2) return null; // several facts: _ackFacts answers them together
           if (f) return this._nameAck(f.value, m, c);
           if (/\b(no|nope|why|secret|not telling|i (do not|don't|dont) want|rather not|none of your|guess)\b/.test(t) && m.tokens.length <= 8)
             return { text: pick(["That's okay! I'll just call you friend. 😊 So, what's up?", "No problem! A mystery friend, how exciting. 🕵️ What would you like to talk about?"]), source: "expect:name" };
@@ -381,6 +391,8 @@
         case "hobby": {
           // "What do you like to do for fun?" -> "mostly drawing. and watching anime, i'm kind of obsessed with frieren rn"
           if (this._strongRequest(m) || (m.isQuestion && !/\b(you|u|yours)\??$/.test(t))) break;
+          if (/\b(what|whats|who|why|how|where|when)\b/.test(t) && !/\b(what about|how about) (you|u)\b/.test(t)) break;
+          if (this.mem.name && m.plain.replace(/[^a-z ]/g, "").trim() === this.mem.name.toLowerCase()) return { text: `That's your name, ${this.mem.name}! 😄 I meant: what do you like to do for fun?`, source: "expect:hobby", expect: { kind: "hobby" } };
           if (/^(hmm |well |and |so )?(what about you|how about you|and you|wbu|hbu|you|u)\??$/.test(t)) return { text: "Me? I love chatting, bad puns, math puzzles and Minecraft! 😄 But I asked first: what do you like to do?", source: "expect:hobby", expect: { kind: "hobby" } };
           const found = [];
           for (const [re, name] of HOBBIES) if (re.test(m.plain) && !found.includes(name)) found.push(name);
@@ -499,7 +511,7 @@
             }
             if (good) {
               this._mood("happy"); this.state.care = 0; this.mem.careFollow = null;
-              return { text: pick([`I'm really glad to hear that${n}! 💙`, `Yay, that makes me so happy${n}! 💙`]) + (m.tokens.length > 4 ? " " + pick(["Tell me more!", "What happened?", "That's great news."]) : " I'm here whenever you want to talk."), source: "expect:followup", expect: m.tokens.length > 4 ? { kind: "open", topic: "good news" } : null };
+              return { text: pick([`I'm really glad to hear that! 💙`, `Yay, that makes me so happy! 💙`]) + (m.tokens.length > 4 ? " " + pick(["Tell me more!", "What happened?", "That's great news."]) : " I'm here whenever you want to talk."), source: "expect:followup", expect: m.tokens.length > 4 ? { kind: "open", topic: "good news" } : null };
             }
             if (bad) { this._mood(ex.label === "grief" ? "sad" : "sad"); return { text: pick([`I'm sorry it's still hard${n}. 💙 Do you want to talk about it? I'm listening.`, `Aw, I'm sorry. 🫂 What's been going on?`]), source: "expect:followup-bad", expect: { kind: "vent", emotion: "sad" } }; }
             break;
@@ -549,6 +561,44 @@
         }
       }
       return null;
+    }
+
+    // "i gtg eat dinner 🍝 bye pip!! wish me luck for the play" -> a goodbye that heard all of it
+    _byeText(m, base) {
+      const t = m.plain, now = Date.now();
+      const extra = [];
+      const meal = /\b(dinner|lunch|breakfast|supper|tea)\b/.exec(t);
+      if (meal) extra.push(`Enjoy your ${meal[1]}! ${meal[1] === "breakfast" ? "🥞" : "🍽️"}`);
+      else if (/\b(sleep|bed|nap)\b/.test(t)) extra.push("Sleep well! 🌙");
+      else if (/\b(practice|training|game|match)\b/.test(t)) extra.push(`Have a great ${/\b(practice|training|game|match)\b/.exec(t)[1]}! 💪`);
+      else if (/\b(school|class)\b/.test(t)) extra.push("Have a good day at school! 🎒");
+      const pet = (this.mem.pets || []).find((p) => p.name && new RegExp("\\b" + p.name.toLowerCase() + "\\b").test(t));
+      if (pet) extra.push(`Say hi to ${pet.name} for me! 🐾`);
+      const ev = (this.mem.events || []).find((e) => !e.done && e.due && e.due > now - 6 * 3600e3 && e.due - now < 36 * 3600e3);
+      if (ev) extra.push(`Good luck with your ${ev.what}! 🍀`);
+      else if (/\bwish me luck\b/.test(t)) extra.push("Good luck!! 🍀");
+      if (!extra.length) return base;
+      return base.replace(/\s*(Come back soon, okay\?|I'll be here whenever you want to chat\.|It was nice talking to you\.)$/, "") + " " + extra.slice(0, 2).join(" ");
+    }
+
+    // "guess what today is!!! 🥳" / "its friday!!! did u forget??" / "the PLAY pip!!! remember??": the big day is here
+    _eventNow(m) {
+      const t = m.plain;
+      const DAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+      const cue = /\b(guess what (today|day) is|what day is (it|today)|do (you|u) know what (today|day) is|did (you|u) forget|(you|u) forgot|today is the (day|big day)|the big day|(it'?s|its|it is) (today|tonight|finally \w+day|\w+day)\b)|\bremember\s*\??$/.test(t);
+      if (!cue) return null;
+      const now = new Date(), day0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const named = DAYS.find((d) => new RegExp("\\b" + d + "\\b").test(t));
+      const evs = (this.mem.events || []).filter((e) => !e.done && e.due);
+      const today = evs.find((e) => e.due >= day0 && e.due < day0 + 864e5) || (named && evs.find((e) => DAYS[new Date(e.due).getDay()] === named && Math.abs(e.due - day0) < 7 * 864e5));
+      const mentioned = evs.find((e) => e.what.split(" ").some((w) => w.length > 2 && t.includes(w.replace(/s$/, ""))));
+      const ev = today || mentioned;
+      if (!ev) return null;
+      ev.wished = true; ev.asked = false;
+      const isToday = ev.due >= day0 && ev.due < day0 + 864e5;
+      const n = this.mem.name ? ", " + this.mem.name : "";
+      if (isToday) return { text: pick([`Of course I didn't forget${n}! Your ${ev.what} is TODAY! 🎉 Good luck, you're going to be amazing! How are you feeling?`, `YES! It's ${ev.what} day! 🎉 I've been waiting for this! How are you feeling about it?`]), source: "memory:event-today", expect: { kind: "followup", about: "upcoming", what: ev.what } };
+      return { text: `I didn't forget! Your ${ev.what} is ${MEM.dayWord(ev.due)}. 😊 Are you excited?`, source: "memory:event-today", expect: { kind: "followup", about: "upcoming", what: ev.what } };
     }
 
     // one sentence of a longer message at a time, questions first, from the last one back
@@ -644,7 +694,7 @@
       for (const part of parts) {
         const pm = N.analyze(part);
         // a feeling mentioned next to a request
-        if (pm.emotion.valence <= -0.9 && !/^(feelings|event|react:negative|fallback:vent)/.test(src) && /\b(i am|i'm|im|i feel|feeling)\b/.test(pm.plain)) {
+        if (pm.emotion.valence <= -0.9 && !/^(feelings|event|react:negative|fallback:vent|advice|support|safety|expect:followup)/.test(src) && /\b(i am|i'm|im|i feel|feeling)\b/.test(pm.plain)) {
           const lab = pm.emotion.label === "lonely" ? "lonely" : pm.emotion.label === "anxious" ? "stressed" : pm.emotion.label === "angry" ? "upset" : pm.emotion.label === "tired" ? "tired" : "down";
           out.text = `Aw, I'm sorry you're feeling ${lab}. 💙 ` + (/^(react|fallback|eliza|ack)/.test(src) ? "Do you want to talk about it?" : out.text);
           if (/^(react|fallback|eliza|ack)/.test(src)) out.expect = { kind: "vent" };
@@ -680,13 +730,34 @@
         const nm = got.find((f) => f.type === "name");
         return { text: `${nm ? `Nice to meet you, ${nm.value}! 😊 ` : ""}${U.capitalizeFirst(U.listJoin(bits))}. Got it, I'll remember all that! ${c.adult || facts.some((f) => f.type === "job" && f.value !== "student") ? "So what do you like to do when you're not working?" : "What do you like to do for fun?"}`, source: "memory:several", expect: { kind: "hobby" } };
       }
+      // two things at once: "hiii im lily!!! im 9", "I'm 67 and a retired teacher", "my hamster is peanut and my favorite color is purple"
+      if (got.length === 2 || (facts.filter((x) => /^(pet|favorite)$/.test(x.type)).length === 2)) {
+        const two = got.length === 2 ? got : facts.filter((x) => /^(pet|favorite)$/.test(x.type));
+        const bit = (x) => x.type === "age" ? `${x.value}` : x.type === "job" ? `${U.aOrAn(x.value)} ${x.value}` : x.type === "location" ? `living in ${x.value}` : x.type === "pet" ? (x.name ? `${x.name} the ${x.kind}` : `${U.aOrAn(x.kind)} ${x.kind}`) : x.type === "favorite" ? `${x.value} as your favorite ${x.slot}` : x.type === "event" ? `your ${x.what}${x.when && x.when !== "soon" ? " " + x.when : ""}` : x.type === "school" ? x.value : null;
+        const nm = two.find((x) => x.type === "name"), other = two.find((x) => x.type !== "name");
+        if (nm && other && other.type === "age") return { text: `${nm.value}, and ${other.value}! ${other.value < 13 ? "That's a great age! 😊" : "Nice to meet you! 😊"} ${other.value < 18 ? "What grade are you in?" : "What do you do?"}`, source: "memory:several", expect: { kind: "open", topic: "school/work" } };
+        if (nm && other && bit(other)) return { text: `Nice to meet you, ${nm.value}! 😊 ${U.capitalizeFirst(bit(other))}, got it.${other.type === "event" ? " Good luck! 🍀" : ""} What do you like to do for fun?`, source: "memory:several", expect: { kind: "hobby" } };
+        const b = two.map(bit).filter(Boolean);
+        if (b.length === 2) {
+          const job = two.find((x) => x.type === "job");
+          const tail = job && /retired/.test(job.value) ? " Enjoying the free time, I hope! What keeps you busy these days?" : job && job.value !== "student" ? " What's the best part of the job?" : c.adult ? " What do you like to do in your free time?" : " What do you like to do for fun?";
+          return { text: `${U.capitalizeFirst(b[0])} and ${b[1]}! Got it, I'll remember both. 😊${tail}`, source: "memory:several", expect: { kind: "open", topic: "about" } };
+        }
+      }
       const f = facts.find((x) => x.type === "name") || facts.find((x) => x.type === "event") || facts.find((x) => x.type === "pet") ||
         facts.find((x) => x.type === "favorite") || facts.find((x) => x.type === "age") || facts.find((x) => x.type === "note") ||
         facts.find((x) => x.type === "birthday") || facts.find((x) => x.type === "location") || facts.find((x) => x.type === "job") ||
-        facts.find((x) => x.type === "school") || facts.find((x) => x.type === "person") || facts.find((x) => x.type === "like") || facts.find((x) => x.type === "dislike");
+        facts.find((x) => x.type === "school") || facts.find((x) => x.type === "position") || facts.find((x) => x.type === "person") || facts.find((x) => x.type === "like") || facts.find((x) => x.type === "dislike");
       const P0 = C.persona;
       switch (f.type) {
-        case "name": return f.prev && f.prev !== f.value ? { text: `Oh, ${f.value}! Got it, I'll call you ${f.value} from now on. 😊`, source: "memory:name" } : this._nameAck(f.value, m, c);
+        case "name": {
+          if (f.prev && f.prev === f.value) {
+            const hi = /^(good (morning|afternoon|evening)|hi|hello|hey)\b/.exec(m.plain);
+            const tell = /\b(catch|remember|know|forget|forgot|told you|i said|i did|already)\b/.test(m.plain) || /\?/.test(m.clean);
+            return { text: hi ? `${U.capitalizeFirst(hi[0])}, ${f.value}! Of course I remember you. 😊` : tell ? pick([`Yes! You're ${f.value}. 😊 I've got it saved.`, `I know, ${f.value}! 😊 I won't forget.`]) : pick([`I know, ${f.value}! 😊`, `Yep, ${f.value}! I remember. 😊`]), source: "memory:name" };
+          }
+          return f.prev ? { text: `Oh, ${f.value}! Got it, I'll call you ${f.value} from now on. 😊`, source: "memory:name" } : this._nameAck(f.value, m, c);
+        }
         case "age": {
           const a = f.value;
           const tail = a < 13 ? "That's a great age! 😊 What grade are you in?" : a < 20 ? "Nice! 😊 Are you in school?" : a < 30 ? "Cool! Do you work or study?" : "Cool! What do you do?";
@@ -717,7 +788,8 @@
         case "note": return { text: pick([`Got it! I'll remember that ${f.value}. 📝`, `Noted! 📝 ${U.capitalizeFirst(f.value)}.`]), source: "memory:note" };
         case "job": return { text: f.value === "student" ? "A student! 📚 What's your favorite subject?" : `${U.aOrAn(f.value) === "an" ? "An" : "A"} ${f.value}! That's cool. Do you like it?`, source: "memory:job", expect: f.value === "student" ? { kind: "favorite", slot: "subject" } : { kind: "open", topic: "job" } };
         case "school": return { text: `${U.capitalizeFirst(f.value)}! How's school going?`, source: "memory:school", expect: { kind: "open", topic: "school" } };
-        case "person": return { text: `${f.name}! I'll remember your ${f.rel}'s name. 😊`, source: "memory:person" };
+        case "position": return { text: `${U.capitalizeFirst(f.value)}! ${/guard/.test(f.value) ? "🏀 The one who runs the whole offense." : /goal|keeper/.test(f.value) ? "🧤 The last line of defense!" : "💪"} I'll remember that.`, source: "memory:position" };
+        case "person": return { text: f.ages ? `${f.name}! ${f.ages[0]} and ${f.ages[1]}, lovely ages. I'll remember your ${f.rel}. 😊` : / and /.test(f.name) ? `${f.name}! I'll remember your ${f.rel}. 😊` : `${f.name}! I'll remember your ${f.rel}'s name. 😊`, source: "memory:person" };
         case "like": {
           const v = f.value;
           const pl = P0.likes.find((l) => v.toLowerCase().includes(l));
@@ -906,7 +978,8 @@
       if (st.turn - (st.topicTurns[tp.name] || -99) <= 2) return null; // don't loop on the same topic
       st.topicTurns[tp.name] = st.turn;
       if (/^i (really |also |just )?(play|like|love|do|watch|listen to)\b|\bmy favorite\b/.test(m.plain) && !/^(them|that game|that sport|that music|food|videos)$/.test(tp.name)) MEM.apply(this.mem, { type: "like", value: tp.name });
-      return { text: `${S.deal(st, "topicsay:" + tp.name, tp.say)} ${S.deal(st, "topicq:" + tp.name, tp.q)}`, source: "topic:" + tp.name, score: 0.6, expect: { kind: "open", topic: tp.name } };
+      const q = S.deal(st, "topicq:" + tp.name, tp.q);
+      return { text: `${S.deal(st, "topicsay:" + tp.name, tp.say)} ${q}`, source: "topic:" + tp.name, score: 0.6, expect: /favorite (rapper|singer|artist|band|song)|listening to/.test(q) ? { kind: "music", topic: tp.name } : { kind: "open", topic: tp.name } };
     }
 
     // a short answer to the question Pip just asked ("shes 3", "yeah", "blue", "i got 18 out of 20")
@@ -1145,7 +1218,8 @@
         const tp = C.topicOf ? C.topicOf(thing) : null;
         if (tp && !/^(minecraft)$/i.test(tp.name)) {
           const can = r[1] === "play" ? "I can't play (no hands! 😄), but" : r[1] === "watch" ? "I can't watch things (no eyes! 😅), but" : r[1] === "listen to" ? "I can't hear music, sadly, but" : "Honestly?";
-          return { text: `${can} ${tp.opinion || `I think ${tp.name} is really cool!`} ${S.deal(this.state, "topicq:" + tp.name, tp.q)}`, source: "opinion:topic", expect: { kind: "open", topic: tp.name }, score: 0.86 };
+          const q = S.deal(this.state, "topicq:" + tp.name, tp.q);
+          return { text: `${can} ${tp.opinion || `I think ${tp.name} is really cool!`} ${q}`, source: "opinion:topic", expect: /favorite (rapper|singer|artist|band|song)|listening to/.test(q) ? { kind: "music", topic: tp.name } : { kind: "open", topic: tp.name }, score: 0.86 };
         }
         if (/^(me|it|that|this|them|him|her|you|yourself)$/.test(thing) || / or /.test(thing)) return null;
         const low = thing.toLowerCase();
