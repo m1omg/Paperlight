@@ -54,6 +54,9 @@ const groups = [
     ["how do i beat the ender dragon", /crystals/i, "skill:minecraft"],
     ["what can i craft with diamonds", /Enchanting Table.*Jukebox|Jukebox.*Enchanting Table|Diamond Pickaxe/, "skill:minecraft"],
     ["what is a blaze rod used for", /Brewing Stand/, "skill:minecraft"],
+    ["how do i find a bastion", /blackstone/i, "skill:minecraft"],
+    ["what is the best armor in minecraft", /Netherite/, "skill:minecraft"],
+    ["where do axolotls spawn", /azalea|lush/i, "skill:minecraft"],
   ]],
   ["generic words stay out of minecraft", [
     ["I am going to bed", /night|sleep/i],

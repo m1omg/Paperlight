@@ -268,6 +268,7 @@
       bar.appendChild(fill);
       const txt = document.createElement("div"); txt.className = "txt"; txt.textContent = brain._post(c.text);
       d.appendChild(lab); d.appendChild(bar); d.appendChild(txt);
+      if (c.detail) { const dt = document.createElement("div"); dt.className = "why"; dt.textContent = c.detail.trim().replace(/^\(|\)$/g, "").replace(/sim/, "similarity").replace(/kw/, "keywords").replace(/pmi/, "fit").replace(/ ll [-0-9.]+/, "").replace(/lex/, "adjust"); d.appendChild(dt); }
       box.appendChild(d);
     }
   }

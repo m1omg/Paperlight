@@ -18,6 +18,10 @@
     "helmet sword axe shovel hoe spade blade pick hatchet tree trees paper door potion healing strength speed poison").split(" "));
   const MC_WORDS = /\b(minecraft|mc|craft|crafting|crafted|recipe|recipes|survival|creative|nether|the end|ender|overworld|redstone|creeper|enchant\w*|mob|mobs|biome|biomes|smelt\w*|furnace|obsidian|netherite|pickaxe|pickax|y level|y=|stronghold|village|villager|villagers|spawner|diamonds?|block|blocks|mining|mine|brew\w*|xp|hearts|steve|alex|herobrine|notch|mojang|server|seed|world|chunk|skin|mod|mods|modded|java|bedrock|pe)\b/;
 
+  // guides whose questions use game-only words can answer anytime; the rest ("how to sleep") need Minecraft context
+  const MC_SPECIFIC = /\b(minecraft|nether|the end|ender|stronghold|village|villager|creeper|redstone|enchant\w*|potion|brew\w*|obsidian|netherite|elytra|beacon|wither|mending|diamonds?|bastion|trial|spawner|axolotls?|sniffer|biomes?|gamemode|creative|pillager|raid|ruined portal|shipwreck|mobs?|xp|slime chunk|ancient city|deep dark|woodland mansion|ocean monument|lush cave|azalea|cherry grove|iron farm|dragon|portal|zombie villager|librarian)\b/;
+  const guideIsMC = (g) => g.q.some((q) => MC_SPECIFIC.test(q));
+
   // ---------- index of names ----------
   const index = new Map();   // phrase -> [{kind, ref}]
   let built = false;
@@ -293,12 +297,15 @@
       if (g && g.score > 0.55 && key.every((w) => m.stems.includes(w) || m.stems.some((x) => x.length > 3 && U.levenshtein(x, w, 1) <= 1))) { guide = D.guides[g.payload]; guideScore = g.score; }
     }
 
+    if (guide && !guideIsMC(guide) && !mcWords && !recentMC) guide = null;
+    // a game-only answer to a question that didn't mention the game gets a "Minecraft" label
+    const label = (a) => (mcWords || recentMC ? a : "If you mean in Minecraft: " + a);
     if (guide && guideScore > 0.75 && !(want === "recipe" && mentions.length && !guide.q.some((q) => mentions.some((x) => q.includes(x.phrase))))) {
-      return done(state, { text: guide.a, kind: "guide" }, null);
+      return done(state, { text: label(guide.a), kind: "guide" }, null);
     }
     if (!mentions.length) {
-      if (guide && (mcWords || recentMC || guide.q.some((q) => /nether|ender|minecraft|redstone|villager|stronghold|elytra|netherite|beacon|wither|mending|obsidian|potion|enchant|diamond|creeper/.test(q)))) {
-        return done(state, { text: guide.a, kind: "guide" }, null);
+      if (guide && (mcWords || recentMC || guideIsMC(guide))) {
+        return done(state, { text: label(guide.a), kind: "guide" }, null);
       }
       return null;
     }

@@ -155,8 +155,9 @@
       // 0) safety first
       if (!out && C.safety.crisis.test(m.plain)) out = { text: C.safety.reply, source: "safety", expect: { kind: "vent", emotion: "sad" } };
 
-      // 1) memory facts ("my name is...", "I have a dog", "my favorite color is...")
+      // 1) memory facts ("my name is...", "I have a dog", "my favorite color is...") and threads to follow up on
       const facts = out ? [] : MEM.extract(mem, m, expect);
+      if (!out) MEM.noteThread(mem, m);
 
       // 2) whatever Pip was waiting for
       if (!out && expect) out = this._onExpect(expect, m, c, facts);
@@ -173,6 +174,7 @@
       if (!out) out = await this._open(m, c, trace, expect);
 
       if (typeof out === "string") out = { text: out };
+      out = this._extraSentences(m, out);
       out.text = this._restoreCase(out.text, m.clean);
       if (greetBack && !/^(hi|hey|hello|good (morning|afternoon|evening)|oh hi|welcome)\b/i.test(out.text)) out.text = greetBack + out.text;
       out.text = this._post(out.text);
@@ -249,7 +251,8 @@
           break;
         }
         case "howareyou": {
-          // "good, you?" / "not great" / "tired"
+          // "good, you?" / "not great" / "tired" (but "I'm sad, tell me a joke" is a request: let it through)
+          if (this._strongRequest(m)) break;
           const e = m.emotion;
           const askBack = /\b(you|u|yourself)\??$/.test(t) || /\b(and|what about|how about) (you|u)\b/.test(t);
           const back = askBack ? " " + pick(["I'm doing great too, thanks for asking!", "I'm good too! 😊", "Me? I'm great!"]) : "";
@@ -271,6 +274,60 @@
         }
       }
       return null;
+    }
+
+    _strongRequest(m) {
+      const chatty = /^(greet|greet_\w+|good_night|ok|bye|brb|back|laugh|thanks|welcome|sorry|bare_yes|bare_no|hmm|wow|agree|disagree|idk|nothing|why|really|user_good|swear|bored|how_are_you|whats_up)$/;
+      return C.intents.some((it) => it.re && !chatty.test(it.id) && (it.re.test(m.norm) || it.re.test(m.plain)));
+    }
+
+    // answer one sentence with handlers that have no side effects (used for the 2nd question in a message)
+    _quickAnswer(text) {
+      const m = N.analyze(text);
+      if (m.empty) return null;
+      const skip = /^(greet|greet_\w+|good_night|ok|bye|brb|back|laugh|thanks|welcome|sorry|bare_yes|bare_no|hmm|wow|agree|disagree|idk|nothing|why|really|test|confused|game|rps|guess|wyr|riddle|trivia|stop_questions|change_topic|ask_me|user_good|swear|repeat_bot|repeat_user)$/;
+      for (const it of C.intents) {
+        if (skip.test(it.id) || !it.re) continue;
+        if (it.re.test(m.norm) || it.re.test(m.plain)) {
+          const r = typeof it.say === "function" ? it.say(this.ctx(m)) : pick(it.say);
+          const t = typeof r === "string" ? r : r && r.text;
+          if (t) return { text: t, id: "intent:" + it.id };
+        }
+      }
+      const mt = P.math.solve(m.clean);
+      if (mt && !mt.error) return { text: (mt.exact ? `${mt.expr} = ${mt.result}` : `${mt.expr} ≈ ${mt.result}`), id: "skill:math" };
+      const cap = S.capital(m.plain.replace(/[?!.]+$/, "")); if (cap) return { text: cap, id: "skill:capital" };
+      const faq = S.faq(m); if (faq) return { text: faq, id: "skill:knowledge" };
+      const rec = MEM.recall(this.mem, m); if (rec) return { text: rec.text, id: "memory" };
+      const op = this._opinion(m); if (op && op.score >= 0.8) return { text: op.text, id: op.source };
+      const def = S.define(m); if (def) return { text: def, id: "skill:dictionary" };
+      return null;
+    }
+
+    // "how are you? what's your name?" -> answer both; "I'm sad. tell me a joke" -> a little empathy first
+    _extraSentences(m, out) {
+      const parts = m.clean.split(/(?<=[.!?])\s+|\s*,\s*(?=(?:and |also |btw |oh and )?(?:what|how|who|where|when|why|do|does|can|could|are|is|will|would)\b)/i).map((x) => x.trim()).filter((x) => x.length > 1);
+      if (parts.length < 2 || !out || !out.text) return out;
+      const src = out.source || "";
+      if (/^(safety|game|expect|command|event:grief|event:bullied)/.test(src)) return out;
+      for (const part of parts) {
+        const pm = N.analyze(part);
+        // a feeling mentioned next to a request
+        if (pm.emotion.valence <= -0.9 && !/^(feelings|event|react:negative|fallback:vent)/.test(src) && /\b(i am|i'm|im|i feel|feeling)\b/.test(pm.plain)) {
+          const lab = pm.emotion.label === "lonely" ? "lonely" : pm.emotion.label === "anxious" ? "stressed" : pm.emotion.label === "angry" ? "upset" : pm.emotion.label === "tired" ? "tired" : "down";
+          out.text = `Aw, I'm sorry you're feeling ${lab}. 💙 ` + out.text;
+          continue;
+        }
+        if (!pm.isQuestion) continue;
+        const q = this._quickAnswer(part);
+        if (!q || q.id === src || out.text.includes(q.text.slice(0, 24))) continue;
+        // keep one follow-up question at most: drop the main reply's closing question if the extra answer has its own
+        const sentences = out.text.split(/(?<=[.!?])\s+/);
+        if (sentences.length > 1 && /\?\s*\S*$/.test(sentences[sentences.length - 1])) { sentences.pop(); out.expect = null; }
+        out.text = sentences.join(" ") + " " + q.text;
+        break;
+      }
+      return out;
     }
 
     _nameAck(name, m, c) {
@@ -624,7 +681,7 @@
     _restoreCase(s, raw) {
       const pn = this._properNouns();
       for (const w of (raw || "").match(/\b[A-Z][a-z]{2,}\b/g) || []) if (!/^(I|The|A|An|My|What|How|Why|When|Where|Who|Do|Does|Did|Is|Are|Can|Hi|Hey|Hello|Yes|No|Ok|Okay|Thanks|Please|And|But|So|It|That|This|You|We|They)$/.test(w)) pn.set(w.toLowerCase(), w);
-      return s.replace(/\b[a-z][a-z']+\b/g, (w) => (pn.has(w) ? pn.get(w) : w));
+      return s.replace(/\b[a-z][a-z']+\b(?!:)/g, (w) => (pn.has(w) ? pn.get(w) : w));
     }
     _post(text) {
       if (!text) return text;
@@ -633,7 +690,7 @@
       // placeholders from the training data: <|you|> = the user, <|me|> = the bot
       s = s.replace(/<\|me\|>/g, this.botName);
       s = name ? s.replace(/<\|you\|>/g, name) : s.replace(/,?\s*<\|you\|>\s*([,.!?])?/g, (mm, p) => p || "").replace(/^\s*[,.]\s*/, "");
-      s = s.replace(/\bi\b/g, "I").replace(/\bi'(m|ve|d|ll)\b/g, "I'$1").replace(/\bminecraft\b/g, "Minecraft").replace(/\bpip\b/g, "Pip");
+      s = s.replace(/\bi\b/g, "I").replace(/\bi'(m|ve|d|ll)\b/g, "I'$1").replace(/\bminecraft\b(?!:)/g, "Minecraft").replace(/\bpip\b/g, "Pip");
       s = s.replace(/(^|(?<!\.)[.!?]\s+)([a-z])/g, (mm, a, b) => a + b.toUpperCase());
       s = s.replace(/\s+([,.!?])/g, "$1").replace(/\s{2,}/g, " ").trim();
       return s;

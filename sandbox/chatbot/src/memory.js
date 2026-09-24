@@ -9,7 +9,7 @@
   function blank() {
     return {
       v: 1, name: null, age: null, ageAt: null, location: null, birthday: null, job: null, school: null,
-      likes: [], dislikes: [], favorites: {}, pets: [], people: {}, notes: [], events: [], moods: [],
+      likes: [], dislikes: [], favorites: {}, pets: [], people: {}, notes: [], events: [], moods: [], threads: [],
       botName: "Pip", firstSeen: Date.now(), lastSeen: null, sessions: 0, messages: 0, facts: 0,
     };
   }
@@ -101,7 +101,8 @@
     } else if (expectingName && m.tokens.length <= 3) {
       const w = m.tokens.filter((x) => !/^(it|is|its|i|am|im|my|name|just|call|me|you|can|the)$/.test(x));
       const cand = raw.replace(/[^A-Za-z' -]/g, " ").trim().split(/\s+/).filter((x) => w.includes(x.toLowerCase()));
-      if (cand.length === 1 && looksLikeName(cand[0], raw, true)) facts.push({ type: "name", value: properCase(cand[0].toLowerCase()) });
+      // a lone word is taken as a name; inside a longer reply it must look like one (capitalized or not a common word)
+      if (cand.length === 1 && looksLikeName(cand[0], raw, m.tokens.length === 1 && !/\b(not|cannot|no|never)\b/.test(m.plain))) facts.push({ type: "name", value: properCase(cand[0].toLowerCase()) });
     }
 
     // age
@@ -190,6 +191,23 @@
     for (const f of facts) apply(mem, f);
     return facts;
   }
+  // things worth asking about next time: "my brother is annoying", "my team won", "my cat is sick"
+  const THREAD_WHO = new RegExp("\\bmy (" + PEOPLE + "|" + PET + "|team|class|school|job|teacher|project|band|game|garden|car|phone|computer|room)\\b");
+  function noteThread(mem, m) {
+    const r = THREAD_WHO.exec(m.plain);
+    if (!r || m.isQuestion) return null;
+    const v = m.emotion.valence;
+    const eventful = /\b(annoying|mean|fight|fought|argue|argued|yelled|sick|hurt|broke|broken|lost|won|win|moved|moving|leaving|left|cheated|ignores?|ignored|bully|bullies|sad|angry|mad|happy|proud|passed|failed|died|sick|surgery|hospital|new)\b/.test(m.plain);
+    if (Math.abs(v) < 0.5 && !eventful) return null;
+    const who = singularPet(r[1]);
+    const th = (mem.threads = mem.threads || []);
+    const i = th.findIndex((x) => x.who === who);
+    if (i >= 0) th.splice(i, 1);
+    th.push({ who, text: m.clean.slice(0, 90), valence: v, at: Date.now(), asked: false });
+    if (th.length > 12) th.shift();
+    return who;
+  }
+
   function ordinal(n) { n = +n; return n % 10 === 1 && n % 100 !== 11 ? "st" : n % 10 === 2 && n % 100 !== 12 ? "nd" : n % 10 === 3 && n % 100 !== 13 ? "rd" : "th"; }
   function singularPet(p) { return p.replace(/ies$/, "y").replace(/(dog|cat|kitten|hamster|rabbit|parrot|bird|turtle|tortoise|snake|lizard|horse|guinea pig|ferret|gerbil|rat|chicken|duck|gecko|axolotl|frog|pig|goat|cow|budgie|cockatiel)s$/, "$1").replace(/^mice$/, "mouse").replace(/^puppy$/, "puppy"); }
 
@@ -335,6 +353,11 @@
         anxious: "Last time you were stressed. Did things calm down?", angry: "Last time something made you really angry. Is it any better now?",
         sick: "Last time you weren't feeling well. Are you feeling better?", tired: "Last time you were really tired. Did you get some rest?" }[mood.label];
     }
+    const th = (mem.threads || []).slice().reverse().find((x) => !x.asked && Date.now() - x.at > 3 * 3600e3 && Date.now() - x.at < 10 * 864e5);
+    if (th) {
+      th.asked = true;
+      return th.valence < 0 ? `Last time you told me about your ${th.who}, and it sounded tough. How are things now?` : `Last time you told me about your ${th.who}! Any news?`;
+    }
     if (mem.pets.length && U.chance(0.3)) { const p = U.pick(mem.pets); return `How's ${petText(p)} doing?`; }
     return null;
   }
@@ -352,5 +375,5 @@
     try { if (storage) storage.setItem(KEY, JSON.stringify(mem)); } catch (e) { /* ignore */ }
   }
 
-  P.memory = { blank, extract, apply, recall, forget, followUp, summary, load, save, looksLikeName, currentAge, petText, SLOTS };
+  P.memory = { noteThread, blank, extract, apply, recall, forget, followUp, summary, load, save, looksLikeName, currentAge, petText, SLOTS };
 })(typeof window !== "undefined" ? (window.Pip = window.Pip || {}) : (global.Pip = global.Pip || {}));

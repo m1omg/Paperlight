@@ -173,6 +173,8 @@ def main():
     ap.add_argument("--batch", type=int, default=384)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--out", default=os.path.join(HERE, "runs", "enc"))
+    ap.add_argument("--resume", action="store_true", help="continue from runs/enc/final.pt with a fresh schedule")
+    ap.add_argument("--human_x", type=int, default=1, help="repeat pairs from the human-written datasets this many times")
     args = ap.parse_args()
     torch.set_num_threads(args.threads)
     torch.set_flush_denormal(True)
@@ -187,11 +189,18 @@ def main():
 
     pairs, human, soda = make_pairs(rng)
     bank = build_bank(human, soda, rng)
-    json.dump(bank, open(os.path.join(DATA, "bank.json"), "w"))
+    if not args.resume:  # keep the exported bank untouched when continuing
+        json.dump(bank, open(os.path.join(DATA, "bank.json"), "w"))
+    val, pairs = pairs[:4096], pairs[4096:]   # same split as the first run, so accuracy stays comparable
+    if args.human_x > 1:
+        pairs += [p for p in pairs if p[2] != "soda"] * (args.human_x - 1)
+        rng.shuffle(pairs)
     say("pairs", len(pairs), "bank", len(bank))
-    val, pairs = pairs[:4096], pairs[4096:]
     tok = Tokenizer.from_file(os.path.join(DATA, "bpe.json"))
     model = Encoder()
+    if args.resume:
+        model.load_state_dict(torch.load(os.path.join(args.out, "final.pt")))
+        say("resumed from", os.path.join(args.out, "final.pt"))
     say(f"params {sum(p.numel() for p in model.parameters())/1e6:.2f}M")
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
     budget = args.hours * 3600
