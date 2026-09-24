@@ -373,6 +373,47 @@
     const hit = CURRENCY[c];
     return hit ? `${U.titleCase(c.replace(/^(usa|uk|uae)$/, (x) => x.toUpperCase()))} uses the ${hit}. 💶` : null;
   }
+  // ---------- can my pet eat this? ----------
+  const PETS = { dog: "dogs", dogs: "dogs", puppy: "dogs", puppies: "dogs", cat: "cats", cats: "cats", kitten: "cats", kittens: "cats",
+    hamster: "hamsters", hamsters: "hamsters", rabbit: "rabbits", rabbits: "rabbits", bunny: "rabbits", bunnies: "rabbits",
+    "guinea pig": "guinea pigs", "guinea pigs": "guinea pigs", bird: "birds", birds: "birds", parrot: "birds", parrots: "birds", budgie: "birds",
+    horse: "horses", horses: "horses", turtle: "turtles", turtles: "turtles", tortoise: "turtles" };
+  const FOODS = [
+    [/^(chocolate|cocoa|brownies?|chocolate cake)$/, { bad: /./, why: "It has a chemical called theobromine that pets' bodies can't break down, so even a little can make them really sick." }],
+    [/^(grapes?|raisins?)$/, { bad: /dogs|cats|hamsters|rabbits|guinea pigs|birds/, why: "Grapes and raisins can badly hurt dogs' and cats' kidneys, and they're not safe for small pets either." }],
+    [/^(onions?|garlic|chives|leeks?)$/, { bad: /./, why: "They damage pets' red blood cells." }],
+    [/^(avocados?|guacamole)$/, { bad: /birds|rabbits|hamsters|guinea pigs|horses|dogs|cats/, why: "Avocado has a toxin called persin that's dangerous for birds and small animals, and it upsets dogs' and cats' tummies." }],
+    [/^(milk|ice cream)$/, { bad: /./, why: "Most grown-up animals can't digest milk properly, so it gives them tummy aches." }],
+    [/^(gum|chewing gum|xylitol|candy|sweets|lollipops?)$/, { bad: /./, why: "Sugary sweets aren't good for pets, and sugar-free gum and candy often contain xylitol, which is very dangerous for dogs." }],
+    [/^(citrus|oranges?|lemons?|limes?|grapefruit)$/, { bad: /hamsters|rabbits|cats|guinea pigs/, ok: /dogs|birds|horses/, why: "Citrus is too sour and acidic for many small pets and cats.", note: "A small piece of orange is okay for most dogs, without the peel." }],
+    [/^(apples?)$/, { ok: /./, note: "Small pieces are a nice treat, but take out the seeds and core first!" }],
+    [/^(carrots?)$/, { ok: /./, note: "As a small treat, not a whole meal. Carrots are quite sweet!" }],
+    [/^(bananas?)$/, { ok: /./, note: "Just a small piece now and then, because it's sugary." }],
+    [/^(strawberr(y|ies)|blueberr(y|ies)|berries)$/, { ok: /./, note: "A few, as a treat. Wash them first!" }],
+    [/^(cucumbers?|broccoli|peas|green beans)$/, { ok: /dogs|hamsters|rabbits|guinea pigs|birds|horses|turtles/, bad: /cats/, note: "In small pieces, it's a healthy crunchy snack.", why: "Cats are meat-eaters and don't really need vegetables, but a tiny bite won't hurt." }],
+    [/^(lettuce)$/, { ok: /./, note: "Romaine or leafy lettuce is fine, but skip iceberg lettuce: it can upset their tummies." }],
+    [/^(cheese)$/, { ok: /dogs|hamsters/, bad: /cats|rabbits|guinea pigs|birds|horses|turtles/, note: "Only a tiny plain bit now and then.", why: "It's hard for them to digest." }],
+    [/^(bread|toast|crackers?)$/, { ok: /dogs|birds|horses/, bad: /rabbits|guinea pigs|hamsters|cats|turtles/, note: "A tiny plain piece won't hurt, but it's not healthy, so don't make it a habit.", why: "It's not good for their tummies." }],
+    [/^(peanut butter)$/, { ok: /dogs|hamsters/, bad: /cats|rabbits|guinea pigs|birds/, note: "Only a little, and only if it has NO xylitol (a sweetener that's dangerous for dogs).", why: "It's too sticky and fatty for them." }],
+    [/^(nuts|peanuts|almonds|walnuts|macadamia nuts?)$/, { bad: /dogs|cats|rabbits|guinea pigs|birds/, ok: /hamsters/, why: "Nuts are too fatty for most pets, and macadamia nuts are poisonous to dogs.", note: "An unsalted plain peanut is an okay treat for a hamster." }],
+    [/^(popcorn)$/, { ok: /dogs|hamsters/, bad: /rabbits|guinea pigs|cats|birds/, note: "Only plain popcorn, with no salt or butter, and no hard kernels.", why: "It can get stuck and isn't good for them." }],
+  ];
+  function petFood(t) {
+    t = t.replace(/\bdrink\b/, "eat");
+    const r = /\b(?:can|could|should|do|does|are|is it (?:ok(?:ay)?|safe|bad|good) (?:to|for|if)(?: i give)?|is it (?:ok(?:ay)?|safe) (?:to )?(?:give|feed))\b.*?\b(?:my )?(guinea pigs?|dogs?|puppies|puppy|cats?|kittens?|hamsters?|rabbits?|bunny|bunnies|birds?|parrots?|budgie|horses?|turtles?|tortoise)\b.*?\b(?:eat|have|drink|eating|chew)\s+(?:a |an |some |the )?([a-z ]{3,20}?)\s*[?!.]*$/.exec(t) ||
+      /\bis ([a-z ]{3,20}?) (?:bad|safe|okay|ok|good|poisonous|toxic|dangerous) (?:for|to) (?:my )?(guinea pigs?|dogs?|puppies|puppy|cats?|kittens?|hamsters?|rabbits?|bunny|bunnies|birds?|parrots?|horses?|turtles?)\b/.exec(t);
+    if (!r) return null;
+    const [petWord, food] = /^is /.test(r[0]) ? [r[2], r[1]] : [r[1], r[2]];
+    const pets = PETS[petWord] || PETS[petWord.replace(/s$/, "")];
+    const f = food.trim().replace(/^(any|some)\s+/, "");
+    const row = FOODS.find(([re]) => re.test(f));
+    if (!pets || !row) return null;
+    const x = row[1], Pets = U.capitalizeFirst(pets);
+    const verb = /^(milk|water|juice|tea|coffee|soda|cola)$/.test(f) ? "drink" : "eat";
+    if (x.bad && x.bad.test(pets) && !(x.ok && x.ok.test(pets) && !x.bad.source.includes(pets))) return `No! 🚫 ${Pets} shouldn't ${verb} ${f}. ${x.why} If yours already ${verb === "drink" ? "drank" : "ate"} some, tell a grown-up and call a vet.`;
+    if (x.ok && x.ok.test(pets)) return `Yes, in small amounts! 👍 ${x.note}`;
+    return null;
+  }
   function parseBirthday(s) {
     const t = s.toLowerCase();
     const mi = MONTHS.findIndex((mo) => t.includes(mo.toLowerCase()) || t.includes(mo.toLowerCase().slice(0, 3) + " "));
@@ -427,6 +468,28 @@
 
   // ---------- general knowledge (question variants -> answer) ----------
   const FAQ = [
+    // why-questions kids ask
+    [["why do hamsters stuff their cheeks", "why do hamsters fill their cheeks", "hamster cheek pouches", "why do hamsters put food in their cheeks", "why do hamsters stuff their cheeks with seeds"], "Hamsters have stretchy cheek pouches that reach all the way back to their shoulders! 🐹 In the wild they fill them with seeds, carry the food home to their burrow and hide it for later, like a snack backpack. So your hamster is just being a very smart hamster!"],
+    [["why are hamsters awake at night", "are hamsters nocturnal", "why do hamsters run at night", "why do hamsters sleep all day"], "Hamsters are mostly night animals: in the wild they sleep in cool burrows during the hot day and come out at dusk and at night, when it's safer from predators. 🐹🌙 That's why the wheel gets busy after bedtime! It's best to let them sleep during the day."],
+    [["why do cats purr", "why does my cat purr"], "Cats purr mostly when they're happy and relaxed, like a cozy little engine! 🐱 The sound comes from muscles in their voice box twitching super fast (25 to 150 times a second) while they breathe. Cats also purr to calm themselves down, and mother cats purr to their kittens."],
+    [["why do dogs wag their tails", "why does my dog wag its tail"], "Dogs wag their tails to talk! 🐶 A loose, wide wag usually means happy and friendly, a wag to the right side often means happy, and a stiff, high wag can mean alert or unsure. It's one of the ways they share how they feel."],
+    [["why do we need sleep", "why do we have to sleep", "why do people sleep", "why do we sleep"], "While you sleep, your brain is busy! 🧠💤 It sorts and saves what you learned during the day, cleans out waste, and your body grows and repairs itself. That's why kids need 9 to 12 hours, and why everything feels harder when you're tired."],
+    [["why do we dream", "why do people dream"], "Scientists aren't 100% sure! 💭 The main ideas: dreams help your brain sort memories and feelings from the day, and practice handling tricky situations. Most vivid dreams happen in REM sleep, when your eyes move quickly under your eyelids."],
+    [["why does air scatter blue light more", "why does air scatter blue", "why is blue light scattered more"], "Great follow-up! 🤓 Blue light has shorter, choppier waves than red light, and the tiny molecules in the air (mostly nitrogen and oxygen) bounce short waves around much more than long ones, about 5 times more for blue than for red. So blue light gets scattered all over the sky and reaches your eyes from every direction! (Violet is scattered even more, but our eyes are more sensitive to blue.)"],
+    [["why do endermen get mad when you look at them", "why do endermen attack when you look at them", "why do endermen get angry"], "In Minecraft, an enderman gets angry if your crosshair looks at its head: staring is rude to them! 👾 The idea comes from spooky stories about creatures that come for you when you look at them. Tip: wear a carved pumpkin on your head and you can look at them safely. Looking at their legs is fine too."],
+    [["why do leaves fall", "why do trees lose their leaves"], "In autumn there's less sunlight and it gets cold, so trees stop feeding their leaves and let them drop to save water and energy through winter. 🍂 In spring they grow brand new ones!"],
+    [["why do we have fingerprints"], "Fingerprints help your fingers grip things (especially wet things) and make your sense of touch sharper. 👆 Everyone's are different, even identical twins!"],
+    [["why do onions make you cry", "why do onions make me cry"], "Cutting an onion breaks its cells and releases a gas that stings your eyes, so your eyes make tears to wash it away. 🧅 Chilling the onion first or using a sharp knife helps!"],
+    // real animals (not the Minecraft ones)
+    [["what do real axolotls eat", "what do axolotls eat in real life", "what do axolotls eat in the wild", "what do pet axolotls eat"], "Real axolotls eat worms, insect larvae, tiny shrimp-like animals, snails and small fish. 🦎 Pet axolotls usually get earthworms or special pellets. In the wild they live only in the lakes around Mexico City, and they're critically endangered."],
+    [["what do real pandas eat", "what do pandas eat in real life", "what do giant pandas eat"], "Real giant pandas eat bamboo, and LOTS of it: 12 to 38 kg a day! 🐼 Bamboo is about 99% of their diet, though they sometimes eat small animals or eggs."],
+    [["what do hamsters eat", "what should i feed my hamster"], "Hamsters eat hamster pellets or seed mix as their main food, plus small bits of fresh veggies (carrot, cucumber, broccoli) and a tiny bit of fruit as a treat. 🐹 Always give fresh water. Never give chocolate, onion, garlic, citrus, or anything sugary or salty!"],
+    [["what do foxes eat", "what do real foxes eat"], "Real foxes eat almost anything: mice, rabbits, birds, insects, worms, berries and fruit. 🦊 City foxes even raid bins!"],
+    // history, space and sport
+    [["who was the first man on the moon", "who walked on the moon first", "first person on the moon", "who was the first person to walk on the moon", "first man to walk on the moon"], "Neil Armstrong! 🌕 On July 20, 1969, during NASA's Apollo 11 mission, he stepped onto the Moon and said: \"That's one small step for man, one giant leap for mankind.\" Buzz Aldrin joined him about 20 minutes later."],
+    [["what is a buzzer beater"], "A buzzer beater is a shot that goes in right as the clock runs out, while the buzzer is sounding! 🏀 It's one of the most exciting plays in basketball."],
+    [["how many weeks are in a month", "how many weeks in a month"], "A month has about 4.35 weeks on average (4 weeks plus 2 or 3 extra days). February has exactly 4 weeks, except in a leap year!"],
+    [["small brown bird with a red breast", "bird with a red breast", "bird with an orange chest", "brown bird red breast"], "That sounds like a robin! 🐦 In Britain and Europe, the robin is a small, round brown bird with an orange-red face and breast. They're famously friendly and often follow gardeners to catch worms.", /\bbird\b.*\b(red|orange|reddish)(-| )(breast|chest|belly)\b/],
     [["is the earth flat", "is the world flat", "is the earth round"], "Nope, the Earth is round! (Technically a slightly squished sphere.) We know from photos taken from space, ships disappearing hull-first over the horizon, and the round shadow Earth casts on the Moon during an eclipse. 🌍"],
     [["is a tomato a fruit", "is tomato a fruit or a vegetable"], "Yes! Botanically a tomato is a fruit (a berry, even!), but cooks treat it like a vegetable. 🍅"],
     [["is a whale a fish", "are whales fish"], "Nope! Whales are mammals: they breathe air, are warm-blooded and feed their babies milk. 🐋"],
@@ -566,12 +629,15 @@
     const simple = m.plain.split(/(?<=[.!?])\s+/)[0].replace(/^(can|could|would|will) (you|u) (please )?(explain|tell me|say|teach me)( to me)?\s+/, "").replace(/^(explain|tell me|teach me|do you know)\s+/, "")
       .replace(/^(what|who|how) (a|an|the)? ?([a-z ]+?) (is|are|was|were)\b/, "$1 $4 $2 $3").replace(/\s+/g, " ").trim();
     if (simple !== m.plain && !this_) { this_ = true; try { const r2 = faq(P.nlp.analyze(simple)); if (r2) return r2; } finally { this_ = false; } }
-    const hit = faqIndex.query(m.stems, 1)[0];
-    if (!hit || hit.score < 0.72) return null;
-    // the key content words of the matched question should all be present
-    const need = hit.doc.stems.filter((w) => !P.nlp.STOP.has(w) && w.length > 2);
-    if (need.some((w) => !m.stems.includes(w))) return null;
-    return FAQ[hit.payload][1];
+    // entries with their own pattern match anywhere ("I saw a small brown bird with a red breast...")
+    for (const e of FAQ) if (e[2] && e[2].test(m.plain)) return e[1];
+    // the key content words of the matched question must all be present; the more of them, the less the rest matters
+    for (const hit of faqIndex.query(m.stems, 3)) {
+      const need = hit.doc.stems.filter((w) => !P.nlp.STOP.has(w) && w.length > 2);
+      if (!need.length || need.some((w) => !m.stems.includes(w))) continue;
+      if (hit.score >= 0.72 || (need.length >= 2 && hit.score >= 0.45) || (need.length >= 3 && hit.score >= 0.2)) return FAQ[hit.payload][1];
+    }
+    return null;
   }
 
   // ---------- dictionary (WordNet definitions, loaded in the background) ----------
@@ -662,5 +728,5 @@
     return pick([`I'd go with ${ch}! 😄`, `Hmm... ${ch}! Final answer.`, `${U.capitalizeFirst(ch)}, definitely.`, `My pick: ${ch}! But what do you think?`]);
   }
 
-  P.skills = { capitalsList: CAP, define, lookup, start, gameTurn, askQuestion, daysUntil, dateMath, timeMath, currency, capital, faq, wordTools, choose, deal, timeText, dateText };
+  P.skills = { capitalsList: CAP, define, lookup, start, gameTurn, askQuestion, daysUntil, dateMath, timeMath, currency, petFood, capital, faq, wordTools, choose, deal, timeText, dateText };
 })(typeof window !== "undefined" ? (window.Pip = window.Pip || {}) : (global.Pip = global.Pip || {}));

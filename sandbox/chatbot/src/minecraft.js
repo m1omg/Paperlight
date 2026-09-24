@@ -116,6 +116,7 @@
     if (n === 1) return name;
     if (/(Dust|Glass|Wool|Sand|Gravel|Leather|Wheat|String|Bamboo|Coal or Charcoal|Sugar|Stone|Obsidian|Cobblestone|Paper|Redstone Dust|Glowstone|Netherrack|Honeycomb|Gunpowder|Clay|Honey|Kelp|Coal|Lapis Lazuli|Nether Quartz|Netherite Scrap)$/.test(name) || /\(/.test(name) || / or /.test(name)) return name;
     if (/(Planks|Bricks|Beans)$/.test(name)) return name;
+    if (/^(sheep|fish|cod|salmon|axolotl|deer|squid|glow squid|bee|panda|fox)$/i.test(name)) return /^(sheep|fish|cod|salmon|deer|squid|glow squid)$/i.test(name) ? name : /fox$/i.test(name) ? name + "es" : name + "s";
     if (/sh$|ch$|x$/.test(name)) return name + "es";
     if (/y$/.test(name) && !/[aeiou]y$/.test(name)) return name.slice(0, -1) + "ies";
     if (/Leaf$/.test(name)) return name.replace(/Leaf$/, "Leaves");
@@ -265,6 +266,8 @@
       /\b(what is|what are|what does|tell me about|explain|use for|used for|good for|info|use (it|them|this|that|one) for|what is it for|what s it for|what does (it|that|this) do|what do (they|those) do)\b/.test(text) ? "info" : null;
 
     if (/\b(stop|quit|enough|no more|don'?t|do not) (talking|talk|telling|going on|asking) (about|me about)\b|\b(real|actual) (recipe|life|world)\b|\bnot (a |the )?game\b/.test(text)) return null;
+    if (/\bwhy (do|did|are) (you|u) (keep |always )?(talking|talk|saying|say|bringing|mention\w*|going on)\b|\b(keep|kept) (talking|saying|going on|bringing up) (about )?\b|\b(that'?s|thats|that is|that was|this is) not (where|what|how|it|right|the answer)\b|^\s*(no+|nope|wrong)[.!,]? (thats|that'?s|that is) not\b/.test(text)) return null;
+    if (/\b(real|actual|irl|wild) (\w+ )?(axolotls?|pandas?|cats?|dogs?|hamsters?|animals?|ones|bees?|foxes|fox|wolves|wolf|horses?|pigs?|cows?|chickens?|sheep|parrots?|turtles?|frogs?|bats?|rabbits?|bunnies|dolphins?|goats?|llamas?|camels?|armadillos?|polar bears?)\b|\bin (the )?(wild|real life)\b|\bin real\b/.test(text) && !/\b(minecraft|mc|in the game|in game)\b/.test(text.replace(/\b(like|as) (in )?(minecraft|mc|the game)\b/g, ""))) return null;
     if (/\b(grams?|millilit\w*|ml|cups?|tablespoons?|tbsp|teaspoons?|tsp|ounces?|oz|oven|bake|baking|baked|scones?|flour|butter|sugar|dough|batter|cake tin|recipe serves|serves \d|degrees|celsius|fahrenheit|gas mark)\b/.test(text) && !/\b(minecraft|mc|craft|crafting|crafted)\b/.test(text)) return null;
     // "how many bones are in the human body?", "forget it. when did ww2 end?": real-world questions, not the game
     if (/\b(human|humans|real life|irl|in real life|human body|world war|ww1|ww2|wwii|history|biology|chemistry|physics|in science|in math|president|country|countries|planet|solar system|in the ocean)\b/.test(text) && !/\b(minecraft|mc|in the game|in game)\b/.test(text)) return null;
@@ -273,6 +276,17 @@
     if (/\bi (already |do )?know (what|how|where|who|that)\b/.test(text) && !/\b(but|so) (what|how|where|why|can|do|does|is)\b/.test(text)) return null;
 
     let mentions = findMentions(toks);
+    if (!mentions.length && mc.last && mc.last.kind === "mob" && turn - mc.turn <= 3 && /\b(a|the|an|get|pink|blue|red|white|black|brown|baby|golden|purple|orange|green|yellow|gray|grey)\s+(one|ones)\b/.test(text)) {
+      const mob = mc.last.ref.name.toLowerCase();
+      const t2 = text.replace(/\b(one|ones)\b/g, mob);
+      const guide2 = guideIndex && guideIndex.query(P.nlp.analyze(t2).stems, 1)[0];
+      if (guide2 && guide2.score > 0.5 && D.guides[guide2.payload].q.some((q) => q.includes(mob))) return done(state, { text: D.guides[guide2.payload].a, kind: "guide" }, mc.last);
+    }
+    // "a PINK SHEEP 😍 can i breed sheep to get pink ones": colours need the colour answer, not plain breeding
+    if (/\bsheep\b/.test(text) && /\b(pink|colou?r\w*|dye\w*|purple|blue|red|white|black|brown|green|yellow|orange|magenta|cyan|lime|gray|grey)\b/.test(text) && /\b(breed\w*|baby|babies|lamb|lambs|get|make)\b/.test(text)) {
+      const g = D.guides.find((x) => x.q.includes("sheep colors"));
+      if (g) return done(state, { text: g.a, kind: "guide" }, null);
+    }
     // drop things the user says they DON'T mean
     const negd = mentions.filter((x) => new RegExp("\\bnot (the |a |an )?" + x.phrase + "\\b").test(text));
     if (negd.length && negd.length < mentions.length) mentions = mentions.filter((x) => !negd.includes(x));
@@ -444,6 +458,8 @@
     }
 
     // pick the best mention: prefer longer, exact, and the kind that fits the question
+    let qAt = -1;
+    toks.forEach((t, i) => { if (i > 0 && /^(what|how|where|why|which|who|can|do|does|is|are)$/.test(t) && !/^(i|you|u|it|that|and|to|like|know|of|about)$/.test(toks[i - 1] || "")) qAt = i; });
     const scored = [];
     for (const mt of mentions) for (const h of mt.hits) {
       let s = mt.len * 2 + (mt.fuzzy ? -1 : 0);
@@ -457,6 +473,7 @@
       if (h.kind === "mob" && (!want || want === "info")) s += 1;
       if (h.kind === "mob" && /\bspawns?\b|\bwhere (do|does|can) (i find )?\w+ (live|spawn)/.test(text)) s += 3;
       s -= mt.at * 0.05;
+      if (qAt > 0 && mt.at >= qAt) s += 2.5;
       scored.push({ s, mt, h });
     }
     scored.sort((a, b) => b.s - a.s);
@@ -492,7 +509,7 @@
         if (want === "feed" || want === "breed") {
           const food = D.feed[ref.name];
           const real = REAL_DIET[ref.name];
-          const plural = ref.name.toLowerCase().replace(/(sh|ch|x)$/, "$1e").replace(/y$/, "ie") + "s";
+          const plural = /^(sheep|cod|salmon|squid|glow squid|tropical fish|pufferfish)$/i.test(ref.name) ? ref.name.toLowerCase() : ref.name.toLowerCase().replace(/(sh|ch|x)$/, "$1e").replace(/y$/, "ie").replace(/wolf$/, "wolve") + "s";
           const noBreed = /^(Parrot|Dolphin|Polar Bear)$/.test(ref.name);
           const emo = (real || "").match(/\s*(\p{Extended_Pictographic}[\u200d\ufe0f\p{Extended_Pictographic}]*)\s*$/u);
           const realText = real ? real.replace(/\s*\p{Extended_Pictographic}[\u200d\ufe0f\p{Extended_Pictographic}]*\s*$/u, "") : null;

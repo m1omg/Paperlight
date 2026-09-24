@@ -186,7 +186,7 @@
       }
       // "lol ok what about iron?" -> "what about iron?": laughs and fillers in front are just reactions
       for (let i = 0; i < 3; i++) {
-        text = text.replace(/^\s*(?:anyway(?:s)?|so|well|ok so|okay so|btw|by the way|also|um+|uh+|hmm+|oh and|and|ok|okay|alright)\s*[,.!]?\s+(?=\S.{3,})/i, "")
+        text = text.replace(/^\s*(?:anyway(?:s)?|so|well|ok so|okay so|btw|by the way|also|um+|uh+|hmm+|oh and|and|ok|okay|alright|but|ok but|okay but)\s*[,.!]?\s+(?=\S.{3,})/i, "")
           .replace(/^\s*(?:lol+|lmao+|haha+|hehe+|rofl|xd+|ha+)\s*[,.!]*\s+(?=\S+\s+\S+)/i, "");
         // "nice. how do i put it on my sword?", "cool and fire resistance?", "bruh so how many books": the first word is a reaction
         const rest = /^\s*(?:nice|cool|bruh|bro|dude|ok thx|ok thanks|thx|thanks|ty|yay|wow|omg|oh|ah|wait|welp|oops|yeah|ya|yep|yes|nah|no|nope|hmm|ugh|kk|k|sure|great|awesome|damn|dang|whoa|woah|same|true|fr|ikr|lmao|lol)\s*[,.!]*\s+((?:(?:and|so|but|then)\s+)?(?:what|how|where|who|why|when|which|can|could|do|does|did|is|are|will|would|should|and|tell|give|show|what's|whats|hw|wat|wut|y|u)\b.{2,})$/i.exec(text);
@@ -626,9 +626,10 @@
       // "can u help with my math homework whats 7 times 8": the question starts in the middle of the sentence
       for (let k = analyzed.length - 1; k >= 0; k--) {
         const { x } = analyzed[k];
-        const at = /\s(?:what is|what's|whats|what are|how many|how much|how do|how does|how long|how far|why do|why does|why is|why are|who is|who was|where is|when is|when did|what does)\s/i.exec(x);
+        const at = /\s(?:what is|what's|whats|what are|how many|how much|how do|how does|how long|how far|why do|why does|why is|why are|why the|who is|who was|where is|when is|when did|what does)\s/i.exec(x);
         if (!at || at.index < 8) continue;
-        const tail = x.slice(at.index + 1), tm = N.analyze(tail);
+        // "Emma asked me why the sky is blue, and I couldn't explain it": just the embedded question
+        const tail = x.slice(at.index + 1).split(/\s*[,;.!?]\s*|\s+(?:and|but) (?=i\b|we\b|she\b|he\b|they\b)/)[0].replace(/^why the (\w+) (is|are|was) /, "why $2 the $1 "), tm = N.analyze(tail);
         const r = this._skills(tm, this.ctx(tm), trace) || (S.define(tm) ? { text: S.define(tm), source: "skill:dictionary" } : null);
         if (r) return r;
       }
@@ -896,6 +897,7 @@
       r = S.dateMath(m.plain); if (r) return { text: r, source: "skill:date" };
       r = S.timeMath(m.clean.toLowerCase()); if (r) return { text: r, source: "skill:time" };
       r = S.currency(m.plain.replace(/[?!.]+$/, "")); if (r) return { text: r, source: "skill:currency" };
+      r = S.petFood(m.plain); if (r) return { text: r, source: "skill:petfood" };
       r = S.wordTools(m); if (r) return { text: r, source: "skill:words" };
       r = S.capital(m.plain.replace(/[?!.]+$/, "")); if (r) return { text: r, source: "skill:capital" };
       // "why do cats purr?" is about real cats: the knowledge base first

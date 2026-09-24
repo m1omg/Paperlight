@@ -243,6 +243,22 @@
   R("Block of Quartz", { grid: ["QQ", "QQ"], key: { Q: "Nether Quartz" }, aliases: "quartz block" });
   R("Coarse Dirt", { grid: ["DG", "GD"], key: { D: "Dirt", G: "Gravel" }, makes: 4 });
   R("Concrete Powder", { shapeless: ["Sand", "Sand", "Sand", "Sand", "Gravel", "Gravel", "Gravel", "Gravel", "Dye"], makes: 8, info: "Touch it with water and it becomes solid concrete." });
+  // dyes: flowers and a few items, or two dyes mixed
+  R("Red Dye", { how: "Put a poppy, red tulip, rose bush or beetroot in the crafting grid.", info: "Mix it with blue for purple, white for pink or yellow for orange." });
+  R("Blue Dye", { how: "Put lapis lazuli or a cornflower in the crafting grid.", info: "Mix it with red for purple, or white for light blue." });
+  R("Yellow Dye", { how: "Put a dandelion or a sunflower in the crafting grid." });
+  R("White Dye", { how: "Put bone meal or a lily of the valley in the crafting grid." });
+  R("Black Dye", { how: "Put an ink sac or a wither rose in the crafting grid." });
+  R("Brown Dye", { how: "Put cocoa beans in the crafting grid." });
+  R("Purple Dye", { shapeless: ["Red Dye", "Blue Dye"], makes: 2, info: "Use it on sheep, glass, concrete powder, beds, candles and more. 💜" });
+  R("Pink Dye", { shapeless: ["Red Dye", "White Dye"], makes: 2, info: "Or craft it straight from a pink tulip, a peony or pink petals. 🌸" });
+  R("Magenta Dye", { shapeless: ["Purple Dye", "Pink Dye"], makes: 2, info: "Or craft it straight from an allium or a lilac." });
+  R("Orange Dye", { shapeless: ["Red Dye", "Yellow Dye"], makes: 2, info: "Or craft it from an orange tulip or a torchflower." });
+  R("Light Blue Dye", { shapeless: ["Blue Dye", "White Dye"], makes: 2, info: "Or craft it from a blue orchid." });
+  R("Cyan Dye", { shapeless: ["Blue Dye", "Green Dye"], makes: 2, info: "Or craft it from a pitcher plant. (Green dye comes from smelting cactus.)" });
+  R("Lime Dye", { shapeless: ["Green Dye", "White Dye"], makes: 2, info: "Or smelt a sea pickle." });
+  R("Gray Dye", { shapeless: ["Black Dye", "White Dye"], makes: 2 });
+  R("Light Gray Dye", { shapeless: ["Gray Dye", "White Dye"], makes: 2, info: "Or craft it from an azure bluet, oxeye daisy or white tulip." });
   R("Concrete", { how: "Craft concrete powder (4 sand + 4 gravel + 1 dye), place it, and let water touch it. It turns into concrete.", aliases: "concrete block" });
   R("Purpur Block", { grid: ["PP", "PP"], key: { P: "Popped Chorus Fruit" }, makes: 4 });
   R("Iron Golem", { how: "Build it: put 4 blocks of iron in a T shape, then a carved pumpkin on top (put the pumpkin last).", aliases: "golem|iron golems" });
@@ -558,7 +574,15 @@
       a: "A creeper is Minecraft's most famous monster: a green, silent creature that sneaks up on you and explodes! 💥 Kids joke about them a lot. They're scared of cats, and they drop gunpowder." },
     { q: ["how to build a house", "how do i build a cozy house", "cozy house ideas", "how to make a house in minecraft", "how to build a cherry wood house", "cherry wood house", "how do i make a cherry house", "how do i build a nice house"],
       a: "Cozy house tips: 🏡 1) Pick a simple shape, like 7×9, and make the frame from logs (stripped cherry logs look great) with planks for the walls. 2) Don't make walls flat: push the windows and doors in or out by one block. 3) Give it a roof with stairs that hangs over the walls by one block. 4) Add a porch, lanterns, flower pots, leaves and a little path. 5) Inside: carpets, bookshelves, a bed and some plants make it cozy!" },
-    { q: ["what blocks go with cherry wood", "what blocks look nice with cherry planks", "cherry wood palette", "what goes with cherry planks", "block palette", "what blocks look good together", "blocks that go together"],
+    { q: ["how do i get bees", "where do i find bees", "where do i find a bee nest", "where are bee nests", "bee nest", "how do i get bees to come to my house", "how to attract bees", "how to move bees", "how do i get them to come to my house"],
+      a: "Getting bees: 🐝 bee nests hang on oak and birch trees in flower forests, plains, sunflower plains and meadows (a yellow block with little holes). To bring bees home, hold any flower: bees follow you! Walk them back slowly, plant lots of flowers near your house and place a beehive (craft it from 6 planks and 3 honeycomb). To move a whole nest with the bees inside, mine it with a Silk Touch tool. Put a campfire under a nest before taking honey, so they stay calm." },
+    { q: ["what purple blocks are there", "purple blocks", "what blocks are purple", "purple building blocks", "purple house blocks"],
+      a: "Purple blocks: 💜 amethyst blocks (sparkly!), purpur blocks and pillars (from End cities), purple concrete, purple terracotta and glazed terracotta, purple wool and carpet, purple stained glass, crying obsidian, and bubble coral for underwater builds. They look lovely next to cherry wood and pink petals!" },
+    { q: ["can i breed sheep to get pink ones", "if i dye two sheep pink and breed them is the baby pink", "baby sheep color", "breed colored sheep", "how to get a pink sheep", "sheep colors"],
+      a: "Yes! 🐑 A lamb gets its color from its parents: if both parents are pink, the baby is pink. If the two colors mix like dyes do (red + white = pink, red + blue = purple), the lamb gets the mixed color! Otherwise it randomly copies one parent. So dye two sheep pink (right-click them with pink dye), feed them wheat, and you'll get a pink family. Shear them for piles of pink wool!" },
+    { q: ["how do i get a blue axolotl", "blue axolotl", "how to get a blue axolotl", "how rare is a blue axolotl"],
+      a: "Blue axolotls can't be found in the wild: 💙 you have to breed two axolotls (feed them buckets of tropical fish), and each baby has a 1 in 1200 chance to be blue. Build a little breeding pond, keep plenty of tropical fish buckets, and be patient. Using a blue one as a parent doesn't raise the odds, sadly." },
+    { q: ["what blocks go with cherry wood", "what blocks look nice with cherry planks", "cherry wood palette", "what goes with cherry planks", "block palette", "what blocks look good together", "blocks that go together", "what blocks go good with cherry", "what goes good with cherry wood", "what blocks match cherry"],
       a: "Blocks that look great with cherry: 🌸 white or light gray concrete, calcite, birch planks, stripped cherry logs for beams, deepslate tiles or dark oak for contrast, and pink petals and flowering azalea for decoration. For purple: amethyst blocks, purpur, or purple and magenta stained glass look amazing with cherry! 💜" },
     { q: ["what should i use for the roof", "roof ideas", "how to make a roof", "best roof blocks", "roof for my house"],
       a: "Roof ideas: use stairs so it slopes (deepslate tile, dark oak or spruce stairs look great), let it hang one block past the walls, and add slabs at the top. For a cherry house, dark oak or deepslate tile makes the pink pop. 🏠" },
