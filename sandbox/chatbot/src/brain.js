@@ -1518,6 +1518,21 @@
       // real laughter about something that happened (not just a "lol" at the end)
       if ((/\b(haha+|hahaha+|lmao+|rofl)\b|😂|🤣/.test(m.clean) || /^(lol|lmao)\b/.test(m.plain)) && v >= 0 && !/\b(no|not|nothing|never|wrong|mean|why)\b/.test(m.plain) && m.tokens.length >= 5)
         return { text: fresh("fun", ["Haha! 😂 That sounds hilarious!", "Hahaha, I wish I could have seen that! 😄", "LOL, that's amazing! 😂"]), source: "react:funny", score: 0.47 };
+      // a reaction to the detail they gave beats a generic "cool!" ("i play it like every day", "w my friends")
+      if (v > -0.3 && !m.isQuestion) {
+        const t = m.plain;
+        const D = [
+          [/\b(every ?day|every night|all the time|24\/7|non ?stop|every single day|like every day)\b/, ["Every day? That's dedication! 😄", "Every day! You must be really good by now. 😎"]],
+          [/\b(with|w) (my )?(friends|friend|bestie|best friend|cousins?|brother|sister|dad|mom|mum|family|team)\b/, [`Doing it with your ${(/\b(friends|friend|bestie|best friend|cousins?|brother|sister|dad|mom|mum|family|team)\b/.exec(t) || ["", "friends"])[1]} makes it way more fun! 😊`]],
+          [/\b(first time|never (done|tried) (it|that) before)\b/, ["First time? That's exciting! 🤩 How did it go?"]],
+          [/\b(i'?m|i am) (pretty |really |so |kinda )?(good|great|the best|a pro) at\b|\bi always win\b/, ["Ooh, a pro! 😎 What's your secret?"]],
+          [/\b(it'?s|its|it is) (so |really |super |kinda )?(hard|difficult|tricky|tough)\b/, ["Hard things feel the best once you get them! 💪 What's the trickiest part?"]],
+          [/\bfor (\d+|two|three|four|five|six|seven|eight|nine|ten) (years|months)\b/, ["Wow, that's a long time! You must really love it. 😊"]],
+          [/\b(it'?s|its|it is|so|really) (so |super |really )?fun\b/, ["Fun is the best reason to do anything! 😄 What's the best part?"]],
+          [/\b(my favou?rite|i love it|best thing ever|the best)\b/, ["I can tell you really love it! 😄 What makes it so good?"]],
+        ];
+        for (const [re, lines] of D) if (re.test(t)) return { text: fresh("detail:" + re.source.slice(0, 12), lines), source: "react:detail", score: 0.47 };
+      }
       if (v > 0.3) return { text: fresh("pos", ["That's awesome! 😄", "Ooh, that sounds fun! 😊", "Love that! 😄", "Nice! That's really cool. 😊", "Yay! That makes me happy to hear. 😄"]), source: "react:positive", score: 0.46 };
       if (long) return { text: fresh("long", ["That's really interesting! Thanks for telling me. 😊", "Oh cool, I didn't know that! 😊", "Huh, that's so interesting!", "I like hearing about this stuff! 😊", "That's pretty cool, honestly."]), source: "react:neutral", score: 0.45 };
       if (past && !explained) return { text: fresh("past", ["Oh really? How did it go?", "Ooh, and then?", "Nice! How was it?"]), source: "react:neutral", score: 0.45 };
