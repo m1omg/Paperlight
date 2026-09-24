@@ -262,6 +262,7 @@
     "Lapis Lazuli": ["Mine lapis ore with a stone pickaxe or better, best around Y=0.", "lapis|lapis ore"],
     "Copper Ingot": ["Mine copper ore (best around Y=48, lots in dripstone caves) and smelt raw copper.", "copper|copper ore"],
     "Netherite Scrap": ["Smelt ancient debris. Ancient debris is found in the Nether, best around Y=15. It needs a diamond pickaxe.", "ancient debris|netherite scrap"],
+    "Netherite Ingot": ["Mine ancient debris in the Nether (best around Y=15, bring a diamond pickaxe), smelt it into netherite scrap, then craft 4 scrap + 4 gold ingots into one netherite ingot.", "netherite"],
     "Obsidian": ["Pour water onto a lava source block, then mine it with a diamond (or netherite) pickaxe. It takes a while!", "obsidian block"],
     "String": ["Kill spiders, break cobwebs (a sword is fastest), or go fishing.", "strings|thread"],
     "Leather": ["Kill cows, horses, llamas or mooshrooms. Or catch it while fishing.", "hide"],
@@ -288,8 +289,8 @@
     "Nether Quartz": ["Mine nether quartz ore in the Nether.", "quartz"],
     "Glowstone Dust": ["Break glowstone blocks on Nether ceilings, or kill witches.", "glowstone dust"],
     "Shulker Shell": ["Kill shulkers in End cities.", "shulker shells"],
-    "Elytra": ["Found in End ships next to End cities (the outer End islands). Fly with firework rockets!", "elytras|wings|glider"],
-    "Totem of Undying": ["Kill evokers (woodland mansions and raids). Hold it and it saves you from dying once.", "totem|totems"],
+    "Elytra": ["Found in End ships next to End cities (the outer End islands).", "elytras|wings|glider"],
+    "Totem of Undying": ["Kill evokers (woodland mansions and raids) to get one.", "totem|totems"],
     "Saddle": ["Found in dungeon, temple, village and Nether fortress chests, by fishing, or bought from leatherworker villagers. (The newest versions may also let you craft one.)", "saddles"],
     "Name Tag": ["Found in dungeon/mineshaft chests, by fishing, or bought from librarian villagers. Rename it on an anvil, then use it on a mob.", "nametag|name tags"],
     "Heart of the Sea": ["Found in buried treasure chests. Treasure maps come from shipwrecks and ocean ruins.", "heart of sea"],
@@ -318,6 +319,28 @@
     if (ex) { ex.how = ex.how || how; ex.aliases = (ex.aliases ? ex.aliases + "|" : "") + aliases; }
     else R(name, { how, aliases, raw: true });
   }
+
+  // short descriptions for things you find rather than craft
+  const INFO = {
+    "Elytra": "Wings that let you glide through the air! Boost with firework rockets to fly.",
+    "Totem of Undying": "Hold it and it saves you from dying once, with a burst of healing.",
+    "Trident": "A magic fork you can throw and use in melee. With Riptide it launches you, with Channeling it calls lightning.",
+    "Heart of the Sea": "A rare treasure used to craft a conduit.",
+    "Nether Star": "Dropped by the Wither. Used to craft a beacon.",
+    "Enchanted Golden Apple": "The most powerful food: Regeneration, Absorption, Resistance and Fire Resistance.",
+    "Saddle": "Lets you ride horses, pigs, striders and camels.",
+    "Name Tag": "Rename a mob so it never despawns. Name a sheep jeb_ for a rainbow sheep!",
+    "Obsidian": "Super tough purple-black block used for Nether portals, enchanting tables and beacons. Nothing but a diamond pickaxe mines it.",
+    "Diamond": "The famous blue gem used for the best tools and armor before netherite.",
+    "Emerald": "Villagers' money! Trade emeralds for tools, food, enchanted books and more.",
+    "Echo Shard": "A shard from ancient cities, used for the recovery compass.",
+    "Heavy Core": "The heavy center of the mace, found in ominous vaults.",
+    "Ender Pearl": "Throw it to teleport to where it lands (costs a bit of health).",
+    "Blaze Rod": "Used for brewing stands and blaze powder. Only blazes drop it.",
+    "Slimeball": "Sticky stuff for sticky pistons, leads and slime blocks.",
+    "Gunpowder": "Used for TNT, fire charges, firework rockets and splash potions.",
+  };
+  for (const [name, info] of Object.entries(INFO)) { const ex = items.find((i) => i.name === name); if (ex && !ex.info) ex.info = info; }
 
   // ---------- smelting ----------
   const SMELT = [
@@ -589,6 +612,26 @@
       a: "A netherite sword with Sharpness V, Looting III, Unbreaking III and Mending is the classic best weapon. The mace (1.21) hits even harder if you fall onto enemies, and a bow with Power V is best at range." },
     { q: ["best pickaxe", "what is the best pickaxe"],
       a: "A netherite pickaxe with Efficiency V, Unbreaking III, Mending and Fortune III (or Silk Touch). Many players keep one of each!" },
+    { q: ["how many eyes of ender do i need", "how many eyes of ender", "how many ender eyes do i need", "how many eyes for the end portal"],
+      a: "Up to 12: each of the 12 frame blocks around the End portal needs an eye, but some frames already have one, so usually you need about 10. Bring a few extra, because thrown eyes can break!" },
+    { q: ["how to breed villagers", "villager breeding", "how do villagers breed", "how to get more villagers"],
+      a: "Villagers breed when they're willing: they need enough food (3 bread, or 12 carrots, potatoes or beetroots each, just throw it to them) and there must be more free beds than villagers. Then hearts appear and a baby villager pops out!" },
+    { q: ["can i feed cookies to my parrot", "can parrots eat cookies", "cookies parrot"],
+      a: "No! Cookies are poisonous to parrots in Minecraft (and chocolate is really bad for real parrots too). Tame and feed them with seeds instead. 🦜" },
+    { q: ["what is the rarest ore", "rarest ore"],
+      a: "Emerald ore is the rarest ore: it only spawns in mountain biomes, one block at a time. Ancient debris in the Nether is also very rare, and diamond ore is rare above the deepslate layer." },
+    { q: ["what is a good seed", "best seed", "good seeds", "what seed should i use", "cool seeds"],
+      a: "Seeds change between versions, so I can't promise a specific one! Tip: any text works as a seed, so try a word you like (your name, 'glacier', 'axolotl'...). Sites like chunkbase let you preview a seed's villages and biomes before you play." },
+    { q: ["how to make a redstone clock", "redstone clock", "observer clock"],
+      a: "Easiest redstone clock: put two observers facing each other; they keep triggering each other, super fast. For a slower clock, make a loop of redstone dust with a couple of repeaters (more delay = slower) and start it with one button press." },
+    { q: ["how to build a house", "house ideas", "how do i build a good house", "building tips", "how to build better"],
+      a: "Building tips: start with a simple rectangle, frame the corners with logs, fill walls with planks or stone bricks, and make a roof with stairs that overhangs by one block. Set walls back one block from the pillars for depth, mix 2-3 materials, add glass panes, flower pots, lanterns and a path. Light it up so mobs can't spawn!" },
+    { q: ["what is the best enchantment", "best enchantment", "most useful enchantment"],
+      a: "Mending is the best overall: it repairs your gear with the XP you pick up, so it lasts forever. After that: Unbreaking III on everything, Efficiency V on tools, Protection IV on armor and Sharpness V on swords." },
+    { q: ["how to repair my elytra", "repair elytra", "fix elytra"],
+      a: "Fix an elytra on an anvil with phantom membranes (each one repairs a chunk), or put Mending on it and pick up XP while wearing it. A broken elytra stops working but doesn't disappear!" },
+    { q: ["how to repair tools", "how do i repair my sword", "how do i repair my pickaxe", "how to fix tools", "repair armor", "how to repair"],
+      a: "Repairing: on an anvil, combine the item with its material (diamonds for diamond gear, iron ingots for iron) or with another copy of the item. A grindstone or crafting grid can merge two damaged copies too (but removes enchantments). Best of all: Mending, which repairs it with XP." },
     { q: ["what is the rarest thing in minecraft", "rarest item", "rarest mob"], a: "Some of the rarest things: a blue axolotl (1 in 1200 when breeding), a pink sheep (0.164% natural spawn), the dragon egg (only one per world), and enchanted golden apples." },
   ];
 

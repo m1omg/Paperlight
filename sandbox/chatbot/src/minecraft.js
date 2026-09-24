@@ -185,6 +185,10 @@
   }
 
   function mobAnswer(mob, want) {
+    if (want === "drops") {
+      const sent = mob.info.split(/(?<=[.!])\s+/).filter((x) => /drop/i.test(x));
+      if (sent.length) return { text: `${mob.type === "boss" ? "The " + mob.name : mob.name}: ${sent.join(" ")}`, kind: "mob" };
+    }
     const hearts = mob.hp / 2;
     const h = `${mob.hp} HP (${hearts % 1 ? hearts : hearts} heart${hearts === 1 ? "" : "s"})`;
     if (want === "health") return { text: `${mob.type === "boss" ? "The " + mob.name : article(mob.name)} has ${h}.`, kind: "mob" };
@@ -223,7 +227,7 @@
     const mcWords = MC_WORDS.test(text);
 
     const want =
-      /\b(y level|y-level|what level|which level|what height|best level|how deep|what layer)\b/.test(text) ? "ylevel" :
+      /\b(y level|y-level|y lvl|what level|which level|what lvl|which lvl|what height|best level|best lvl|how deep|what layer)\b/.test(text) ? "ylevel" :
       /\b(brew|brewing|potion|potions)\b/.test(text) ? "brew" :
       /\benchant(ment|ments|ing)?s?\b/.test(text) && !/\benchant(ing|ment)? table\b/.test(text) ? "enchant" :
       /\b(tame|taming|breed|breeding|ride|riding)\b/.test(text) ? "tame" :
@@ -273,6 +277,44 @@
       }
     }
 
+    // potion modifiers: "how do I make it last longer / stronger / splash?"
+    const lastIsPotion = mc.last && mc.last.kind === "potion" && turn - mc.turn <= 3;
+    if ((lastIsPotion || /\bpotions?\b/.test(text)) && /\b(last longer|longer|stronger|level (2|ii|two)|splash|throw|throwable|lingering|cloud)\b/.test(text)) {
+      const pn = lastIsPotion ? "the " + mc.last.ref.name + " potion" : "a potion";
+      const tip = /\blingering|cloud\b/.test(text) ? `Brew dragon's breath into a splash version of ${pn} to make it lingering: it leaves a cloud that affects everyone inside.`
+        : /\bsplash|throw/.test(text) ? `Add gunpowder to ${pn} in the brewing stand and it becomes a splash potion you can throw.`
+        : /\bstronger|level/.test(text) ? `Add glowstone dust to ${pn} for the stronger level II version (it usually lasts shorter).`
+        : `Add redstone dust to ${pn} in the brewing stand: most potions go from 3 minutes to 8. (Instant ones like Healing can't be extended.)`;
+      return done(state, { text: tip, kind: "potion" }, null);
+    }
+    // enchantment face-offs: "sharpness or smite?"
+    const COMP = {
+      "sharpness|smite": "Sharpness is better for everyday fighting because it boosts damage against every mob. Smite does much more damage, but only to undead mobs (zombies, skeletons, phantoms, the Wither). You can't have both on one sword.",
+      "fortune|silk touch": "Fortune gives more drops from ores (more diamonds!), Silk Touch mines the block itself (like ore blocks, glass or grass). Most players keep one pickaxe of each.",
+      "infinity|mending": "On a bow: Infinity means one arrow lasts forever, Mending keeps the bow repaired. They can't go together. Early on Infinity is great; later most players pick Mending.",
+      "loyalty|riptide": "Loyalty makes the trident fly back to you; Riptide launches YOU when you throw it in water or rain. Can't have both.",
+      "multishot|piercing": "Multishot fires three arrows at once (great for crowds), Piercing shoots through several mobs in a line. Pick one.",
+      "blast protection|protection": "Protection reduces all kinds of damage a bit, Blast Protection reduces explosions a lot. Protection IV is the best all-rounder.",
+      "depth strider|frost walker": "Depth Strider makes you fast underwater; Frost Walker freezes water so you can walk on it. They can't be combined.",
+      "bane of arthropods|sharpness": "Sharpness wins almost always: Bane of Arthropods only helps against spiders, bees and silverfish.",
+    };
+    const enchMentioned = D.enchants.map((e) => e[0].toLowerCase()).filter((n) => text.includes(n));
+    if (enchMentioned.length >= 2 && /\b(or|vs|versus|better|best|which)\b/.test(text)) {
+      const key = enchMentioned.slice(0, 2).sort().join("|");
+      const hit = COMP[key] || Object.entries(COMP).find(([k]) => k.split("|").every((x) => enchMentioned.includes(x)));
+      if (hit) return done(state, { text: typeof hit === "string" ? hit : hit[1], kind: "ench" }, null);
+    }
+    // variants: "how 'bout a sticky one?", "the golden one"
+    const variant = /\b(?:a|an|the)? ?(\w+) (?:one|ones|version|kind)\b/.exec(text);
+    if (variant && mc.last && mc.last.kind === "item" && turn - mc.turn <= 3 && !MATERIAL_WORDS[variant[1]]) {
+      const cand = variant[1] + " " + mc.last.ref.name.toLowerCase();
+      const hits = index.get(cand) || index.get(sing(variant[1]) + " " + mc.last.ref.name.toLowerCase());
+      if (hits && hits[0].kind === "item") {
+        const res = recipeAnswer(hits[0].ref) || obtainAnswer(hits[0].ref);
+        if (res) return done(state, res, { kind: "item", ref: hits[0].ref });
+      }
+    }
+
     // "how many iron ingots do I need for it?" right after a recipe
     const hmIt = /\bhow many (\w+(?: \w+)?)\b.*\b(for it|for that|for one|for this|for them|to make it|to craft it|to make one|to craft one)\b/.exec(text);
     if (hmIt && mc.last && mc.last.kind === "item" && turn - mc.turn <= 3 && (mc.last.ref.grid || mc.last.ref.shapeless)) {
@@ -301,12 +343,19 @@
     // guides (portal, dragon, diamonds...), unless a specific item recipe is asked
     let guide = null, guideScore = 0;
     if (guideIndex) {
-      const g = guideIndex.query(m.stems, 1)[0];
-      // the distinctive words of the matched guide question must appear ("who made you" is not "who made minecraft")
-      const key = g ? g.doc.stems.filter((w) => !P.nlp.STOP.has(w) && w.length > 2 && !/^(make|made|get|find|how|best|use|work|build)$/.test(w)) : [];
-      if (g && g.score > 0.55 && key.every((w) => m.stems.includes(w) || m.stems.some((x) => x.length > 3 && U.levenshtein(x, w, 1) <= 1))) { guide = D.guides[g.payload]; guideScore = g.score; }
+      // among the best keyword matches, prefer the guide whose distinctive words are all in the question,
+      // and the more of them the better ("repair my elytra" beats plain "elytra")
+      let best = null;
+      for (const g of guideIndex.query(m.stems, 6)) {
+        if (g.score < 0.4) continue;
+        const key = g.doc.stems.filter((w) => !P.nlp.STOP.has(w) && w.length > 2 && !/^(make|made|get|find|how|best|use|work|build)$/.test(w));
+        const ok = key.length && key.every((w) => m.stems.includes(w) || m.stems.some((x) => x.length > 3 && U.levenshtein(x, w, 1) <= 1));
+        if (!ok) continue;
+        const rank = key.length * 0.3 + g.score;
+        if (!best || rank > best.rank) best = { rank, g, cover: key.length };
+      }
+      if (best && (best.g.score > 0.55 || best.cover >= 2)) { guide = D.guides[best.g.payload]; guideScore = best.cover >= 2 ? Math.max(best.g.score, 0.8) : best.g.score; }
     }
-
     if (guide && !guideIsMC(guide) && !mcWords && !recentMC) guide = null;
     // a game-only answer to a question that didn't mention the game gets a "Minecraft" label
     const label = (a) => (mcWords || recentMC ? a : "If you mean in Minecraft: " + a);
@@ -356,7 +405,8 @@
         if (want === "obtain" || want === "ylevel") {
           const ore = D.ores.find((o) => ref.name.toLowerCase().startsWith(o[0].toLowerCase()));
           res = ore && !ref.grid && !ref.shapeless && want === "ylevel" ? obtainAnswer(ref, { name: ore[0], y: ore[1], tool: ore[2], tip: ore[3] }) : obtainAnswer(ref);
-        } else if (want === "info" && ref.info) res = { text: `${ref.name}: ${ref.info}` + (ref.grid || ref.shapeless ? ` Want the recipe?` : ""), kind: "info", item: ref, offerRecipe: !!(ref.grid || ref.shapeless) };
+        } else if (want === "info" && ref.info) res = { text: `${ref.name}: ${ref.info}` + (ref.grid || ref.shapeless ? ` Want the recipe?` : ref.how ? " " + ref.how : ""), kind: "info", item: ref, offerRecipe: !!(ref.grid || ref.shapeless) };
+        else if (want === "info" && ref.how) res = { text: `${ref.name}: ${ref.how}`, kind: "info", item: ref };
         else if (want === "kill" || want === "tame") {
           const mob = D.mobs.find((x) => x[0].toLowerCase() === ref.name.toLowerCase());
           res = mob ? mobAnswer({ name: mob[0], hp: mob[1], type: mob[2], info: mob[3] }) : recipeAnswer(ref, generic && !inContext);
