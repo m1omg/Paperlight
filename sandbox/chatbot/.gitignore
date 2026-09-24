@@ -1,0 +1,4 @@
+# downloaded datasets, prepared corpora and training checkpoints (large, re-creatable)
+training/data/
+training/runs/
+__pycache__/

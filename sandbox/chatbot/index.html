@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pip</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Fredoka:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #e8eee9; --surface: #f7faf7; --surface-2: #dfe7e1; --ink: #1b2622; --ink-soft: #55665f; --line: #c7d3cb;
+    --accent: #0f7c6e; --accent-ink: #ffffff; --accent-soft: #cfe6e0; --user-bg: #0f7c6e; --user-ink: #f4fbf9;
+    --amber: #b86a12; --amber-soft: #f6e3c8; --shadow: 0 1px 2px rgba(20, 40, 34, .08), 0 6px 20px rgba(20, 40, 34, .06);
+    --display: "Fredoka", "Nunito", "Varela Round", system-ui, sans-serif;
+    --body: "Atkinson Hyperlegible", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #0d1614; --surface: #15221e; --surface-2: #1c2d28; --ink: #e1ebe6; --ink-soft: #93a79f; --line: #283a33;
+      --accent: #3fbca8; --accent-ink: #05201b; --accent-soft: #173b35; --user-bg: #1d6a5f; --user-ink: #ecf8f4;
+      --amber: #f0b04f; --amber-soft: #3a2c16; --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .25);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0d1614; --surface: #15221e; --surface-2: #1c2d28; --ink: #e1ebe6; --ink-soft: #93a79f; --line: #283a33;
+    --accent: #3fbca8; --accent-ink: #05201b; --accent-soft: #173b35; --user-bg: #1d6a5f; --user-ink: #ecf8f4;
+    --amber: #f0b04f; --amber-soft: #3a2c16; --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .25);
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 var(--body); }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .app { height: 100%; display: grid; grid-template-columns: minmax(0, 1fr); }
+  .app.with-panel { grid-template-columns: minmax(0, 1fr) 360px; }
+  .main { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; grid-template-columns: minmax(0, 1fr); height: 100%; min-width: 0; }
+
+  /* header */
+  .top { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--surface); }
+  .who { flex: 1; min-width: 0; }
+  .who h1 { margin: 0; font: 600 1.35rem/1.1 var(--display); letter-spacing: .01em; }
+  .who p { margin: 2px 0 0; font-size: .82rem; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .who p .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-right: 6px; vertical-align: 1px; }
+  .who p.busy .dot { background: var(--amber); }
+  .tbtn { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 6px 14px; font-size: .88rem; color: var(--ink); }
+  .tbtn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+
+  /* Pip's face: a teal pebble that blinks every few seconds (time-based CSS animation) */
+  .pebble { position: relative; width: 44px; height: 40px; flex: none; background: var(--accent); border-radius: 52% 48% 46% 54% / 58% 55% 45% 42%; box-shadow: inset -4px -5px 0 rgba(0, 0, 0, .12); }
+  .pebble.small { width: 30px; height: 27px; }
+  .pebble i { position: absolute; top: 38%; width: 18%; height: 26%; background: var(--surface); border-radius: 50%; animation: blink 5.2s infinite; transform-origin: center; transition: transform .35s; }
+  .pebble i:first-child { left: 26%; } .pebble i:last-child { right: 26%; }
+  .pebble.think i { transform: translateX(3px) scaleY(.9); }
+  @keyframes blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
+
+  /* conversation */
+  .log { overflow-y: auto; padding-block: 18px 8px; padding-inline: 16px; display: flex; flex-direction: column; gap: 10px; scroll-behavior: smooth; }
+  .row { display: flex; gap: 10px; align-items: flex-end; max-width: 760px; width: 100%; margin-inline: auto; }
+  .row.user { justify-content: flex-end; }
+  .bubble { max-width: 100%; padding: 9px 14px; border-radius: 18px; white-space: pre-wrap; overflow-wrap: break-word; box-shadow: var(--shadow); }
+  .bot .bubble { background: var(--surface); border-bottom-left-radius: 6px; }
+  .user .bubble { background: var(--user-bg); color: var(--user-ink); border-bottom-right-radius: 6px; }
+  .meta { font-size: .72rem; color: var(--ink-soft); margin-top: 4px; font-family: var(--mono); }
+  .bot .meta { padding-left: 2px; }
+  .stack { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; max-width: min(80%, 580px); }
+  .user .stack { align-items: flex-end; }
+  .day { text-align: center; font-size: .75rem; color: var(--ink-soft); font-family: var(--mono); letter-spacing: .04em; text-transform: uppercase; margin: 6px 0; }
+  .typing .bubble { display: flex; gap: 5px; padding: 14px 16px; }
+  .typing .bubble span { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-soft); animation: hop 1.2s infinite ease-in-out; }
+  .typing .bubble span:nth-child(2) { animation-delay: .15s; } .typing .bubble span:nth-child(3) { animation-delay: .3s; }
+  @keyframes hop { 0%, 60%, 100% { transform: translateY(0); opacity: .5; } 30% { transform: translateY(-5px); opacity: 1; } }
+
+  /* crafting grid card */
+  .card { margin-top: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px; box-shadow: var(--shadow); max-width: 100%; }
+  .card h3 { margin: 0 0 8px; font: 600 .95rem/1.2 var(--display); }
+  .craft { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 44px); gap: 4px; padding: 6px; background: #8b8b8b; border-radius: 4px; box-shadow: inset 2px 2px 0 #5a5a5a, inset -2px -2px 0 #c6c6c6; }
+  .slot { background: #9d9d9d; box-shadow: inset 2px 2px 0 #6f6f6f, inset -2px -2px 0 #d8d8d8; display: grid; place-items: center; }
+  .item { width: 32px; height: 32px; border-radius: 3px; display: grid; place-items: center; font: 500 .68rem/1 var(--mono); color: #111; box-shadow: inset -3px -3px 0 rgba(0, 0, 0, .22), inset 3px 3px 0 rgba(255, 255, 255, .28); }
+  .arrow { font: 600 1.4rem/1 var(--display); color: var(--ink-soft); }
+  .result { display: grid; place-items: center; gap: 2px; font: 500 .75rem/1.2 var(--mono); color: var(--ink-soft); text-align: center; max-width: 90px; }
+  .result .slot { width: 54px; height: 54px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 10px; font-size: .8rem; color: var(--ink-soft); }
+  .legend b { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 3px; margin-right: 5px; font: 500 .56rem/1 var(--mono); color: #111; vertical-align: -4px; }
+
+  /* quick replies + composer */
+  .bottom { border-top: 1px solid var(--line); background: var(--surface); padding-block: 8px calc(10px + env(safe-area-inset-bottom, 0px)); padding-inline: 16px; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; max-width: 760px; margin: 0 auto 8px; }
+  .chips:empty { display: none; }
+  .chip { border: 1px solid var(--accent); color: var(--accent); background: transparent; border-radius: 999px; padding: 4px 12px; font-size: .88rem; }
+  .chip:hover { background: var(--accent-soft); }
+  .composer { display: flex; gap: 8px; max-width: 760px; margin: 0 auto; }
+  .composer input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 10px 16px; }
+  .composer input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .send { border: 0; background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 0 18px; font-weight: 700; }
+
+  /* side panel: brain / memory / settings */
+  .panel { background: var(--surface); border-left: 1px solid var(--line); display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100%; min-width: 0; }
+  .tabs { display: flex; gap: 4px; padding: 10px 12px; border-bottom: 1px solid var(--line); align-items: center; }
+  .tab { border: 0; background: transparent; padding: 6px 12px; border-radius: 999px; font-size: .9rem; color: var(--ink-soft); }
+  .tab[aria-selected="true"] { background: var(--accent-soft); color: var(--ink); font-weight: 700; }
+  .tabs .close { margin-left: auto; border: 0; background: transparent; font-size: 1.2rem; color: var(--ink-soft); padding: 2px 8px; }
+  .pane { overflow-y: auto; padding: 14px 16px 24px; }
+  .pane h2 { font: 600 1rem/1.2 var(--display); margin: 4px 0 8px; }
+  .pane p { margin: 0 0 10px; font-size: .88rem; color: var(--ink-soft); }
+  .answered { font-family: var(--mono); font-size: .82rem; background: var(--amber-soft); color: var(--ink); border-radius: 8px; padding: 8px 10px; margin-bottom: 12px; }
+  .cand { display: grid; gap: 4px; padding: 8px 0; border-bottom: 1px dashed var(--line); }
+  .cand .lab { display: flex; justify-content: space-between; gap: 8px; font: .74rem/1.2 var(--mono); color: var(--ink-soft); }
+  .cand .lab b { font-weight: 500; color: var(--ink); }
+  .cand.win .lab b { color: var(--amber); }
+  .bar { height: 5px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+  .bar span { display: block; height: 100%; background: var(--accent); }
+  .cand.win .bar span { background: var(--amber); }
+  .cand .txt { font-size: .84rem; line-height: 1.35; }
+  .stats { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: .82rem; margin: 6px 0 14px; }
+  .stats dt { color: var(--ink-soft); } .stats dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .facts { list-style: none; padding: 0; margin: 0 0 14px; display: grid; gap: 6px; }
+  .facts li { background: var(--bg); border-radius: 10px; padding: 7px 10px; font-size: .88rem; }
+  .facts li span { display: block; font: .7rem/1.3 var(--mono); color: var(--ink-soft); text-transform: uppercase; letter-spacing: .06em; }
+  .field { display: grid; gap: 6px; margin-bottom: 16px; }
+  .field label { font-size: .85rem; font-weight: 700; }
+  .field .inline { display: flex; gap: 8px; }
+  .field input[type="text"] { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--bg); border-radius: 10px; padding: 7px 10px; }
+  .toggle { display: flex; align-items: flex-start; gap: 10px; font-size: .88rem; margin-bottom: 12px; }
+  .toggle input { margin-top: 4px; accent-color: var(--accent); }
+  .btn { border: 1px solid var(--line); background: var(--bg); border-radius: 10px; padding: 7px 12px; font-size: .88rem; }
+  .btn.danger { border-color: #c2413b; color: #c2413b; }
+  .btn.armed { background: #c2413b; color: #fff; }
+  .muted { color: var(--ink-soft); font-size: .8rem; }
+
+  @media (max-width: 900px) {
+    .app.with-panel { grid-template-columns: minmax(0, 1fr); }
+    .panel { position: fixed; inset: auto 0 0 0; height: min(72%, 560px); border-left: 0; border-top: 1px solid var(--line); border-radius: 18px 18px 0 0; box-shadow: 0 -10px 30px rgba(0, 0, 0, .18); z-index: 5; padding-bottom: env(safe-area-inset-bottom, 0px); }
+    .stack { max-width: 88%; }
+    .tbtn .long { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pebble i, .typing .bubble span { animation: none; }
+    .log { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <div class="main">
+    <header class="top">
+      <div class="pebble" id="face" aria-hidden="true"><i></i><i></i></div>
+      <div class="who">
+        <h1 id="botName">Pip</h1>
+        <p id="status"><span class="dot"></span><span id="statusText">online</span></p>
+      </div>
+      <button class="tbtn" id="brainBtn" aria-pressed="false" aria-controls="panel"><span class="long">Show </span>brain</button>
+    </header>
+    <main class="log" id="log" aria-live="polite" aria-label="Conversation"></main>
+    <div class="bottom">
+      <div class="chips" id="chips"></div>
+      <form class="composer" id="form" autocomplete="off">
+        <input id="msg" type="text" placeholder="Message Pip…" aria-label="Message" maxlength="500" autofocus>
+        <button class="send" id="sendBtn" type="submit">Send</button>
+      </form>
+    </div>
+  </div>
+  <aside class="panel" id="panel" hidden aria-label="Pip's brain">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tab-brain" aria-selected="true" data-pane="brain">Brain</button>
+      <button class="tab" role="tab" id="tab-memory" aria-selected="false" data-pane="memory">Memory</button>
+      <button class="tab" role="tab" id="tab-settings" aria-selected="false" data-pane="settings">Settings</button>
+      <button class="close" id="closePanel" aria-label="Close panel">×</button>
+    </div>
+    <section class="pane" id="pane-brain">
+      <h2>How Pip chose the last reply</h2>
+      <div id="brainNow"><p>Send a message and this shows every candidate reply, where it came from and its score. Pip picks the best one.</p></div>
+      <h2>What's inside</h2>
+      <dl class="stats" id="modelStats"></dl>
+      <p>Rules and a knowledge base answer the things they can answer exactly: math, Minecraft recipes, memory and games. For open chat, the retrieval network scores about 60,000 human-written lines, and PipGPT writes a few replies of its own. The same network scores both kinds.</p>
+    </section>
+    <section class="pane" id="pane-memory" hidden>
+      <h2>What Pip remembers about you</h2>
+      <p>Stored only in this browser. Pip learns these from normal conversation ("my favorite color is blue", "I have a dog named Rex").</p>
+      <ul class="facts" id="facts"></ul>
+      <button class="btn danger" id="forgetBtn" type="button">Forget everything</button>
+    </section>
+    <section class="pane" id="pane-settings" hidden>
+      <div class="field">
+        <label for="renameInput">Pip's name</label>
+        <div class="inline"><input type="text" id="renameInput" maxlength="20"><button class="btn" id="renameBtn" type="button">Rename</button></div>
+      </div>
+      <label class="toggle"><input type="checkbox" id="optGen" checked> <span>Let PipGPT write replies<br><span class="muted">When off, open chat only uses human-written lines from the reply bank (faster).</span></span></label>
+      <label class="toggle"><input type="checkbox" id="optPace" checked> <span>Natural typing pace<br><span class="muted">Pip waits a moment before answering, like a person typing.</span></span></label>
+      <button class="btn" id="clearChat" type="button">Clear the chat window</button>
+      <p class="muted" style="margin-top:14px">Clearing the window keeps Pip's memory. Use "Forget everything" in the Memory tab to wipe that too.</p>
+    </section>
+  </aside>
+</div>
+<script src="src/util.js"></script>
+<script src="data/words.js"></script>
+<script src="src/nlp.js"></script>
+<script src="src/mathcalc.js"></script>
+<script src="src/mcdata.js"></script>
+<script src="src/minecraft.js"></script>
+<script src="src/memory.js"></script>
+<script src="src/content.js"></script>
+<script src="src/skills.js"></script>
+<script src="src/wasm.js"></script>
+<script src="src/neural.js"></script>
+<script src="src/brain.js"></script>
+<script src="src/ui.js"></script>
+</body>
+</html>
