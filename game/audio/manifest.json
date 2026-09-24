@@ -1,0 +1,112 @@
+{
+ "bgm": {
+  "title": {
+   "loop": true,
+   "vol": 0.475
+  },
+  "victory": {
+   "loop": false,
+   "vol": 0.929
+  },
+  "house": {
+   "loop": true,
+   "vol": 0.358
+  },
+  "house_night": {
+   "loop": true,
+   "vol": 0.413
+  },
+  "meadow": {
+   "loop": true,
+   "vol": 0.655
+  },
+  "village": {
+   "loop": true,
+   "vol": 0.626
+  },
+  "forest": {
+   "loop": true,
+   "vol": 0.398
+  },
+  "battle": {
+   "loop": true,
+   "vol": 0.638
+  },
+  "boss": {
+   "loop": true,
+   "vol": 0.632
+  },
+  "unfinished": {
+   "loop": true,
+   "vol": 0.497
+  },
+  "hush": {
+   "loop": true,
+   "vol": 0.568
+  },
+  "speak": {
+   "loop": true,
+   "vol": 0.593
+  },
+  "owl": {
+   "loop": true,
+   "vol": 0.448
+  },
+  "ending": {
+   "loop": true,
+   "vol": 0.569
+  },
+  "gameover": {
+   "loop": true,
+   "vol": 0.333
+  },
+  "soothed": {
+   "loop": false,
+   "vol": 0.576
+  },
+  "chapter": {
+   "loop": false,
+   "vol": 0.675
+  }
+ },
+ "se": [
+  "bell",
+  "blip",
+  "blip_button",
+  "blip_hush",
+  "blip_mom",
+  "blip_moth",
+  "blip_owl",
+  "buzzer",
+  "cancel",
+  "confirm",
+  "crit",
+  "cursor",
+  "door",
+  "encounter",
+  "eraser",
+  "guard",
+  "heal",
+  "heartbeat",
+  "hit",
+  "hurt",
+  "item",
+  "levelup",
+  "light",
+  "miss",
+  "page",
+  "phone",
+  "save",
+  "scatter",
+  "shimmer",
+  "soothe",
+  "soothed",
+  "sparkle",
+  "splash",
+  "step",
+  "thud",
+  "tick",
+  "together",
+  "whoosh"
+ ]
+}

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PAPERLIGHT</title>
+<style>
+  @font-face { font-family: "Gaegu"; src: url("fonts/Gaegu-Regular.ttf"); font-weight: normal; }
+  @font-face { font-family: "Gaegu"; src: url("fonts/Gaegu-Bold.ttf"); font-weight: bold; }
+  @font-face { font-family: "Patrick Hand"; src: url("fonts/PatrickHand-Regular.ttf"); }
+  html, body { margin: 0; height: 100%; background: #14121f; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; image-rendering: auto; box-shadow: 0 0 40px rgba(0,0,0,0.6); }
+  .preload { font-family: "Gaegu"; position: absolute; left: -999px; }
+</style>
+</head>
+<body>
+<span class="preload">a</span><span class="preload" style="font-weight:bold">a</span><span class="preload" style="font-family:'Patrick Hand'">a</span>
+<canvas id="game"></canvas>
+<script src="js/audio_manifest.js"></script>
+<script src="js/core.js"></script>
+<script src="js/draw.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/data.js"></script>
+<script src="js/map.js"></script>
+<script src="js/battle.js"></script>
+<script src="js/menu.js"></script>
+<script src="js/story_common.js"></script>
+<script src="js/story_house.js"></script>
+<script src="js/story_dream1.js"></script>
+<script src="js/story_dream2.js"></script>
+<script src="js/story.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

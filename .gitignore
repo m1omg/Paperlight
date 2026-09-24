@@ -1,0 +1,14 @@
+# your own save files (written by tools/serve.py when playing through play.sh)
+saves/
+.server.log
+
+# full-size generated source art (111 MB); the game only needs the processed files in game/img/
+art_source/
+
+# generator logs and Python caches
+tools/logs/
+tools/gen_run*.log
+__pycache__/
+
+# test helper copied into the game folder during testing
+game/dev_harness.js
