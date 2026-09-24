@@ -603,7 +603,7 @@
       if (t.length < 2 || t.split(/\s+/).length > 40) return false;
       if (PERSONA.test(t) || BAD.test(t) || RISKY.test(t)) return false;
       // numbers the user didn't mention are made up ("It's called 200144.")
-      if (/\d/.test(t) && !/\d/.test(userText)) return false;
+      if ((t.match(/\d+/g) || []).some((n) => !new RegExp("(^|\\D)" + n + "(\\D|$)").test(userText)) || /[$€£%]/.test(t)) return false;
       // a retrieved "It means..." is a guessed definition
       if (/^(it|that) means\b|\bstands for\b/i.test(t)) return false;
       if (/<\|(a|b|end)\|>/.test(t) || /[\/\\|_~^*#{}\[\]]/.test(t.replace(/<\|you\|>/g, ""))) return false;

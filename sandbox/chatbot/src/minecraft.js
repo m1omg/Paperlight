@@ -273,6 +273,7 @@
     if (/\b(human|humans|real life|irl|in real life|human body|world war|ww1|ww2|wwii|history|biology|chemistry|physics|in science|in math|president|country|countries|planet|solar system|in the ocean)\b/.test(text) && !/\b(minecraft|mc|in the game|in game)\b/.test(text)) return null;
     // "what's your favorite mob?" / "do you like creepers?" are about Pip, and "I know what a creeper is" isn't a question
     if (/\bpiston door|redstone door|2x2 door\b/.test(text)) return null;
+    if (/\b(safe|parental controls?|family settings|strangers|turn off (the )?chat|chat off)\b/.test(text) && /\b(minecraft|servers?|online|multiplayer|realms?)\b/.test(text)) { const g = D.guides.find((x) => x.q.includes(/parental|chat|block/.test(text) ? "minecraft parental controls" : "is minecraft safe for kids")); if (g) return done(state, { text: g.a, kind: "guide" }, null); }
     if (/^(why|how come)\b/.test(text) && /\b(dogs?|puppies|puppy|cats?|kittens?|beagles?|hamsters?|birds?|horses?)\b/.test(text) && !/\b(minecraft|mc|in the game|in game|tame|wolf|wolves)\b/.test(text)) return null;
     if (/\b(your|yours|urs) (favou?rite|fav|fave)\b|\bwhat(?: is| s|s)? (yours|urs)\b|\bdo (you|u) (like|love|hate|enjoy|play|even play)\b|\b(what do|do) you think (of|about)\b/.test(text)) return null;
     if (/\bi (already |do )?know (what|how|where|who|that)\b/.test(text) && !/\b(but|so) (what|how|where|why|can|do|does|is)\b/.test(text)) return null;

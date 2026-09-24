@@ -75,7 +75,8 @@
     "super lovely perfect best fun ecstatic elated content satisfied yay yippee hooray woohoo lit epic " +
     "incredible terrific splendid better calmer calm safe okayish hopeful", 1);
   addEmo("sick", "sick ill fever flu covid headache migraine nauseous vomiting puking cough coughing sore injured " +
-    "hospital", 1.1);
+    "", 1.1);
+  addEmo("sad", "mid drama", 0.6);
   addEmo("love", "love loving crush adore", 0.6);
   const NEGATORS = new Set(["not", "no", "never", "nothing", "nobody", "noone", "hardly", "barely", "without", "nor", "neither"]);
   const INTENS = new Set(["so", "very", "really", "super", "extremely", "incredibly", "totally", "quite", "too", "sooo", "soo", "hella", "mega"]);
@@ -248,6 +249,8 @@
     if (/ (by myself|on my own|no one to|nobody to|(do not|don't|dont) (really |even )?have (anyone|anybody|any friends)|no friends|have nobody|have no one|nobody to talk to|sit alone|eat alone|(nobody|no one|noone) (listens|cares|does|understands|gets it|likes me|loves me|wants me|talks to me|plays with me|wants to play with me|sits with me|wants to be my friend)|no one (listens|cares|understands)|(does not|doesn't|doesnt|do not|don't|dont) (even )?listen) /.test(joined)) scores.lonely = (scores.lonely || 0) + 1.2;
     if (/ (feel|feels|feeling|felt|am|was|been|im) (so |a bit |a little |kind of |kinda |pretty |really )?blue( today| lately| again)? /.test(joined)) scores.sad = (scores.sad || 0) + 1;
     if (/ (was|is|are|were|being|been) (so |really |super |very )?mean( to me| to us)? | (laughed at|made fun of|picked on) (me|us) /.test(joined)) scores.sad = (scores.sad || 0) + 1;
+    if (/ (ignoring|ignores|ignored|ghosting|ghosted|left) me( on read)? | (won'?t|will not|doesn'?t|does not) (even )?(look at|talk to|text) me /.test(joined)) scores.lonely = (scores.lonely || 0) + 1;
+    if (/ (in|at|to) (the )?hospital /.test(joined) && !/ (work|works|working|shift|shifts|nurse|doctor|job) /.test(joined)) scores.sick = (scores.sick || 0) + 1.1;
     return finishEmotion(scores);
   }
   function finishEmotion(scores) {

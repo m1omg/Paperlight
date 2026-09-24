@@ -109,7 +109,7 @@
       if (looksLikeName(r[1], raw, true) && r[1] !== "not") facts.push({ type: "name", value: properCase(r[1]) });
     } else if ((r = /^\s*(?:i am|im|it is|its|this is|hi i am|hello i am|hey i am|hi im|hey im|hello im)\s+([a-z][a-z'-]*)\s*[.!]?\s*$/.exec(m.plain)) && looksLikeName(r[1], raw, expectingName)) {
       facts.push({ type: "name", value: properCase(r[1]) });
-    } else if ((r = /\b(?:hi+|hello+|hey+|heyy+|hii+|yo)[!,.]*\s+(?:i am|im)\s+([a-z][a-z'-]*)\b/.exec(t)) && looksLikeName(r[1], raw, true) && !NOT_NAME.has(r[1])) {
+    } else if ((r = /\b(?:hi+|hello+|hey+|heyy+|hii+|yo)(?: [a-z]+)?[!,.]*\s+(?:i am|im)\s+([a-z][a-z'-]*)\b/.exec(t)) && looksLikeName(r[1], raw, !mem.name) && !NOT_NAME.has(r[1]) && !(mem.name && P.nlp.knownWord(r[1]))) {
       facts.push({ type: "name", value: properCase(r[1]) });
     } else if ((r = /^\s*(?:no+|nope|noo+)[!,. ]+(?:i am|im|my name is|it is|its)\s+([a-z][a-z'-]*)\b/.exec(t)) && looksLikeName(r[1], raw, true) && !NOT_NAME.has(r[1])) {
       facts.push({ type: "name", value: properCase(r[1]) });   // "NOOO im lily!! peanut is my HAMSTER"
@@ -118,7 +118,9 @@
       if (r[2]) facts.push({ type: "age", value: +r[2] });
     } else if ((r = /\b(?:hi|hello|hey),?\s+(?:i am|im)\s+([a-z][a-z'-]*)\b/.exec(t)) && looksLikeName(r[1], raw, expectingName)) {
       facts.push({ type: "name", value: properCase(r[1]) });
-    } else if ((r = /(?:^|[.!?]\s+)(?:i'?m|i am|im|my name is|it'?s|this is)\s+([A-Za-z][a-z'-]{1,20})\s*[.!]+(?=\s|$)/i.exec(raw)) && looksLikeName(r[1], raw, true) && !NOT_NAME.has(r[1].toLowerCase()) && !JOBS.has(r[1].toLowerCase()) &&
+    } else if ((r = /(?:^|[.!?,]\s+)(?:i'?m|i am|im|my name is|it'?s|this is)\s+([A-Za-z][a-z'-]{1,20})\s*[.!]+(?=\s|$)/i.exec(raw)) && looksLikeName(r[1], raw, true) &&
+        // "I'm exhausted." is a feeling: once Pip knows a name, a new one must look like a name (capitalized, not a word)
+        !(P.nlp.knownWord(r[1].toLowerCase()) && (mem.name || !/^[A-Z]/.test(r[1]))) && !NOT_NAME.has(r[1].toLowerCase()) && !JOBS.has(r[1].toLowerCase()) &&
         (!/^(it'?s|this is)$/i.test(/(?:i'?m|i am|im|my name is|it'?s|this is)(?=\s+[A-Za-z])/i.exec(r[0])[0]) || expectingName || /\bname\b/.test(t) || (mem.name && mem.name.toLowerCase() === r[1].toLowerCase()))) {
       facts.push({ type: "name", value: properCase(r[1].toLowerCase()) });   // "Good afternoon, Pip. I'm Margaret. I used to be a teacher."
     } else if ((r = /^\s*(?:(?:hi|hey|hello|yo|ok|so)\s+)?([a-z][a-z'-]{1,20}) here\b/.exec(m.plain)) && !/^(its|it|me|im|i|we|you|nobody|someone|everyone|not)$/.test(r[1]) && looksLikeName(r[1], raw, false)) {
@@ -145,7 +147,7 @@
       if (!NOT_NAME.has(cand) && !P.nlp.STOP.has(cand) && plausibleName(cand) && looksLikeName(cand, raw, !P.nlp.knownWord(cand))) facts.push({ type: "name", value: properCase(cand) });
     }
     // age
-    if ((r = /\bi am (\d{1,3})(?: years? old| yrs? old| yo| y\/o)?\s*(?:$|[.!,;]| and| but| now| today| lol| [a-z]+ [a-z]+)/.exec(t)) || (r = /\b(\d{1,2}) (?:years? old|yrs? old|yo)\b/.exec(t)) || (r = /\bi am (\d{1,3}) years? old\b/.exec(t)) ||
+    if ((r = /\bi am (\d{1,3})(?: years? old| yrs? old| yo| y\/o)?\s*(?:$|[.!,;]| and| but| now| today| lol| [a-z]+ [a-z]+)/.exec(t)) || ((r = /\b(\d{1,2}) (?:years? old|yrs? old|yo)\b/.exec(t)) && !/\b(he|she|they|it|his|her|son|daughter|kid|kids|brother|sister|dog|cat|grandson|granddaughter|child|baby|cousin|friend)( is| are|'s| s)? (\w+ )?\d{1,2} (years?|yrs?)/.test(t)) || (r = /\bi am (\d{1,3}) years? old\b/.exec(t)) ||
       (r = /\bmy age is (\d{1,3})\b/.exec(t)) || (r = /\bi (?:just )?turned (\d{1,3})\b/.exec(t)) || (expect && (expect.kind === "age" || (expect.q && /how old are you/i.test(expect.q))) && (r = /^\s*(?:i am |im )?(\d{1,3})\b/.exec(m.plain))) ||
       (mem._askedAge && (r = /^\s*(?:i am |im |i'm )?(\d{1,2})(?: years old| yo)?\s*[.!]*$/.exec(m.plain)))) {
       const a = parseInt(r[1], 10);
@@ -275,7 +277,7 @@
     // job / school
     if ((r = /\bi (?:am|work as) (?:a|an) ([a-z]+(?: [a-z]+)?)\b/.exec(t)) || (r = /(?:^|[,;] ?|\band )(?:i'?m |i am |im )?(?:a |an )?((?:(?:software|web|game|senior|junior|high school|high-school|primary school|primary-school|elementary school|elementary-school|middle school|retired|former|school|head|art|music|maths|math|science|english) )*(?:developer|engineer|programmer|teacher|nurse|doctor|designer|student|lawyer|accountant|chef|mechanic|electrician|artist|writer|musician|scientist|manager|firefighter|pilot|headteacher|librarian|midwife|dentist|vet|farmer|police officer|secretary|cleaner|driver|builder|plumber|carpenter|pharmacist))\b(?=\s*(?:$|[,.;!]|and\b))/.exec(m.clean.toLowerCase()))) {
       const words = r[1].split(" ");
-      const job = JOBS.has(r[1]) ? r[1] : JOBS.has(words[words.length - 1]) ? r[1] : JOBS.has(words[0]) && words.length === 1 ? words[0] : null;
+      const job = JOBS.has(r[1]) ? r[1] : JOBS.has(words[words.length - 1]) ? r[1] : JOBS.has(words[0]) ? words[0] : null;
       if (job) facts.push({ type: "job", value: job });
     }
     if ((r = /\bi am in (\d{1,2})(?:st|nd|rd|th)? grade\b/.exec(t)) || (r = /\bi am in (year \d{1,2}|high school|middle school|elementary school|primary school|college|university|uni|kindergarten)\b/.exec(t)) || (r = /\bi (?:go to|attend) (high school|middle school|elementary school|college|university|uni|school)\b/.exec(t))) {
@@ -399,7 +401,7 @@
         break;
       }
       case "person": mem.people[f.rel] = f.name; break;
-      case "job": mem.job = f.value; break;
+      case "job": f.same = mem.job === f.value; mem.job = f.value; break;
       case "school": mem.school = f.value; break;
       case "event": {
         // the same event mentioned again (with a new day) replaces the old one ("big game" and "game" are the same)
