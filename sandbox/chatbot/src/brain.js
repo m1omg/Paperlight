@@ -532,7 +532,7 @@
       const add = (x) => {
         if (!x || !x.text) return;
         cands.push(x);
-        const extra = x.sim !== undefined ? ` (sim ${x.sim.toFixed(2)}${x.kw ? " kw " + x.kw.toFixed(2) : ""}${x.ll !== undefined ? " ll " + x.ll.toFixed(2) : ""}${x.lex ? " lex " + x.lex.toFixed(2) : ""})` : "";
+        const extra = x.sim !== undefined ? ` (sim ${x.sim.toFixed(2)}${x.kw ? " kw " + x.kw.toFixed(2) : ""}${x.ll !== undefined ? " ll " + x.ll.toFixed(2) : ""}${x.pmi !== undefined ? " pmi " + x.pmi.toFixed(2) : ""}${x.lex ? " lex " + x.lex.toFixed(2) : ""})` : "";
         trace.push({ source: x.source, score: +(x.score || 0).toFixed(3), text: x.text, detail: extra });
       };
 
@@ -541,9 +541,12 @@
       const it = this._intent(m, c); if (it) add(it);
       const fe = this._feelings(m); if (fe) add(fe);
       const ch = S.choose(m, C.persona); if (ch) add({ text: ch, source: "skill:choose", score: 0.75 });
+      // dictionary definitions (WordNet)
+      const def = S.define(m);
+      if (def) add({ text: def, source: "skill:dictionary", score: 0.8 });
       // "what is a quokka?" / "who is Taylor Swift?": be honest instead of letting retrieval guess
       const wq = /^(what(?:'s| is| are)|whats|who(?:'s| is| are)|whos|define|what does)\s+(?:a |an |the )?([a-z0-9][a-z0-9 '-]{1,40}?)(?: mean| means)?\??$/i.exec(m.plain.replace(/[?!.]+$/, ""));
-      if (wq && !/\b(you|your|yours|my|me|i|it|that|this|up|going on|new|wrong|happening|the matter|that about|love)\b/.test(wq[2])) {
+      if (!def && wq && !/\b(you|your|yours|my|me|i|it|that|this|up|going on|new|wrong|happening|the matter|that about|love)\b/.test(wq[2])) {
         const who = /^who/i.test(wq[1]);
         const rawHit = new RegExp(wq[2].replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").exec(m.clean);
         const thing = who ? U.titleCase(wq[2].trim()) : rawHit ? rawHit[0] : wq[2].trim();
@@ -566,11 +569,11 @@
         const r = re.exec(m.plain.replace(/[.!]+$/, ""));
         if (r) {
           const parts = r.slice(1).map((x) => reflect(x || "").replace(/[?.!]+$/, ""));
-          add({ text: U.fill(pick(outs).replace(/\{(\d)\}/g, "{a$1}"), { a1: parts[0], a2: parts[1] }), source: "eliza", score: 0.55 });
+          add({ text: U.fill(pick(outs).replace(/\{(\d)\}/g, "{a$1}"), { a1: parts[0], a2: parts[1] }), source: "eliza", score: 0.52 });
           break;
         }
       }
-      if (!cands.some((x) => x.score >= 0.55)) add(this._react(m, venting));
+      if (!cands.some((x) => x.score >= 0.52)) add(this._react(m, venting));
       if (!cands.length || cands.every((x) => x.score < 0.3)) add(this._fallback(m, venting));
 
       // choose: best score, penalize repeats
@@ -593,10 +596,10 @@
     // short, safe reactions picked by the mood of the message (the neural replies have to beat these)
     _react(m, venting) {
       const v = m.emotion.valence;
-      if (m.isQuestion) return { text: pick(["Hmm, good question! What do you think? 🤔", "Ooh, I'm not sure! What's your take?", "That's a tricky one! What made you think of it?"]), source: "react:question", score: 0.5 };
-      if (venting || v < -0.3) return { text: pick(["Oh no, that sounds rough. 😟 What happened?", "That sounds hard. I'm here if you want to talk about it. 💙", "I'm sorry. 💙 How are you feeling about it?", "Ugh, that's no fun. Do you want to tell me more?"]), source: "react:negative", score: 0.52, expect: { kind: "vent" } };
-      if (v > 0.3) return { text: pick(["That's awesome! 😄 Tell me more!", "Nice! How did that feel?", "Ooh, that sounds fun! 😊", "Love that! What happened next?"]), source: "react:positive", score: 0.5 };
-      return { text: pick(["Interesting! Tell me more? 😊", "Oh really? What happened?", "Mhm! How do you feel about that?", "Ooh, go on! 👂"]), source: "react:neutral", score: 0.48 };
+      if (m.isQuestion) return { text: pick(["Hmm, good question! What do you think? 🤔", "Ooh, I'm not sure! What's your take?", "That's a tricky one! What made you think of it?"]), source: "react:question", score: 0.47 };
+      if (venting || v < -0.3) return { text: pick(["Oh no, that sounds rough. 😟 What happened?", "That sounds hard. I'm here if you want to talk about it. 💙", "I'm sorry. 💙 How are you feeling about it?", "Ugh, that's no fun. Do you want to tell me more?"]), source: "react:negative", score: 0.48, expect: { kind: "vent" } };
+      if (v > 0.3) return { text: pick(["That's awesome! 😄 Tell me more!", "Nice! How did that feel?", "Ooh, that sounds fun! 😊", "Love that! What happened next?"]), source: "react:positive", score: 0.46 };
+      return { text: pick(["Interesting! Tell me more? 😊", "Oh really? What happened?", "Mhm! How do you feel about that?", "Ooh, go on! 👂"]), source: "react:neutral", score: 0.45 };
     }
 
     _fallback(m, venting) {

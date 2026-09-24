@@ -328,6 +328,34 @@
     return FAQ[hit.payload][1];
   }
 
+  // ---------- dictionary (WordNet definitions, loaded in the background) ----------
+  let dictMap = null;
+  function lookup(word) {
+    const blob = P.data && P.data.dictionary;
+    if (!blob) return null;
+    if (!dictMap) { dictMap = new Map(); for (const line of blob.split("\n")) { const i = line.indexOf("\t"); dictMap.set(line.slice(0, i), line.slice(i + 1)); } }
+    const w = word.toLowerCase().trim();
+    for (const c of [w, w.replace(/ies$/, "y"), w.replace(/es$/, ""), w.replace(/s$/, ""), w.replace(/^the /, "")]) {
+      const e = dictMap.get(c);
+      if (e) { const i = e.indexOf("\t"); return { word: c, pos: e.slice(0, i), def: e.slice(i + 1) }; }
+    }
+    return null;
+  }
+  function define(m) {
+    const t = m.plain.replace(/[?!.]+$/, "").trim();
+    const r = /^(?:(what(?:'s| is| are| was| were)|whats|who(?:'s| is| was| are)|whos|define|definition of|meaning of|what(?:'s| is) the meaning of|what does|what do)\s+)(?:a |an |the |some )?([a-z][a-z '-]{1,30}?)(?:\s+mean| means)?$/.exec(t);
+    if (!r || /\b(you|your|yours|my|me|i|it|that|this|up|going on|new|wrong|happening|the matter|next|there|here|they|he|she|we|u|ur)\b/.test(r[2])) return null;
+    const e = lookup(r[2]);
+    if (!e) return null;
+    const W = U.capitalizeFirst(/^who/.test(r[1]) ? U.titleCase(e.word) : e.word);
+    let text;
+    if (e.pos === "v") text = `To ${e.word} means to ${e.def}.`;
+    else if (e.pos === "a" || e.pos === "r") text = `${W} means ${e.def}.`;
+    else if (/^(a|an|the|any|one) /.test(e.def) && !/^who/.test(r[1])) text = `${U.capitalizeFirst(U.aOrAn(e.word))} ${e.word} is ${e.def}.`;
+    else text = pick([`📖 ${W}: ${e.def}.`, `My dictionary says ${W} is: ${e.def}.`]);
+    return text.replace(/\.\.$/, ".");
+  }
+
   // ---------- word tools ----------
   function wordTools(m) {
     const t = m.plain, raw = m.clean;
@@ -378,5 +406,5 @@
     return pick([`I'd go with ${ch}! 😄`, `Hmm... ${ch}! Final answer.`, `${U.capitalizeFirst(ch)}, definitely.`, `My pick: ${ch}! But what do you think?`]);
   }
 
-  P.skills = { capitalsList: CAP, start, gameTurn, askQuestion, daysUntil, capital, faq, wordTools, choose, deal, timeText, dateText };
+  P.skills = { capitalsList: CAP, define, lookup, start, gameTurn, askQuestion, daysUntil, capital, faq, wordTools, choose, deal, timeText, dateText };
 })(typeof window !== "undefined" ? (window.Pip = window.Pip || {}) : (global.Pip = global.Pip || {}));

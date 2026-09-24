@@ -1,7 +1,7 @@
 /* Node loader: pulls every Pip module into one object (the browser uses <script> tags instead). */
 "use strict";
 const path = require("path"), fs = require("fs");
-const FILES = ["src/util.js", "data/words.js", "src/nlp.js", "src/mathcalc.js", "src/mcdata.js", "src/minecraft.js", "src/memory.js",
+const FILES = ["src/util.js", "data/words.js", "data/dictionary.js", "src/nlp.js", "src/mathcalc.js", "src/mcdata.js", "src/minecraft.js", "src/memory.js",
   "src/content.js", "src/skills.js", "src/wasm.js", "src/neural.js", "src/brain.js"];
 const root = path.join(__dirname, "..");
 for (const f of FILES) { const p = path.join(root, f); if (fs.existsSync(p)) require(p); }

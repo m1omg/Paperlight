@@ -11,6 +11,7 @@
     "beehive honey bottle apple egg milk wheat sand stone log stick chain wood planks string leather feather flint coal " +
     "clay brick iron gold diamond emerald copper cow pig sheep chicken horse cat wolf dog fox parrot bee panda goat frog " +
     "squid dolphin turtle camel villager witch zombie skeleton spider slime phantom bat golden apple gold apple " +
+    "axolotl armadillo polar bear llama ocelot rabbit bunny horse donkey mule " +
     "concrete button lever target hopper rail minecart cart item frame frame flower pot pot note block jukebox bell " +
     "snowman snow block hay bale melon pumpkin pie mushroom stew rabbit stew beetroot soup rocket fireworks firework " +
     "rope window pail scissors lighter watch telescope binoculars oven workbench dynamite hat cap shoes pants boots " +
@@ -321,8 +322,10 @@
     const generic = GENERIC.has(mt.phrase) || GENERIC.has(sing(mt.phrase));
     const inContext = mcWords || recentMC;
     if (generic && !inContext) {
-      // "how do I make a cake?" could be real life. Answer the Minecraft way only for recipe-ish questions, flagged.
-      if (!(want === "recipe" && h.kind === "item")) return null;
+      // "how do I make a cake?" could be real life. Answer the Minecraft way only for recipe-ish questions, flagged,
+      // or for verbs that only make sense in the game ("tame an axolotl", "brew", "enchant", "y level").
+      const gameVerb = /^(tame|brew|enchant|ylevel|drops|health)$/.test(want || "");
+      if (!(want === "recipe" && h.kind === "item") && !gameVerb) return null;
       if (guide) return null;
     }
     if (guide && want !== "recipe" && (h.kind !== "item" || want === "obtain" || want === "info") && guide.q.some((q) => q.includes(mt.phrase))) {

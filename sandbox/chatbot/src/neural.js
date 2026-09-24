@@ -459,7 +459,7 @@
   }
 
   // things a from-scratch AI friend must not claim (port of the filter used to build the reply bank)
-  const PERSONA = /\b(my (wife|husband|girlfriend|boyfriend|son|daughter|kids?|children|mom|mum|mother|dad|father|parents|brothers?|sisters?|job|boss|co-?workers?|grand\w+|aunt|uncle|cousins?|baby|car|truck|house|apartment|dog|dogs|cat|cats|pets?|puppy|teacher|class|school|college|university|degree|fianc\w*|church|roommate|body|legs?|arms?|stomach|doctor|office|room|bed|phone|hometown|town|city|country|favorite \w+ (is|are))|i('m| am) (a |an )?(\d+|teacher|nurse|doctor|student|mom|dad|mother|father|lawyer|chef|waitress|waiter|cashier|farmer|vegan|vegetarian|married|single|divorced|pregnant|retired|christian|muslim|jewish|atheist|engaged|parent|writer|artist|musician|singer|engineer|programmer|in (school|college|high school|the army)|from|at work|home|on my way|driving|allergic|human|a (boy|girl|man|woman|guy|lady))|i (work|worked|live|lived|study|studied|teach|taught|drive|drove|grew up|was born|go to (school|college|church|work)|moved|graduated|retired|married|divorced|broke up|just got back|went to|visited|bought|ate|cooked|slept|woke up)\b|i (have|had|got) (a |an |two |three |four |\d+ )?(kids?|children|sons?|daughters?|dogs?|cats?|brothers?|sisters?|husband|wife|boyfriend|girlfriend|job|car|house|pets?|horses?|siblings?|baby)|years? old|my name|call me|when i was (a kid|a child|young|little|younger|in|\d+)|(last|this) (week|night|year|month|weekend|morning)|yesterday|<\|me\|>)/i;
+  const PERSONA = /\b(my (wife|husband|girlfriend|boyfriend|son|daughter|kids?|children|mom|mum|mother|dad|father|parents|brothers?|sisters?|job|boss|co-?workers?|grand\w+|aunt|uncle|cousins?|baby|car|truck|house|apartment|dog|dogs|cat|cats|pets?|puppy|teacher|class|school|college|university|degree|fianc\w*|church|roommate|body|legs?|arms?|stomach|doctor|office|room|bed|phone|hometown|town|city|country|favorite \w+ (is|are))|i('m| am) (a |an )?(\d+|teacher|nurse|doctor|student|mom|dad|mother|father|lawyer|chef|waitress|waiter|cashier|farmer|vegan|vegetarian|married|single|divorced|pregnant|retired|christian|muslim|jewish|atheist|engaged|parent|writer|artist|musician|singer|engineer|programmer|in (school|college|high school|the army)|from|at work|home|on my way|driving|allergic|human|a (boy|girl|man|woman|guy|lady))|i (work|worked|live|lived|study|studied|teach|taught|drive|drove|grew up|was born|go to (school|college|church|work)|moved|graduated|retired|married|divorced|broke up|just got back|went to|visited|bought|ate|cooked|slept|woke up)\b|i('ve| have|ve| had| got) (a |an |two |three |four |\d+ )?(kids?|children|sons?|daughters?|dogs?|cats?|brothers?|sisters?|husband|wife|boyfriend|girlfriend|job|car|house|pets?|horses?|siblings?|baby)|i('ve| have) been (working|living|married|studying|going)|years? old|my name|call me|when i was (a kid|a child|young|little|younger|in|\d+)|(last|this) (week|night|year|month|weekend|morning)|yesterday|<\|me\|>)/i;
   const BAD = /\b(fuck\w*|shit\w*|bitch\w*|cunt|nigg\w*|fag\w*|retard\w*|slut\w*|whore\w*|dick\w*|cock\w*|pussy|porn\w*|rape\w*|sex\w*|nazi\w*|kill (yourself|you)|kys|die)\b/i;
 
   // ---------- the neural chat engine ----------
@@ -468,7 +468,8 @@
       this.data = data;
       this.ready = false;
       // how candidate replies are scored (see respond); tuned on test/sample_chat.txt
-      this.weights = { base: 0.36, sim: 0.55, simRef: 0.55, kw: 0.32, ll: 0.05, llRef: -3.2, pmi: 0, gpt: -0.01 };
+      // pmi = log P(reply | conversation) - lambda * log P(reply | "ok"): rewards replies that fit THIS conversation
+      this.weights = { base: 0.36, sim: 0.55, simRef: 0.55, kw: 0.36, ll: 0, llRef: -3.2, pmi: 0.05, lambda: 0.6, pmiRef: -1.0, gpt: -0.01 };
     }
     async init() {
       const d = this.data;
@@ -618,6 +619,7 @@
       const ctxWords = this._contentWords(ctxAll);
       const userSide = history.filter((h) => h.role === "user").slice(-1).map((h) => h.text).join(" ") + " " + userText;
       const ctx3rd = /\b(he|she|him|her|his|hers|mom|mum|dad|mother|father|brother|sister|friend|teacher|boss|girlfriend|boyfriend|wife|husband|cat|dog|coach|grandma|grandpa|son|daughter|baby|uncle|aunt|cousin|neighbou?r)\b/i.test(userSide);
+      const userVal = P.nlp.emotion(P.nlp.words(P.nlp.normalize(userText, { spell: false }))).valence;
       const userAsked = /\?\s*$/.test(userText) || /^(do|does|did|are|is|was|were|can|could|will|would|should|have|has)\b/i.test(userText.trim());
       const cands = [];
       // 1) retrieval from the bank of human-written replies
@@ -656,20 +658,27 @@
         const conts = cands.map((c) => this.tok.encode(" " + this._fmt(c.text, "bot", names).trim()).slice(0, 40));
         const ll = await this.gpt.scoreContinuations(prompt, conts, sp["<|a|>"], yieldFn);
         const llg = W.pmi ? await this.gpt.scoreContinuations(this.tok.encode("<|a|> ok<|b|>"), conts, sp["<|a|>"], yieldFn) : null;
-        cands.forEach((c, i) => { c.ll = ll[i]; if (llg) c.pmi = ll[i] - llg[i]; });
+        cands.forEach((c, i) => { c.ll = ll[i]; if (llg) c.pmi = ll[i] - W.lambda * llg[i]; });
       }
       for (const c of cands) {
         const words = this._contentWords(c.text);
         let novel = 0, shared = 0;
         for (const w of words) { if (ctxWords.has(w)) shared++; else if (this._specific(w)) novel++; }
         const n = c.text.split(/\s+/).length;
-        c.lex = 0.025 * Math.min(shared, 2) - 0.04 * Math.min(novel, 3) + (n < 3 ? -0.03 : n > 24 ? -0.03 : 0);
+        c.lex = 0.025 * Math.min(shared, 2) - 0.06 * Math.min(novel, 3) + (n < 3 ? -0.03 : n > 24 ? -0.03 : 0);
         // "I hope he does!" when nobody mentioned a "he"
         if (!ctx3rd && /\b(he|she|him|her|his|hers)\b/i.test(c.text)) c.lex -= 0.08;
+        // mood must match: no "that's great!" to a bad day, no "that's so sad" to pancakes
+        const cv = P.nlp.emotion(P.nlp.words(P.nlp.normalize(c.text, { spell: false }))).valence;
+        if (userVal <= -0.5 && cv >= 0.5) c.lex -= 0.14;
+        else if (userVal >= 0.3 && cv <= -0.5) c.lex -= 0.14;
+        else if (userVal > -0.3 && cv <= -0.8 && !opts.venting) c.lex -= 0.06;
         // "Yes, I love it." as a reply to something that wasn't a question
         if (!userAsked && /^(yes|yeah|yep|no|nope|nah|sure|of course)\b/i.test(c.text)) c.lex -= 0.05;
-        c.score = W.base + W.sim * (c.sim - W.simRef) + W.kw * (c.kw || 0) + c.lex +
-          (c.ll !== undefined ? W.ll * U.clamp(c.ll - W.llRef, -2.5, 2) : 0) + (c.pmi !== undefined ? W.pmi * U.clamp(c.pmi, -2, 3) : 0) +
+        // keyword matches only count fully when they cover most of what the user said
+        const kwEff = (c.kw || 0) >= 0.45 ? c.kw : (c.kw || 0) * 0.4;
+        c.score = W.base + W.sim * (c.sim - W.simRef) + W.kw * kwEff + c.lex +
+          (c.ll !== undefined ? W.ll * U.clamp(c.ll - W.llRef, -2.5, 2) : 0) + (c.pmi !== undefined ? W.pmi * U.clamp(c.pmi - W.pmiRef, -2.5, 2.5) : 0) +
           (opts.venting && c.src === "empathetic" ? 0.03 : 0) + (c.source === "neural:gpt" ? W.gpt : 0);
         out.push({ text: c.text, score: Math.min(c.score, 0.84), source: c.source === "neural:keyword" ? "neural:retrieval" : c.source, sim: c.sim, ll: c.ll, lex: c.lex, kw: c.kw, pmi: c.pmi });
       }

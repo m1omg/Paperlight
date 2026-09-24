@@ -347,7 +347,7 @@
     });
   }
   async function loadNeural() {
-    const files = ["data/tokenizer.js", "data/encoder.js", "data/bank.js", "data/bankctx.js", "data/gpt.js"];
+    const files = ["data/dictionary.js", "data/tokenizer.js", "data/encoder.js", "data/bank.js", "data/bankctx.js", "data/gpt.js"];
     let ok = true;
     for (const f of files) ok = (await loadScript(f)) && ok;
     try {
