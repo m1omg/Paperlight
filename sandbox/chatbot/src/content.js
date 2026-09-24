@@ -66,7 +66,7 @@
       re: /\b(good ?night|night night|nighty night|going to (sleep|bed)|off to (sleep|bed)|time for bed|gotta sleep|go to sleep now|heading to bed)\b/,
       say: (c) => pick([`Good night${comma(c)}! 🌙 Sleep well and sweet dreams.`, `Night night! Thanks for chatting with me today. See you tomorrow? 💤`, `Sleep tight${comma(c)}! Remember: no phantoms if you sleep 😄`, `Good night! I'll be right here when you wake up. 🌟`]) },
     { id: "bye", ex: ["bye", "goodbye", "see you", "see ya", "later", "gotta go", "i have to go", "talk to you later", "ttyl", "cya", "bye bye", "i am leaving", "i will be back", "see you tomorrow", "catch you later", "peace out", "farewell", "i got to go"],
-      re: /^(bye+|goodbye|good bye|see (you|ya)|cya|later|ttyl|gotta go|got to go|i have to go|i gotta go|bye bye|peace( out)?|farewell|adios|see you (later|soon|tomorrow))\b/,
+      re: /^(bye+|goodbye|good bye|see (you|ya)|cya|later|ttyl|gotta go|got to go|i have to go|i gotta go|bye bye|peace( out)?|farewell|adios|see you (later|soon|tomorrow))\b|\b(bye+|goodbye|bye bye|see (you|ya)( later| soon| tomorrow)?|cya|ttyl|gtg|g2g|later|peace out|gotta go|have to go now)( pip| now| for now| everyone)?[.! ]*$/,
       say: (c) => pick([`Bye${comma(c)}! 👋 Come back soon, okay?`, `See you later! It was nice talking to you.`, `Bye bye! I'll remember what we talked about. 😊`, `Take care${comma(c)}! I'll be here whenever you want to chat.`, `Catch you later! Have a great ${c.partOfDay}!`]) },
     { id: "brb", ex: ["brb", "be right back", "one sec", "wait a moment", "give me a minute", "hold on"], re: /^(brb|be right back|one sec(ond)?|hold on|wait a (sec|second|minute|moment)|give me a (sec|second|minute))\b/,
       say: ["Sure, take your time! I'll wait right here. ⏳", "Okay! I'll be here.", "No problem, I'm not going anywhere 😄"] },
@@ -235,7 +235,7 @@
       re: /\b(meaning|purpose|point) of (life|existence|everything)\b/,
       say: ["42! 😄 (According to The Hitchhiker's Guide to the Galaxy.) For real though, I think it's about the people you care about and the things that make you curious.", "Big question! My guess: be kind, learn things, build cool stuff, and hang out with people you love. And maybe beat the Ender Dragon."] },
     { id: "ai_takeover", ex: ["will ai take over the world", "are you going to kill us", "skynet", "will robots take over", "are you evil", "robot uprising"],
-      re: /\b(ai|robots?|machines?|you) (will |going to |gonna )?(take over|rule|destroy|kill|enslave)\b|\bskynet\b|\brobot uprising\b|\b(are|r) (you|u) evil\b/,
+      re: /\b(ais?|robots?|machines?|computers?) (will |going to |gonna |are going to )?(take over|rule|destroy|kill|enslave)\b|\b(will|would|are|are you going to|gonna) (you|u) (going to |gonna )?(take over|destroy|enslave|kill) (us|humans|humanity|the world|everyone|people|me)\b|\bskynet\b|\brobot uprising\b|\b(are|r) (you|u) evil\b/,
       say: ["Take over the world? I can barely take over a crafting table! 😄 Don't worry, I'm on Team Humans.", "Nope! My biggest ambition is telling you a good pun. World domination sounds exhausting."] },
     { id: "secret", ex: ["tell me a secret", "do you have a secret", "tell me something secret"], re: /\b(tell me a|have a|know any|your) secrets?\b/,
       say: ["Okay, here's a secret: sometimes I get creepers and zombies mixed up because they're both green. Don't tell anyone! 🤫", "Secret: I've never actually played Minecraft. I just know everything about it. Shh! 🤫", "Here's one: I get really happy when someone says good morning to me. 🤫"] },
@@ -289,6 +289,9 @@
       say: ["I don't have internet access, so I can't read the news. But I'd love to hear what's new with you!"] },
     { id: "search", ex: ["google something", "search the internet", "look it up", "can you search", "browse the web"], re: /\b(google|search (the )?(internet|web|online)|look (it|that) up|browse the web)\b/,
       say: ["I can't go online, everything I know lives inside me. But ask me anyway and I'll try my best!"] },
+    { id: "spell_quiz", ex: ["quiz me on spelling", "spelling quiz", "can you test my spelling", "help me practice spelling", "spelling game"],
+      re: /\b(quiz|test|practice|practise|help) (me )?(on |with |my )?(spelling|spellings|spelling words)\b|\bspelling (quiz|test|game|practice|bee)\b|\bpractice (my )?spelling\b/,
+      say: (c) => c.skill("spell") },
     { id: "joke", ex: ["tell me a joke", "make me laugh", "say something funny", "joke please", "another joke", "know any jokes", "tell me a pun", "do you know any jokes", "one more joke", "i want a joke", "jokes"], re: /\b(tell|know|got|have|say|hear|give|gimme|want|need) (me |us )?(a |any |another |some |one more |more |ur |your |a few )?(good |funny |dad |bad |minecraft |math |science |[a-z]+ )?(jokes?|puns?)\b|\bmake me laugh\b|\bsay something funny\b|^(jokes?|another( one)?|one more)[.!?]*$|^(yes |yeah |ok |okay |sure |pls |please )?(a |another |one more |some )?(minecraft |mc |funny |good |dad |short )?jokes?( please| pls)?[.!?]*$/,
       say: (c) => {
         const t = c.m.plain;

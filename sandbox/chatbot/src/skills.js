@@ -45,6 +45,14 @@
         st.game = g;
         return { text: (g.asked ? "" : "Trivia time! 🧠 ") + q[0], chips: ["I don't know", "Stop"] };
       }
+      case "spell": {
+        const g = st.game && st.game.type === "spell" ? st.game : { type: "spell", score: 0, asked: 0 };
+        const w = deal(st, "spell", SPELL);
+        const opts = U.shuffle(w.slice());
+        Object.assign(g, { w, opts, idle: 0 });
+        st.game = g;
+        return { text: `${g.asked ? "" : "Spelling quiz! ✏️ "}Which one is spelled right? A) ${opts[0]}  B) ${opts[1]}  C) ${opts[2]}`, chips: opts.concat(["Stop"]) };
+      }
       case "rps": st.game = { type: "rps", you: 0, me: 0, idle: 0 }; return { text: "Rock, paper, scissors! ✊✋✌️ Make your move!", chips: ["Rock", "Paper", "Scissors"] };
       case "guess": {
         st.game = { type: "guess", target: 1 + Math.floor(U.rand() * 100), tries: 0, idle: 0 };
@@ -103,7 +111,7 @@
     const t = m.norm;
     if (QUIT.test(t) && m.tokens.length <= 6) {
       st.game = null;
-      if (g.type === "trivia" && g.asked) return { text: `Game over! You got ${g.score} out of ${g.asked}. ${g.score >= g.asked * 0.7 ? "Impressive! 🏆" : "Nice try! 😊"}` };
+      if ((g.type === "trivia" || g.type === "spell") && g.asked) return { text: `Game over! You got ${g.score} out of ${g.asked}. ${g.score >= g.asked * 0.7 ? "Impressive! 🏆" : "Nice try! 😊"}` };
       if (g.type === "rps" && g.you + g.me) return { text: `Good game! Final score: you ${g.you}, me ${g.me}. ${g.you > g.me ? "You win! 🏆" : g.you < g.me ? "I win this time! 😄" : "It's a tie!"}` };
       if (g.type === "guess") return { text: `Okay! My number was ${g.target}. 😄` };
       if (g.type === "riddle") return { text: `No problem! The answer was: ${g.r[2]}` };
@@ -132,6 +140,25 @@
         if (g.asked >= 5) { st.game = null; return { text: `${verdict} That's 5 questions: you got ${g.score}/5! ${g.score >= 4 ? "Trivia champion! 🏆" : g.score >= 2 ? "Nice job! 😊" : "You'll get them next time! 💪"} Play again?`, expect: { kind: "yesno", yes: "trivia" } }; }
         const nx = start("trivia", c);
         return { text: `${verdict} (Score: ${g.score}/${g.asked}) Next question: ${nx.text}`, chips: nx.chips };
+      }
+      case "spell": {
+        const low = m.clean.toLowerCase().replace(/[^a-z ]/g, " ").trim();
+        let pickd = null;
+        const letter = /^(?:option |answer |it'?s |its |i think )?([abc])\b/.exec(low);
+        if (letter && low.split(/\s+/).length <= 3) pickd = g.opts["abc".indexOf(letter[1])];
+        else pickd = g.opts.find((o) => low.split(/\s+/).includes(o.toLowerCase()));
+        if (!pickd) {
+          if (/\b(i do not know|idk|no idea|not sure|dunno|skip|pass)\b/.test(t)) pickd = "?";
+          else return idle(g, st);
+        }
+        g.asked++;
+        const right = pickd === g.w[0];
+        if (right) g.score++;
+        const verdict = right ? pick(["Correct! ✅", "Yes! Perfect spelling! 🎉", "That's right! ✏️"]) : `Not quite: it's spelled ${g.w[0].toUpperCase().split("").join("-")}.`;
+        const tip = SPELL_TIPS[g.w[0]] ? " " + SPELL_TIPS[g.w[0]] : "";
+        if (g.asked >= 5) { st.game = null; return { text: `${verdict}${tip} That's 5 words: you got ${g.score}/5! ${g.score >= 4 ? "Spelling champion! 🏆" : "Nice practice! 💪"} Again?`, expect: { kind: "yesno", yes: "spell" } }; }
+        const nx = start("spell", c);
+        return { text: `${verdict}${tip} (Score: ${g.score}/${g.asked}) Next: ${nx.text}`, chips: nx.chips };
       }
       case "rps": {
         const mv = /\b(rock|stone|fist)\b/.test(t) ? "rock" : /\b(paper|sheet)\b/.test(t) ? "paper" : /\b(scissors?|scissor|sissors|shears)\b/.test(t) ? "scissors" : null;
@@ -172,6 +199,19 @@
     }
     return null;
   }
+  // [correct spelling, two common misspellings]
+  const SPELL = [["necessary", "neccessary", "necesary"], ["because", "becuase", "becouse"], ["separate", "seperate", "separete"], ["definitely", "definately", "definatly"],
+    ["friend", "freind", "frend"], ["receive", "recieve", "receve"], ["believe", "beleive", "belive"], ["beautiful", "beutiful", "beautifull"], ["different", "diffrent", "diferent"],
+    ["tomorrow", "tommorow", "tomorow"], ["Wednesday", "Wensday", "Wednsday"], ["February", "Febuary", "Feburary"], ["library", "libary", "liberry"], ["probably", "probly", "probaly"],
+    ["surprise", "suprise", "surprize"], ["weird", "wierd", "werid"], ["science", "sience", "scince"], ["favorite", "favrite", "favorit"], ["calendar", "calender", "calandar"],
+    ["restaurant", "restaraunt", "resturant"], ["environment", "enviroment", "envirnoment"], ["immediately", "immediatly", "imediately"], ["rhythm", "rythm", "rhythem"],
+    ["embarrass", "embarass", "embarras"], ["until", "untill", "untl"], ["answer", "anser", "awnser"], ["piece", "peice", "pice"], ["address", "adress", "addres"],
+    ["always", "allways", "alwys"], ["island", "iland", "islend"], ["knowledge", "knowlege", "knowladge"], ["minute", "minite", "minut"], ["neighbor", "nieghbor", "naybor"],
+    ["people", "peple", "poeple"], ["question", "questoin", "qestion"], ["enough", "enuff", "enought"], ["guess", "gess", "guese"], ["tongue", "tounge", "tung"]];
+  const SPELL_TIPS = { necessary: "Tip: one Collar, two Sleeves (1 c, 2 s's)!", separate: "Tip: there's \"a rat\" in sep-a-rat-e!", believe: "Tip: never believe a lie!", friend: "Tip: a friend to the end!",
+    receive: "Tip: i before e, except after c!", because: "Tip: Big Elephants Can Always Understand Small Elephants!", definitely: "Tip: it has \"finite\" in the middle!", weird: "Weird is weird: it breaks the i-before-e rule!",
+    piece: "Tip: a piece of pie!", until: "Tip: until has just one l, even though till has two!", tomorrow: "Tip: one m, two r's!", embarrass: "Tip: two r's and two s's, because it's so embarrassing!" };
+
   function idle(g, st) { g.idle = (g.idle || 0) + 1; if (g.idle >= 2) st.game = null; return null; }
 
   // ---------- time & date ----------
@@ -520,11 +560,15 @@
 
   // "should I play minecraft or read?", "pizza or burgers?"
   function choose(m, persona) {
-    const raw = m.clean.replace(/[?!.]+$/, "");
-    const r = /^(?:(?:should i|do i|would you|which is better|what(?:'s| is) better|which one|pick one|choose|you choose|do you prefer|which do you prefer|what do you prefer|do you like|do you love|which do you like(?: more| better)?|what do you like(?: more| better)?|are you team|team)[:,]?\s+)?(.{1,40}?),? or (.{1,40}?)$/i.exec(raw);
-    if (!r || m.tokens.length > 14) return null;
+    // only the last sentence ("nah. do u like roblox or minecraft better" -> "do u like roblox or minecraft better")
+    let raw = m.clean.split(/(?<=[.!?])\s+/).pop().replace(/[?!.]+$/, "");
+    // "are you real or just code?" is about Pip, and numbers are compared by the calculator
+    if (/^(are|r) (you|u)\b/i.test(raw) || /\d/.test(raw) && /\b(bigger|smaller|larger|greater|less|more)\b/i.test(raw)) return null;
+    raw = raw.replace(/^(nah|no|yes|yeah|ok|okay|hmm|so|well|lol|haha)[,.]?\s+/i, "");
+    const r = /^(?:(?:should i|do i|would you|which is better|what(?:'s| is) better|which one|pick one|choose|you choose|do you prefer|do u prefer|which do you prefer|what do you prefer|do you like|do u like|do you love|which do you like(?: more| better)?|what do you like(?: more| better)?|are you team|team)[:,]?\s+)?(.{1,40}?),? or (.{1,40}?)(?:\s+(?:better|more|best))?$/i.exec(raw);
+    if (!r || m.tokens.length > 16) return null;
     let a = r[1].trim(), b = r[2].trim();
-    a = a.replace(/^(to |a |an |the |should i |i should )/i, ""); b = b.replace(/^(to |a |an |the |should i )/i, "");
+    a = a.replace(/^(to |a |an |the |should i |i should )/i, ""); b = b.replace(/^(to |a |an |the |should i )/i, "").replace(/\s+(better|more|best)$/i, "");
     if (!a || !b || a.toLowerCase() === b.toLowerCase() || /\b(not|no)$/i.test(b)) return null;
     // Pip's own taste first
     const liked = (x) => persona.likes.some((l) => x.toLowerCase().includes(l));

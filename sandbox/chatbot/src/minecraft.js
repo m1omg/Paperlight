@@ -247,6 +247,7 @@
       /\b(brew|brewing|potion|potions)\b/.test(text) ? "brew" :
       /\benchant(ment|ments|ing)?s?\b/.test(text) && !/\benchant(ing|ment)? table\b/.test(text) ? "enchant" :
       /\b(tame|taming|breed|breeding|ride|riding)\b/.test(text) ? "tame" :
+      /\bwhat (does|do|did|will|would) .{1,30}\b(drop|drops)\b/.test(text) ? "drops" :
       /\b(kill|beat|defeat|fight|fighting|survive|deal with|avoid)\b/.test(text) ? "kill" :
       /\b(health|hp|how many hearts|how strong)\b/.test(text) ? "health" :
       /\b(drop|drops|loot)\b/.test(text) ? "drops" :

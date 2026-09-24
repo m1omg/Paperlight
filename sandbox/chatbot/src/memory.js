@@ -53,12 +53,15 @@
     ice: "ice cream flavor", "ice cream": "ice cream flavor", "ice cream flavor": "ice cream flavor", thing: "thing", person: "person" };
 
   function cleanValue(v) {
+    v = v.replace(/\s+\b(what|wdym|bye|lol|lmao|haha|btw|anyway|idk|ok|okay|you know|right|also|but|because|cause|cuz|so|when|which|who|if|and then)\b.*$/, "");
     return v.replace(/\b(too|also|as well|lol|lmao|haha|though|tho|btw|now|right now|rn|atm|lately|these days|ngl|tbh|i guess|i think|very much|so much|a lot|lots|really|honestly|more|better|the most|best|the best|instead|at all)\b/g, "")
       .replace(/\s+(and|but|because|since|so|when|which|who|if)\b.*$/, "").replace(/[^a-z0-9' &+-]/gi, " ").replace(/\s+/g, " ").trim();
   }
   const ADVERB = /^(just|also|really|always|never|finally|still|recently|actually|literally|totally|usually|sometimes|probably|even|only|already|kinda|basically|and|who|was|is|got|has|had|said|says|lives|moved|went|keeps|told|made|thinks|wants|needs|likes|loves|hates|left|came|called|texted|did|does|can|could|will|would|from|at|in|again|too|now|then|once|today|yesterday|tomorrow|last|every|all|both|who|which|that)$/;
   // common first names that are also in the word list (so "my friend jess moved" still counts)
   const NAMEISH = /^(jess|jessie|max|sam|alex|ben|jack|tom|will|bill|rose|lily|daisy|grace|hope|faith|joy|ruby|amber|jade|pearl|april|may|june|summer|autumn|dawn|holly|ivy|violet|jasmine|olive|poppy|sky|river|rain|storm|hunter|chase|mason|carter|cooper|taylor|jordan|morgan|casey|charlie|frank|mark|matt|nick|pat|rob|ray|joe|jim|dan|ken|kim|lee|ann|anna|mia|leo|eli|ava|zoe|noah|liam|emma|olivia|sophia|isabella|ella|chloe|lucy|sophie|ellie|jake|josh|ryan|tyler|ethan|logan|owen|luke|adam|evan|dylan|aaron|kyle|nathan|sean|shawn|tony|andy|jay|kay|bella|luna|stella|nova|penny|molly|sadie|maggie|bailey|buddy|rocky|duke|bear|cooper|milo|oscar|toby|jasper|finn|ollie|teddy|george|harry|henry|jacob|james|john|michael|david|chris|mike|sarah|emily|hannah|ashley|megan|rachel|laura|amy|beth|katie|kate|jen|jenny|becky|abby|abbie|maya|mila|nora|leah|julia|diana|victoria|sofia|lena|nina|tina|lisa|sara|maria|elena|carlos|juan|jose|luis|diego|pedro|miguel)$/;
+  // pet names that are also normal words
+  const PETNAMEISH = /^(biscuit|cookie|peanut|mochi|oreo|pepper|coco|cocoa|ginger|honey|muffin|nugget|pickles|pumpkin|shadow|smokey|snowball|sugar|waffles|bean|buttons|cupcake|marshmallow|noodle|potato|tofu|sushi|taco|toast|milo|luna|bella|daisy|lucky|rocky|buddy|bear|tiger|socks|boots|patch|spot|rex|fluffy|fuzzy|oscar|simba|nala|kiwi|mango|olive|pebble|pebbles|rusty|sandy|scout|shadow|sunny|ziggy|zeus|thor|loki|chewie|yoda|bubbles|nemo|dory|goldie|speedy|squeaky|hammy|peaches|cinnamon|nutmeg|biscuits)$/;
   function properCase(s) { return s.replace(/\b[a-z]/g, (c) => c.toUpperCase()); }
   // keyboard mashes ("asdfghjkl") and consonant soup are not names
   function plausibleName(low) {
@@ -101,6 +104,12 @@
       facts.push({ type: "name", value: properCase(r[1]) });
     } else if ((r = /\b(?:hi|hello|hey),?\s+(?:i am|im)\s+([a-z][a-z'-]*)\b/.exec(t)) && looksLikeName(r[1], raw, expectingName)) {
       facts.push({ type: "name", value: properCase(r[1]) });
+    } else if ((r = /^\s*(?:(?:hi|hey|hello|yo|ok|so)\s+)?([a-z][a-z'-]{1,20}) here\b/.exec(m.plain)) && !/^(its|it|me|im|i|we|you|nobody|someone|everyone|not)$/.test(r[1]) && looksLikeName(r[1], raw, false)) {
+      facts.push({ type: "name", value: properCase(r[1]) });   // "Dan here. I'm 34..."
+    } else if ((r = /\bmy name\b.*?\b(?:it'?s|its|it is)\s+([a-z][a-z'-]*)\b/.exec(t)) && looksLikeName(r[1], raw, true)) {
+      facts.push({ type: "name", value: properCase(r[1]) });   // "I just told you my name. It's Dan."
+    } else if (expectingName && /^\s*([A-Za-z][a-z'-]{1,20})\s*[.!,]\s+\S/.test(raw) && looksLikeName(/^\s*([A-Za-z][a-z'-]{1,20})/.exec(raw)[1], raw, true) && !/^\s*(no|nope|yes|yeah|ok|okay|hi|hey|hello|why|what|sure|well|um|uh|hmm|lol|guess)\b/i.test(raw)) {
+      facts.push({ type: "name", value: properCase(/^\s*([A-Za-z][a-z'-]{1,20})/.exec(raw)[1].toLowerCase()) });   // "Dan. Let's see what you can do."
     } else if (expectingName && m.tokens.length <= 3) {
       const w = m.tokens.filter((x) => !/^(it|is|its|i|am|im|my|name|just|call|me|you|can|the)$/.test(x));
       const cand = raw.replace(/[^A-Za-z' -]/g, " ").trim().split(/\s+/).filter((x) => w.includes(x.toLowerCase()));
@@ -109,14 +118,14 @@
     }
 
     // age
-    if ((r = /\bi am (\d{1,3})(?: years? old| yrs? old| yo| y\/o)?\s*(?:$|[.!,]| and| but| now| today| lol)/.exec(t)) || (r = /\bi am (\d{1,3}) years? old\b/.exec(t)) ||
+    if ((r = /\bi am (\d{1,3})(?: years? old| yrs? old| yo| y\/o)?\s*(?:$|[.!,;]| and| but| now| today| lol| [a-z]+ [a-z]+)/.exec(t)) || (r = /\b(\d{1,2}) (?:years? old|yrs? old|yo)\b/.exec(t)) || (r = /\bi am (\d{1,3}) years? old\b/.exec(t)) ||
       (r = /\bmy age is (\d{1,3})\b/.exec(t)) || (r = /\bi (?:just )?turned (\d{1,3})\b/.exec(t)) || (expect && expect.kind === "age" && (r = /^\s*(?:i am |im )?(\d{1,3})\b/.exec(m.plain)))) {
       const a = parseInt(r[1], 10);
       if (a >= 3 && a <= 120) facts.push({ type: "age", value: a });
     }
 
     // where they live
-    if ((r = /\bi (?:live|am living|stay|reside) in ([a-z][a-z .'-]{1,40})/.exec(t)) || (r = /\bi am from ([a-z][a-z .'-]{1,40})/.exec(t)) || (r = /\bi come from ([a-z][a-z .'-]{1,40})/.exec(t))) {
+    if ((r = /\b(?:i )?(?:live|am living|living|stay|reside|based) in ([a-z][a-z .'-]{1,40})/.exec(t)) || (r = /\bi am from ([a-z][a-z .'-]{1,40})/.exec(t)) || (r = /\bi come from ([a-z][a-z .'-]{1,40})/.exec(t))) {
       const v = cleanValue(r[1]).replace(/^(the )?(city|town|state|country|village) of /, "");
       if (v && v.split(" ").length <= 4 && !/^(a|an|the|my|this|that|here|there|home|house|space|minecraft|nowhere|somewhere|your|his|her)\b/.test(v)) facts.push({ type: "location", value: properCase(v) });
     }
@@ -177,6 +186,10 @@
     }
     if ((r = new RegExp("\\bmy (" + PET + ")(?:'s| s|s)? (?:name is|is named|is called|named|called) ([a-z]+)").exec(t))) {
       if (looksLikeName(r[2], raw, true)) facts.push({ type: "pet", kind: singularPet(r[1]), name: properCase(r[2]) });
+    } else if ((r = new RegExp("\\bmy (?:little |baby |pet |new |old |cute |fat |crazy )?(" + PET + ") ([a-z]+)(?= (?:is|was|keeps|just|always|never|ate|eats|loves|likes|hates|sleeps|slept|barks|barked|barking|meows|jumped|jumps|ran|runs|got|has|did|and|bit|scratched|knocked|sat|sits|stole)\\b|[,.!]|$)").exec(t))) {
+      const w = r[2];
+      if (!ADVERB.test(w) && !NOT_NAME.has(w) && !P.nlp.STOP.has(w) && plausibleName(w) && w.length >= 3 && (looksLikeName(w, raw, false) || NAMEISH.test(w) || PETNAMEISH.test(w)))
+        facts.push({ type: "pet", kind: singularPet(r[1]), name: properCase(w), quiet: true });
     }
 
     // people in their life
@@ -191,9 +204,9 @@
     }
 
     // job / school
-    if ((r = /\bi (?:am|work as) (?:a|an) ([a-z]+(?: [a-z]+)?)\b/.exec(t))) {
+    if ((r = /\bi (?:am|work as) (?:a|an) ([a-z]+(?: [a-z]+)?)\b/.exec(t)) || (r = /(?:^|[,;] ?|\band )(?:i'?m |i am |im )?(?:a |an )?((?:software |web |game |senior |junior |high school |primary school |elementary school |retired )?(?:developer|engineer|programmer|teacher|nurse|doctor|designer|student|lawyer|accountant|chef|mechanic|electrician|artist|writer|musician|scientist|manager|firefighter|pilot))\b(?=\s*(?:$|[,.;!]|and\b))/.exec(m.clean.toLowerCase()))) {
       const words = r[1].split(" ");
-      const job = JOBS.has(r[1]) ? r[1] : JOBS.has(words[0]) ? words[0] : JOBS.has(words[words.length - 1]) ? r[1] : null;
+      const job = JOBS.has(r[1]) ? r[1] : JOBS.has(words[words.length - 1]) ? r[1] : JOBS.has(words[0]) && words.length === 1 ? words[0] : null;
       if (job) facts.push({ type: "job", value: job });
     }
     if ((r = /\bi am in (\d{1,2})(?:st|nd|rd|th)? grade\b/.exec(t)) || (r = /\bi am in (year \d{1,2}|high school|middle school|elementary school|primary school|college|university|uni|kindergarten)\b/.exec(t)) || (r = /\bi (?:go to|attend) (high school|middle school|elementary school|college|university|uni|school)\b/.exec(t))) {
@@ -202,8 +215,8 @@
 
     // upcoming events worth asking about later
     {
-      const NOUN = "tests?|exams?|quiz|quizzes|interview|game|match|recital|appointment|date|presentation|party|sleepover|trip|surgery|operation|competition|tournament|concert|audition|meeting|finals|midterms?|essay|project|race|performance|show|tryouts?|practice|lesson|vacation|holiday|flight|wedding|funeral|checkup|check up|playdate|camp|first day|big day|debate|speech|sats?";
-      const WHEN = "tomorrow|today|tonight|later today|next week|this weekend|this week|on the weekend|over the weekend|(?:on|next|this) (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|soon|in \\w+ days?";
+      const NOUN = "tests?|exams?|quiz|quizzes|interview|game|match|recital|appointment|date|presentation|party|sleepover|trip|surgery|operation|competition|tournament|concert|audition|meeting|finals|midterms?|essay|project|race|performance|show|tryouts?|practice|lesson|vacation|holiday|flight|wedding|funeral|checkup|check up|playdate|camp|first day|big day|debate|speech|sats?|hike|play|school play|recital|dance|prom|graduation|birthday party|sleepover";
+      const WHEN = "tomorrow|today|tonight|later today|next week|next month|this month|this weekend|this week|on the weekend|over the weekend|in (?:a|two|three|\\d+) weeks?|(?:on|next|this) (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|soon|in \\w+ days?";
       const PLACE = { dentist: "dentist appointment", doctor: "doctor's appointment", doctors: "doctor's appointment", zoo: "trip to the zoo", beach: "beach trip", museum: "museum trip", movies: "movie night", movie: "movie night", "amusement park": "amusement park trip", "theme park": "theme park trip", "water park": "water park trip" };
       const clean = (pre, noun) => {
         const words = (pre || "").trim().split(/\s+/).filter((w) => w && !/^(of|lot|lots|bunch|really|very|so|super|kind|pretty|such|some|kinda|sorta|the|a|an|my|our|this|that|another|couple|few|going|gonna|to|hard|easy|difficult|scary|stupid|boring|dumb|annoying)$/.test(w));
@@ -213,13 +226,17 @@
       if ((r = new RegExp("\\b(?:i|we) (?:have|got|have got|will have|am having|are having|have to do|need to do) (?:a |an |my |our |the |this |that |some |another )?((?:[a-z]+ ){0,3}?)(" + NOUN + ")\\b(?:.*?\\b(" + WHEN + ")\\b)?").exec(t)) ||
           (r = new RegExp("\\bmy ((?:[a-z]+ ){0,3}?)(" + NOUN + ") is (?:on |)(" + WHEN + ")\\b").exec(t))) {
         facts.push({ type: "event", what: clean(r[1], r[2]), when: whenOf(r[3]) });
-      } else if ((r = new RegExp("\\b(?:i am|we are) (?:going|goin|heading) (?:to|on) (?:a |an |the |my |our )?((?:[a-z]+ ){0,2}?)(" + NOUN + "|dentist|doctors?|zoo|beach|museum|movies?|amusement park|theme park|water park)\\b(?:.*?\\b(" + WHEN + ")\\b)?").exec(t)) && r[3]) {
-        facts.push({ type: "event", what: PLACE[r[2]] || clean(r[1], r[2]), when: whenOf(r[3]) });
+      } else if ((r = new RegExp("\\b(?:i am|we are|were|im) (?:going|goin|heading) (?:to|on) (?:a |an |the |my |our )?((?:[a-z]+ ){0,2}?)(" + NOUN + "|dentist|doctors?|zoo|beach|museum|movies?|amusement park|theme park|water park)\\b(?:.*?\\b(" + WHEN + ")\\b)?").exec(t)) && r[3]) {
+        let what = PLACE[r[2]] || clean(r[1], r[2]);
+        const dest = /^(trip|vacation|holiday)$/.test(r[2]) && /\b(?:trip|vacation|holiday) to ([a-z]+)\b/.exec(t);
+        if (dest && !/^(the|a|my|see|visit)$/.test(dest[1])) what = r[2] + " to " + properCase(dest[1]);
+        facts.push({ type: "event", what, when: whenOf(r[3]) });
       }
     }
 
     // explicit "remember that ..."
-    if ((r = /\b(?:remember|do not forget|never forget|please remember|pls remember|make a note|note) (?:that |this: |this |:)?(.{3,90})$/.exec(m.plain)) && !/^(me|my name|what|when|how|who|that time|the time)\b/.test(r[1])) {
+    if (!m.isQuestion && !/\b(do|can|did|will|would) (you|u) (still )?remember\b|\byou remember\b|\bsay you remember\b|\bremember (stuff|things|anything)\b/.test(m.plain) &&
+        (r = /(?:^|[.!]\s*|\b(?:please|pls|can you|could you|and)\s+)(?:remember|do not forget|don't forget|never forget|make a note|note) (?:that |this: |this |:)?(.{3,90})$/.exec(m.plain)) && !/^(me|my name|what|when|how|who|why|that time|the time|to)\b/.test(r[1])) {
       facts.push({ type: "note", value: r[1].replace(/\bmy\b/g, "your").replace(/\bi am\b/g, "you are").replace(/\bi\b/g, "you").replace(/\bme\b/g, "you") });
     }
 
@@ -319,13 +336,17 @@
     if (when === "this weekend") return at(Math.max(1, (6 - d.getDay() + 7) % 7));
     if (when === "this week") return at(2);
     if (when === "next week") return at(7);
+    if (when === "next month") return at(30);
+    if (when === "this month") return at(10);
+    if ((r = /^in (a|two|three|\d+) weeks?$/.exec(when))) return at(7 * ({ a: 1, two: 2, three: 3 }[r[1]] || +r[1]));
     if ((r = /^in (\w+) days?$/.exec(when))) return at({ a: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, ten: 10 }[r[1]] || +r[1] || 3);
     return now + 864e5; // "soon"
   }
   function dayWord(t) {
     const a = new Date(), b = new Date(t);
     const days = Math.round((new Date(b.getFullYear(), b.getMonth(), b.getDate()) - new Date(a.getFullYear(), a.getMonth(), a.getDate())) / 864e5);
-    return days <= 0 ? "today" : days === 1 ? "tomorrow" : "on " + U.capitalizeFirst(WEEKDAYS[b.getDay()]);
+    const MON = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    return days <= 0 ? "today" : days === 1 ? "tomorrow" : days <= 6 ? "on " + U.capitalizeFirst(WEEKDAYS[b.getDay()]) : days <= 13 ? "next week" : `on ${MON[b.getMonth()]} ${b.getDate()}`;
   }
   const dueOf = (e) => e.due || e.at + 864e5;
 
@@ -348,7 +369,7 @@
     const ppl = Object.entries(mem.people).slice(-3).map(([k, v]) => `your ${k} is ${v}`);
     parts.push(...ppl);
     const ev = mem.events.filter((e) => dueOf(e) > Date.now() - 6 * 3600e3).slice(-2);
-    if (ev.length) parts.push(`you have ${U.listJoin(ev.map((e) => U.aOrAn(e.what) + " " + e.what + (e.when && e.when !== "soon" ? " " + dayWord(dueOf(e)) : "")))} coming up`);
+    if (ev.length) parts.push(`you have ${U.listJoin(ev.map((e) => (/s$/.test(e.what) && !/(ss|us)$/.test(e.what) ? "" : U.aOrAn(e.what) + " ") + e.what + (e.when && e.when !== "soon" ? " " + (/month/.test(e.when) ? e.when : dayWord(dueOf(e))) : "")))} coming up`);
     if (mem.notes.length) parts.push(`you asked me to remember that ${mem.notes[mem.notes.length - 1]}`);
     return parts;
   }
